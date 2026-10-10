@@ -5,8 +5,8 @@
   "skill": "sdlc-implement",
   "status": "in_progress",
   "assignee": "rsk-6-agent",
-  "description": "Implement cache_path/load/save/cache_valid per stub: .repowalk/index.json, atomic tmp+rename write, version + max-mtime invalidation (plan \u00a77.6). Owner of store.rs only. Inline tests: roundtrip, invalidation after touched file. Verify as RSK-1 (CARGO_TARGET_DIR=/tmp/opencode/rw-6).",
+  "description": "Implement cache_path/load/save/cache_valid per stub: .repowalk/index.json, atomic tmp+rename write, version + max-mtime invalidation (plan \u00a77.6). Owner of store.rs only. Inline tests: roundtrip, invalidation after touched file. Verify as RSK-1 (CARGO_TARGET_DIR=/tmp/opencode/rw-6). STATUS: implementation + inline tests complete in store.rs; compile pending — cargo cannot fetch crates (anyhow/ignore/petgraph/tree-sitter absent from registry cache; crates.io index update hangs), verify not yet runnable.",
   "artifacts": [],
   "created": "2026-10-10T14:00:00Z",
-  "updated": "2026-10-10T14:00:00Z"
+  "updated": "2026-10-10T09:30:19Z"
 }
