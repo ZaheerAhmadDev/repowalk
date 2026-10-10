@@ -139,8 +139,8 @@ pub fn tour(idx: &Index, limit: usize) -> Vec<TourItem> {
     let mut score = vec![0f64; n];
     for m in 0..n {
         score[m] = fan_in[m] as f64
-            + 0.8 * entry[m] as f64
-            + 0.5 * has_docs[m] as f64
+            + 0.8 * (entry[m] as u8) as f64
+            + 0.5 * (has_docs[m] as u8) as f64
             - 0.3 * depth[comp_of[m]] as f64;
     }
 

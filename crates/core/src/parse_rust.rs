@@ -6,18 +6,19 @@ use tree_sitter::{Node, Parser, Query, QueryCursor, StreamingIterator};
 
 const DEFS: &str = r#"
 (function_item name: (identifier) @name) @def
+(function_signature_item name: (identifier) @name) @def
 (struct_item name: (type_identifier) @name) @def
 (enum_item name: (type_identifier) @name) @def
 (trait_item name: (type_identifier) @name) @def
 (impl_item type: (type_identifier) @name) @def
-(impl_item type: (generic_type (type_identifier) @name)) @def
+(impl_item type: (generic_type type: (type_identifier) @name)) @def
 (mod_item name: (identifier) @name) @def
 "#;
 
 const CALLS: &str = r#"
 (call_expression function: (identifier) @callee) @call
 (call_expression function: (scoped_identifier name: (identifier) @callee)) @call
-(call_expression function: (field_expression field: (identifier) @callee)) @call
+(call_expression function: (field_expression field: (field_identifier) @callee)) @call
 "#;
 
 const USES: &str = r#"
@@ -55,7 +56,7 @@ fn extract_defs(root: Node, source: &str, path: &str) -> Vec<Symbol> {
             continue;
         };
         let Some(name) = text(name, source) else { continue };
-        let start_line = def.start_position.row + 1;
+        let start_line = def.start_position().row + 1;
         let (kind, container) = classify(def, source);
         out.push(Symbol {
             id: format!("{path}:{start_line}"),
@@ -64,7 +65,7 @@ fn extract_defs(root: Node, source: &str, path: &str) -> Vec<Symbol> {
             signature: signature(def, source),
             doc: leading_doc(def, source),
             start_line,
-            end_line: def.end_position.row + 1,
+            end_line: def.end_position().row + 1,
             container,
             file: path.to_string(),
         });
@@ -90,7 +91,7 @@ fn extract_calls(root: Node, source: &str, path: &str) -> Vec<CallSite> {
         out.push(CallSite {
             file: path.to_string(),
             callee: callee.to_string(),
-            line: call.start_position.row + 1,
+            line: call.start_position().row + 1,
             enclosing: enclosing_fn(call, source),
         });
     }
@@ -117,14 +118,12 @@ fn extract_imports(root: Node, source: &str, path: &str) -> Vec<Import> {
     out
 }
 
-type QueryMatch<'a, 'tree> = tree_sitter::QueryMatch<'a, 'tree, &'tree [u8]>;
-
 fn find_capture<'a, 'tree>(
-    m: &QueryMatch<'a, 'tree>,
+    m: &tree_sitter::QueryMatch<'a, 'tree>,
     names: &[&str],
     want: &str,
 ) -> Option<Node<'tree>> {
-    m.captures
+    m.captures()
         .iter()
         .find(|c| names.get(c.index as usize) == Some(&want))
         .map(|c| c.node)
@@ -183,7 +182,7 @@ fn clean_comment(raw: &str) -> String {
 
 fn classify(def: Node, source: &str) -> (SymbolKind, Option<String>) {
     match def.kind() {
-        "function_item" => {
+        "function_item" | "function_signature_item" => {
             let mut cur = def.parent();
             while let Some(p) = cur {
                 match p.kind() {
@@ -226,7 +225,7 @@ fn first_type_ident(n: Node) -> Option<Node> {
     if n.kind() == "type_identifier" {
         return Some(n);
     }
-    n.child(0).and_then(first_type_ident)
+    n.child_by_field_name("type").and_then(first_type_ident)
 }
 
 fn enclosing_fn(mut node: Node, source: &str) -> Option<String> {
