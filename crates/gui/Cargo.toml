@@ -1,0 +1,12 @@
+[package]
+name = "repowalk-gui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow = "1"
+eframe = "0.36"
+egui_code_editor = "0.4.2"
+egui_graphs = "0.32.0"
+repowalk-core = { path = "../core" }
