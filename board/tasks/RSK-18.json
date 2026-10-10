@@ -1,0 +1,12 @@
+{
+  "id": "RSK-18",
+  "title": "gui: editable code pane (repowalk/crates/gui/src/text/editor.rs)",
+  "phase": "sdlc-implement",
+  "skill": "sdlc-implement",
+  "status": "todo",
+  "assignee": null,
+  "description": "Implement editor::ui using egui_code_editor 0.4.2: syntax-highlighted editable buffer, line numbers, Ctrl+S save (dirty_edits tracking), jump/scroll to selection line, load file content on Selection change. Owner of text/editor.rs only. Verify: cargo check -p repowalk-gui, CARGO_TARGET_DIR=/tmp/opencode/rw-18, else compile-pending.",
+  "artifacts": [],
+  "created": "2026-10-10T14:00:00Z",
+  "updated": "2026-10-10T14:00:00Z"
+}

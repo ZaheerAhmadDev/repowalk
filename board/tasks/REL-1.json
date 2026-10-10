@@ -1,0 +1,15 @@
+{
+  "id": "REL-1",
+  "title": "Release run script + pre-release checklist for the demo",
+  "phase": "release",
+  "skill": "sdlc-release",
+  "status": "done",
+  "assignee": "release-agent",
+  "description": "Produce board/run.sh (executable; starts the board with BOARD_PORT default 8765, exec python3 board/server.py from script dir) and board/docs/release-checklist.md (items + the exact command/output for each: python compile check, unittest suite, /api/tasks 200, /api/stats 200, offline/no-deps confirmation). Verify by starting the server on a scratch port (BOARD_PORT=8899), curling both endpoints, then killing it — retry once if the file is being edited concurrently, mark blocked if still failing. NOTE: port 8765 is occupied by the live demo server; do not touch it. Governing skill: skills/sdlc/sdlc-release/SKILL.md.",
+  "artifacts": [
+    "board/run.sh",
+    "board/docs/release-checklist.md"
+  ],
+  "created": "2026-10-10T12:00:00Z",
+  "updated": "2026-10-10T08:24:43Z"
+}

@@ -1,0 +1,12 @@
+{
+  "id": "RSK-4",
+  "title": "core: Python extraction via tree-sitter (repowalk/crates/core/src/parse_py.rs)",
+  "phase": "sdlc-implement",
+  "skill": "sdlc-implement",
+  "status": "in_progress",
+  "assignee": "rsk-4-agent",
+  "description": "Implement extract(source,path) per stub using tree-sitter-python queries (plan \u00a78.1): function/class defs (incl async), first-string docstring, call sites (attribute calls name-only), import/import-from. Same Symbol conventions as parse_rust (id='{path}:{start_line}'). Owner of parse_py.rs only. Inline tests. Verify as RSK-1 (CARGO_TARGET_DIR=/tmp/opencode/rw-4).",
+  "artifacts": [],
+  "created": "2026-10-10T14:00:00Z",
+  "updated": "2026-10-10T14:00:00Z"
+}

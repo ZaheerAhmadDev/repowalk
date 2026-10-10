@@ -1,0 +1,12 @@
+{
+  "id": "DES-1",
+  "title": "Specify task schema and board architecture",
+  "phase": "design",
+  "skill": "sdlc-design",
+  "status": "done",
+  "assignee": "design-agent",
+  "description": "Produce board/docs/design.md: decision + alternatives + contract for the task file schema (id, title, phase, skill, status, assignee, description, artifacts, created, updated; enums: 6 phases, 4 statuses), the one-file-per-task ownership model, data flow (agents write files → server reads → browser polls every 2s), risks/fallbacks, deliberate omissions (no auth, no writes over HTTP, no DB).",
+  "artifacts": ["board/docs/design.md"],
+  "created": "2026-10-10T12:00:00Z",
+  "updated": "2026-10-10T07:58:04Z"
+}

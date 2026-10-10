@@ -1,0 +1,12 @@
+{
+  "id": "RSK-21",
+  "title": "gui: explain card (repowalk/crates/gui/src/explain.rs)",
+  "phase": "sdlc-implement",
+  "skill": "sdlc-implement",
+  "status": "todo",
+  "assignee": null,
+  "description": "Implement card(ui,app): docstring summary, full signature, file:line, callers/callees lists (each clickable \u2192 Selection sync), module role, nested items; rendered under the text pane; empty-state when no selection. Owner of explain.rs only. Verify: cargo check -p repowalk-gui, CARGO_TARGET_DIR=/tmp/opencode/rw-21, else compile-pending.",
+  "artifacts": [],
+  "created": "2026-10-10T14:00:00Z",
+  "updated": "2026-10-10T14:00:00Z"
+}

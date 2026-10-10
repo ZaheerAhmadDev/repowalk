@@ -1,0 +1,12 @@
+{
+  "id": "RSK-1",
+  "title": "core: repository walk (repowalk/crates/core/src/walk.rs)",
+  "phase": "sdlc-implement",
+  "skill": "sdlc-implement",
+  "status": "in_progress",
+  "assignee": "rsk-1-agent",
+  "description": "Implement walk(root)->Result<Vec<FileEntry>> per stub: ignore-crate gitignore-aware walk, skip .git/target/node_modules/.venv, lang by extension, line counts, mtime, entrypoint flags (main.rs/lib.rs/__main__). Inline #[cfg(test)] tests with tempdir fixtures. Owner of walk.rs only. Verify: cargo check -p repowalk-core with CARGO_TARGET_DIR=/tmp/opencode/rw-1 if toolchain+crates ready, else report compile-pending.",
+  "artifacts": [],
+  "created": "2026-10-10T13:00:00Z",
+  "updated": "2026-10-10T14:00:00Z"
+}

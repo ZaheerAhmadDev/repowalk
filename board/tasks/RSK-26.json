@@ -1,0 +1,12 @@
+{
+  "id": "RSK-26",
+  "title": "check-setup.sh (repowalk/check-setup.sh)",
+  "phase": "sdlc-implement",
+  "skill": "sdlc-implement",
+  "status": "todo",
+  "assignee": null,
+  "description": "Write check-setup.sh (plan \u00a713): validates toolchain (rustc/cargo), linker (zigcc or cc), cargo cache has eframe/egui_graphs/egui_code_editor/petgraph/tree-sitter, python3, board reachability on 8765 (curl), prints OK/BLOCKED per item, exit non-zero if blocked. Owner of that file only. Verify: bash -n check-setup.sh && ./check-setup.sh runs and reports truthfully.",
+  "artifacts": [],
+  "created": "2026-10-10T14:00:00Z",
+  "updated": "2026-10-10T14:00:00Z"
+}

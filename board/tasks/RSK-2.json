@@ -1,0 +1,12 @@
+{
+  "id": "RSK-2",
+  "title": "core: metrics (repowalk/crates/core/src/metrics.rs)",
+  "phase": "sdlc-implement",
+  "skill": "sdlc-implement",
+  "status": "in_progress",
+  "assignee": "rsk-2-agent",
+  "description": "Implement compute(idx)->Metrics per stub: LOC, langs, entrypoints, top-10 files, fan-in, SCC cycles via petgraph (len>1), god-files (lines>max(500,p99)), unresolved_pct. Owner of metrics.rs only. Inline tests (cycle fixture, god-file, unresolved math). Verify as RSK-1 (CARGO_TARGET_DIR=/tmp/opencode/rw-2).",
+  "artifacts": [],
+  "created": "2026-10-10T14:00:00Z",
+  "updated": "2026-10-10T14:00:00Z"
+}

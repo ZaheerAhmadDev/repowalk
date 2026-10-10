@@ -1,0 +1,12 @@
+{
+  "id": "TST-1",
+  "title": "Schema validation test suite for board tasks",
+  "phase": "testing",
+  "skill": "sdlc-test",
+  "status": "done",
+  "assignee": "qa-agent",
+  "description": "Produce board/tests/test_tasks.py (Python stdlib unittest, no third-party deps) asserting for every board/tasks/*.json: valid JSON; required fields present (id, title, phase, skill, status, assignee, description, artifacts, created, updated); id matches filename stem; phase ∈ {requirements, design, implementation, testing, release, maintenance}; status ∈ {todo, in_progress, done, blocked}; assignee is null or string; artifacts is list of strings; unique ids. Run: python3 -m unittest discover -s board/tests -v — must be green. Governing skill: skills/sdlc/sdlc-test/SKILL.md.",
+  "artifacts": ["board/tests/test_tasks.py"],
+  "created": "2026-10-10T12:00:00Z",
+  "updated": "2026-10-10T08:06:05Z"
+}

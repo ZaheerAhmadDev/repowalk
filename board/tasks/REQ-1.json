@@ -1,0 +1,12 @@
+{
+  "id": "REQ-1",
+  "title": "Write requirements for the agent task board",
+  "phase": "requirements",
+  "skill": "sdlc-requirements",
+  "status": "done",
+  "assignee": "requirements-agent",
+  "description": "Produce board/docs/requirements.md for the local agent board: problem statement, user stories with Given/When/Then acceptance criteria (human viewer, agent claimant, live updates), MoSCoW priorities, explicit out-of-scope, open questions. Requirements only — no design or code.",
+  "artifacts": ["board/docs/requirements.md"],
+  "created": "2026-10-10T12:00:00Z",
+  "updated": "2026-10-10T07:57:05Z"
+}

@@ -1,0 +1,12 @@
+{
+  "id": "RSK-15",
+  "title": "gui: sidebar map + health panel (repowalk/crates/gui/src/sidebar/map.rs)",
+  "phase": "sdlc-implement",
+  "skill": "sdlc-implement",
+  "status": "todo",
+  "assignee": null,
+  "description": "Implement map::ui: repo map (LOC, languages, entrypoints), metrics strip, health report (\u25cf N cycles, god-files, unresolved %) from core::metrics::Metrics, dark-theme colors, clickable entries \u2192 Selection::File. Owner of sidebar/map.rs only. Verify: cargo check -p repowalk-gui, CARGO_TARGET_DIR=/tmp/opencode/rw-15, else compile-pending.",
+  "artifacts": [],
+  "created": "2026-10-10T14:00:00Z",
+  "updated": "2026-10-10T14:00:00Z"
+}

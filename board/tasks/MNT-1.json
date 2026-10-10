@@ -1,0 +1,14 @@
+{
+  "id": "MNT-1",
+  "title": "Demo retrospective: what worked, what failed, action items",
+  "phase": "maintenance",
+  "skill": "sdlc-maintenance",
+  "status": "done",
+  "assignee": "maintenance-agent",
+  "description": "Produce board/docs/retro.md for this first demo build of the agent board: what worked / what failed / what surprised; escaped problems and rework observed while the board came together; action items each with owner and destination (skill update, backlog item, or process change). Include a short bug-triage table of any issues found (reproduce steps, severity, fix-forward plan). Governing skill: skills/sdlc/sdlc-maintenance/SKILL.md.",
+  "artifacts": [
+    "board/docs/retro.md"
+  ],
+  "created": "2026-10-10T12:00:00Z",
+  "updated": "2026-10-10T08:47:28Z"
+}

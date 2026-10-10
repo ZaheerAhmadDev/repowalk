@@ -1,0 +1,12 @@
+{
+  "id": "RSK-27",
+  "title": "scripts: offline verify + bench (repowalk/scripts/verify-offline.sh, repowalk/scripts/bench.sh)",
+  "phase": "sdlc-implement",
+  "skill": "sdlc-implement",
+  "status": "todo",
+  "assignee": null,
+  "description": "Write verify-offline.sh (cargo tree must show no reqwest/tokio/LLM crates; grep source for network APIs; ldd binary if built) and bench.sh (time repowalk map on a target repo, prints files/sec + wall time). Owner of scripts/** only. Verify: bash -n both; run verify-offline.sh (it must pass or honestly report what's missing pre-build).",
+  "artifacts": [],
+  "created": "2026-10-10T14:00:00Z",
+  "updated": "2026-10-10T14:00:00Z"
+}

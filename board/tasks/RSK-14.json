@@ -1,0 +1,12 @@
+{
+  "id": "RSK-14",
+  "title": "gui: app shell, layout, keyboard, selection sync (repowalk/crates/gui/src/main.rs, app.rs)",
+  "phase": "sdlc-implement",
+  "skill": "sdlc-implement",
+  "status": "todo",
+  "assignee": null,
+  "description": "Flesh App: load index (background thread + progress overlay, core::pipeline::build_index), Tab mode toggle preserving selection, / focus search, j/k lists, Esc clear, selection drives all panels (plan \u00a74.2-4.3), dark theme default. Wire explain::card into text mode. Keep existing type names (Mode/Selection/App fields) \u2014 other panels depend on them. Owner of main.rs + app.rs only. Verify: cargo check -p repowalk-gui, CARGO_TARGET_DIR=/tmp/opencode/rw-14, else compile-pending.",
+  "artifacts": [],
+  "created": "2026-10-10T14:00:00Z",
+  "updated": "2026-10-10T14:00:00Z"
+}

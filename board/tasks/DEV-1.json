@@ -1,0 +1,12 @@
+{
+  "id": "DEV-1",
+  "title": "Add /api/stats endpoint to the board server",
+  "phase": "implementation",
+  "skill": "sdlc-implement",
+  "status": "done",
+  "assignee": "dev-agent",
+  "description": "board/server.py currently serves /api/tasks but /api/stats 404s (the header shows a fallback count). Implement GET /api/stats returning JSON: {\"total\": int, \"statuses\": {<status>: count}, \"phases\": {<phase>: count}} computed from load_tasks(). Match existing style, minimal diff, stdlib only. Verify: python3 -m py_compile board/server.py && BOARD_PORT=8877 python3 board/server.py in background, curl -sf localhost:8877/api/stats, then kill it. Governing skill: skills/sdlc/sdlc-implement/SKILL.md + skills/meta/karpathy-guidelines/SKILL.md.",
+  "artifacts": ["board/server.py"],
+  "created": "2026-10-10T12:00:00Z",
+  "updated": "2026-10-10T08:02:53Z"
+}

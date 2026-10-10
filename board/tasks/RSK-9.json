@@ -1,0 +1,12 @@
+{
+  "id": "RSK-9",
+  "title": "core: index pipeline orchestrator (repowalk/crates/core/src/pipeline.rs)",
+  "phase": "sdlc-implement",
+  "skill": "sdlc-implement",
+  "status": "todo",
+  "assignee": null,
+  "description": "Implement build_index(root, progress) per stub: cache-valid \u2192 load; else walk \u2192 parse each file by lang (parse_rust/parse_py) \u2192 resolve edges (resolve/resolve_imports) \u2192 timestamp \u2192 save cache \u2192 return Index. This is the entry point every CLI/GUI command calls. Owner of pipeline.rs only (coordinate via signatures; do not edit other modules). Inline test on a temp fixture tree. Verify as RSK-1 (CARGO_TARGET_DIR=/tmp/opencode/rw-9).",
+  "artifacts": [],
+  "created": "2026-10-10T14:00:00Z",
+  "updated": "2026-10-10T14:00:00Z"
+}
