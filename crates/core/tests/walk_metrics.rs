@@ -1,7 +1,9 @@
 use std::fs;
 use std::path::PathBuf;
 
-use repowalk_core::{index_repo, metrics};
+use repowalk_core::metrics;
+use repowalk_core::model::Index;
+use repowalk_core::walk;
 
 fn fixture(name: &str) -> PathBuf {
     let mut dir = std::env::temp_dir();
@@ -23,15 +25,15 @@ fn walk_collects_sources_and_skips_build_dirs() {
     fs::write(root.join("target/junk.rs"), "fn nope() {}\n").unwrap();
     fs::write(root.join(".git/config"), "ignored\n").unwrap();
 
-    let index = index_repo(&root).unwrap();
-    let paths: Vec<&str> = index.files.iter().map(|f| f.path.as_str()).collect();
+    let files = walk::walk(&root).unwrap();
+    let paths: Vec<&str> = files.iter().map(|f| f.path.as_str()).collect();
 
     assert!(paths.contains(&"src/main.rs"));
     assert!(paths.contains(&"src/lib.rs"));
     assert!(!paths.iter().any(|p| p.starts_with("target/")));
     assert!(!paths.iter().any(|p| p.starts_with(".git/")));
 
-    let main = index.files.iter().find(|f| f.path == "src/main.rs").unwrap();
+    let main = files.iter().find(|f| f.path == "src/main.rs").unwrap();
     assert_eq!(main.lang, "rust");
     assert_eq!(main.lines, 3);
     assert!(main.is_entrypoint);
@@ -47,18 +49,18 @@ fn metrics_aggregate_languages_and_largest_files() {
     fs::write(root.join("a/other.rs"), "pub fn hi() {}\n").unwrap();
     fs::write(root.join("a/tool.py"), "print('hi')\n").unwrap();
 
-    let index = index_repo(&root).unwrap();
+    let files = walk::walk(&root).unwrap();
+    let mut index = Index::new(root.to_string_lossy());
+    index.files = files;
     let m = metrics::compute(&index);
 
-    assert_eq!(m.total_files, 3);
-    assert_eq!(m.total_lines, 6);
+    assert_eq!(m.total_loc, 6);
     assert_eq!(m.entrypoints, vec!["a/main.rs".to_string()]);
 
-    let rust = m.languages.iter().find(|(l, _)| l == "rust").unwrap();
-    assert_eq!(rust.1.files, 2);
-    assert_eq!(rust.1.lines, 5);
+    let rust = m.langs.iter().find(|(l, _)| l == "rust").unwrap();
+    assert_eq!(rust.1, 2);
 
-    assert_eq!(m.largest_files[0], ("a/main.rs".to_string(), 4));
+    assert_eq!(m.top_files[0], ("a/main.rs".to_string(), 4));
 
     fs::remove_dir_all(&root).ok();
 }
