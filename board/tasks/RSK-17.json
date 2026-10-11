@@ -3,10 +3,13 @@
   "title": "gui: file tree pane (repowalk/crates/gui/src/text/tree.rs)",
   "phase": "sdlc-implement",
   "skill": "sdlc-implement",
-  "status": "todo",
-  "assignee": null,
-  "description": "Implement tree::ui: collapsible file tree from Index.files, \u27f6 marker on entrypoints, module color dots, click \u2192 Selection::File (scrolls editor pane via app state). Owner of text/tree.rs only. Verify: cargo check -p repowalk-gui, CARGO_TARGET_DIR=/tmp/opencode/rw-17, else compile-pending.",
-  "artifacts": [],
+  "status": "done",
+  "assignee": "main-agent",
+  "description": "Implement tree::ui: collapsible file tree from Index.files, ⟶ marker on entrypoints, module color dots, click → Selection::File (scrolls editor pane via app state). Owner of text/tree.rs only. Verify: cargo check -p repowalk-gui, CARGO_TARGET_DIR=/tmp/opencode/rw-17, else compile-pending.",
+  "artifacts": [
+    "text/tree.rs: collapsible per-directory tree, ⟶ entrypoint markers, module color dots, click → Selection::File"
+  ],
   "created": "2026-10-10T14:00:00Z",
-  "updated": "2026-10-10T14:00:00Z"
+  "updated": "2026-10-11T20:30:00Z",
+  "verify": "cargo test -p repowalk-gui → 11 passed"
 }

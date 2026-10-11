@@ -3,10 +3,13 @@
   "title": "contract tests (repowalk/crates/core/tests/contract.rs)",
   "phase": "sdlc-test",
   "skill": "sdlc-test",
-  "status": "todo",
-  "assignee": null,
-  "description": "Write tests/contract.rs against the FROZEN model: serde roundtrip Index\u2192JSON\u2192Index equality, symbol id format '{path}:{line}' parses, all enums serialize as expected (Exact/NameOnly/Ambiguous/Unresolved etc.), SCHEMA_VERSION=1, Index::new defaults. Do NOT change model.rs \u2014 a failing test means the contract needs discussion (report it). Owner of tests/contract.rs only. Verify as RSK-10 (CARGO_TARGET_DIR=/tmp/opencode/rw-29).",
-  "artifacts": [],
+  "status": "done",
+  "assignee": "main-agent",
+  "description": "Write tests/contract.rs against the FROZEN model: serde roundtrip Index→JSON→Index equality, symbol id format '{path}:{line}' parses, all enums serialize as expected (Exact/NameOnly/Ambiguous/Unresolved etc.), SCHEMA_VERSION=1, Index::new defaults. Do NOT change model.rs — a failing test means the contract needs discussion (report it). Owner of tests/contract.rs only. Verify as RSK-10 (CARGO_TARGET_DIR=/tmp/opencode/rw-29).",
+  "artifacts": [
+    "crates/core/tests/contract.rs: serde roundtrip, symbol id format, enum serialization, SCHEMA_VERSION=1, Index::new defaults, store fs roundtrip — model.rs untouched (equality via serde since frozen model has no PartialEq)"
+  ],
   "created": "2026-10-10T14:00:00Z",
-  "updated": "2026-10-10T14:00:00Z"
+  "updated": "2026-10-11T20:30:00Z",
+  "verify": "cargo test -p repowalk-core --test contract → 6 passed"
 }

@@ -3,10 +3,13 @@
   "title": "repo hygiene: LICENSE, .gitignore, rustfmt.toml (repowalk/)",
   "phase": "sdlc-implement",
   "skill": "sdlc-implement",
-  "status": "todo",
-  "assignee": null,
-  "description": "Create LICENSE (MIT OR Apache-2.0 dual, plan \u00a714 \u2014 use standard texts), .gitignore (target/, .repowalk/, *.pdb, .idea/ etc.), rustfmt.toml (defaults + edition note). Owner of those files only. Verify: files exist, .gitignore covers target/ and .repowalk/, license text non-empty standard.",
-  "artifacts": [],
+  "status": "done",
+  "assignee": "main-agent",
+  "description": "Create LICENSE (MIT OR Apache-2.0 dual, plan §14 — use standard texts), .gitignore (target/, .repowalk/, *.pdb, .idea/ etc.), rustfmt.toml (defaults + edition note). Owner of those files only. Verify: files exist, .gitignore covers target/ and .repowalk/, license text non-empty standard.",
+  "artifacts": [
+    "LICENSE (MIT OR Apache-2.0 pointer), LICENSE-MIT, LICENSE-APACHE, .gitignore (target/, .repowalk/, exports), rustfmt.toml"
+  ],
   "created": "2026-10-10T14:00:00Z",
-  "updated": "2026-10-10T14:00:00Z"
+  "updated": "2026-10-11T20:30:00Z",
+  "verify": "files created; clippy -D warnings clean"
 }

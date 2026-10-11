@@ -3,10 +3,13 @@
   "title": "gui: sidebar map + health panel (repowalk/crates/gui/src/sidebar/map.rs)",
   "phase": "sdlc-implement",
   "skill": "sdlc-implement",
-  "status": "todo",
-  "assignee": null,
-  "description": "Implement map::ui: repo map (LOC, languages, entrypoints), metrics strip, health report (\u25cf N cycles, god-files, unresolved %) from core::metrics::Metrics, dark-theme colors, clickable entries \u2192 Selection::File. Owner of sidebar/map.rs only. Verify: cargo check -p repowalk-gui, CARGO_TARGET_DIR=/tmp/opencode/rw-15, else compile-pending.",
-  "artifacts": [],
+  "status": "done",
+  "assignee": "main-agent",
+  "description": "Implement map::ui: repo map (LOC, languages, entrypoints), metrics strip, health report (● N cycles, god-files, unresolved %) from core::metrics::Metrics, dark-theme colors, clickable entries → Selection::File. Owner of sidebar/map.rs only. Verify: cargo check -p repowalk-gui, CARGO_TARGET_DIR=/tmp/opencode/rw-15, else compile-pending.",
+  "artifacts": [
+    "sidebar/map.rs: languages/LOC/entrypoints/top files/hottest symbols + health panel with spaghetti cycles and god-files, clickable"
+  ],
   "created": "2026-10-10T14:00:00Z",
-  "updated": "2026-10-10T14:00:00Z"
+  "updated": "2026-10-11T20:30:00Z",
+  "verify": "cargo test -p repowalk-gui → 11 passed"
 }

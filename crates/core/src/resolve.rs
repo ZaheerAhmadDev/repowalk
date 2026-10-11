@@ -185,7 +185,7 @@ fn import_candidates(target: &str, from_file: &str, crate_roots: &BTreeSet<Strin
     }
 
     let segs: Vec<&str> = rest
-        .split(|c| c == ':' || c == '.')
+        .split([':', '.'])
         .filter(|s| !s.is_empty())
         .collect();
 

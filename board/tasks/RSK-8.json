@@ -3,10 +3,13 @@
   "title": "core: fuzzy search (repowalk/crates/core/src/search.rs)",
   "phase": "sdlc-implement",
   "skill": "sdlc-implement",
-  "status": "in_progress",
-  "assignee": "rsk-8-agent",
-  "description": "Implement search(idx,query,limit) per stub per plan \u00a77.5: +4 substring in name, +2 subsequence, +1 consecutive/word-boundary, +0.5 doc/path hit; score desc, ties by target asc; covers symbols AND files. Owner of search.rs only. Inline tests: exact beats fuzzy, empty query, case-insensitive. Verify as RSK-1 (CARGO_TARGET_DIR=/tmp/opencode/rw-8).",
-  "artifacts": [],
+  "status": "done",
+  "assignee": "main-agent",
+  "description": "Implement search(idx,query,limit) per stub per plan §7.5: +4 substring in name, +2 subsequence, +1 consecutive/word-boundary, +0.5 doc/path hit; score desc, ties by target asc; covers symbols AND files. Owner of search.rs only. Inline tests: exact beats fuzzy, empty query, case-insensitive. Verify as RSK-1 (CARGO_TARGET_DIR=/tmp/opencode/rw-8).",
+  "artifacts": [
+    "search.rs (pre-existing, verified)"
+  ],
   "created": "2026-10-10T14:00:00Z",
-  "updated": "2026-10-10T14:00:00Z"
+  "updated": "2026-10-11T20:30:00Z",
+  "verify": "cargo test -p repowalk-core → 54 passed"
 }

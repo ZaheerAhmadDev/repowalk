@@ -3,10 +3,13 @@
   "title": "fixtures + golden test harness (repowalk/fixtures/, crates/core/tests/golden.rs)",
   "phase": "sdlc-test",
   "skill": "sdlc-test",
-  "status": "todo",
-  "assignee": null,
+  "status": "done",
+  "assignee": "main-agent",
   "description": "Create fixtures/sample/ (~60-line .rs + .py: 2 fns, 1 struct, docs, cross-file call, import cycle) and crates/core/tests/golden.rs: runs pipeline::build_index on fixtures/sample, diffs against fixtures/golden/index.json, UPDATE_GOLDEN=1 regenerates, diff must be reviewable. Owner of fixtures/** and tests/golden.rs only. Verify as RSK-1 (CARGO_TARGET_DIR=/tmp/opencode/rw-10).",
-  "artifacts": [],
+  "artifacts": [
+    "fixtures/sample/ (6 files, import cycle a↔b), fixtures/golden/index.json, crates/core/tests/golden.rs with UPDATE_GOLDEN flow"
+  ],
   "created": "2026-10-10T14:00:00Z",
-  "updated": "2026-10-10T14:00:00Z"
+  "updated": "2026-10-11T20:30:00Z",
+  "verify": "cargo test -p repowalk-core --test golden → 1 passed (RED: missing golden → UPDATE_GOLDEN → GREEN)"
 }

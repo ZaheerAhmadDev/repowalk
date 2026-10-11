@@ -3,10 +3,13 @@
   "title": "gui: Markdown export (repowalk/crates/gui/src/export/markdown.rs)",
   "phase": "sdlc-implement",
   "skill": "sdlc-implement",
-  "status": "todo",
-  "assignee": null,
-  "description": "Implement tour_markdown(idx) (numbered tour with why-lines + metrics header) and health_markdown(idx) per plan \u00a73.2 pick 6: hand-rolled, deterministic, copy-to-clipboard friendly. Owner of export/markdown.rs only. Inline tests. Verify: cargo check -p repowalk-gui, CARGO_TARGET_DIR=/tmp/opencode/rw-22, else compile-pending.",
-  "artifacts": [],
+  "status": "done",
+  "assignee": "main-agent",
+  "description": "Implement tour_markdown(idx) (numbered tour with why-lines + metrics header) and health_markdown(idx) per plan §3.2 pick 6: hand-rolled, deterministic, copy-to-clipboard friendly. Owner of export/markdown.rs only. Inline tests. Verify: cargo check -p repowalk-gui, CARGO_TARGET_DIR=/tmp/opencode/rw-22, else compile-pending.",
+  "artifacts": [
+    "export/markdown.rs: tour_markdown + health_markdown, deterministic, + 3 tests"
+  ],
   "created": "2026-10-10T14:00:00Z",
-  "updated": "2026-10-10T14:00:00Z"
+  "updated": "2026-10-11T20:30:00Z",
+  "verify": "cargo test -p repowalk-gui → 11 passed"
 }

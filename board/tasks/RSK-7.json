@@ -3,10 +3,13 @@
   "title": "core: reading-order tour (repowalk/crates/core/src/tour.rs)",
   "phase": "sdlc-implement",
   "skill": "sdlc-implement",
-  "status": "in_progress",
-  "assignee": "rsk-7-agent",
-  "description": "Implement tour(idx,limit) per stub per plan \u00a77.2: topological layers of import DAG (SCC collapsed), score=fan_in+0.8*entrypoint+0.5*has_docs-0.3*depth, why=doc first sentence else 'fn N \u2014 called by X, calls Y'. Owner of tour.rs only. Inline tests: order deterministic, entrypoint first, cycle handled. Verify as RSK-1 (CARGO_TARGET_DIR=/tmp/opencode/rw-7).",
-  "artifacts": [],
+  "status": "done",
+  "assignee": "main-agent",
+  "description": "Implement tour(idx,limit) per stub per plan §7.2: topological layers of import DAG (SCC collapsed), score=fan_in+0.8*entrypoint+0.5*has_docs-0.3*depth, why=doc first sentence else 'fn N — called by X, calls Y'. Owner of tour.rs only. Inline tests: order deterministic, entrypoint first, cycle handled. Verify as RSK-1 (CARGO_TARGET_DIR=/tmp/opencode/rw-7).",
+  "artifacts": [
+    "tour.rs (pre-existing, verified)"
+  ],
   "created": "2026-10-10T14:00:00Z",
-  "updated": "2026-10-10T14:00:00Z"
+  "updated": "2026-10-11T20:30:00Z",
+  "verify": "cargo test -p repowalk-core → 54 passed"
 }

@@ -6,3 +6,9 @@ members = ["crates/core", "crates/gui", "crates/cli"]
 version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
+
+# egui_code_editor 0.4.2 ships without the serde derives its own `serde`
+# feature implies; egui_graphs 0.32 forces egui/persistence, which makes
+# egui require them. Vendored copy adds exactly that derive — see vendor/README.md.
+[patch.crates-io]
+egui_code_editor = { path = "vendor/egui_code_editor-0.4.2" }

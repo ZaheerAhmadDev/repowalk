@@ -5,7 +5,7 @@ use ignore::WalkBuilder;
 use std::ffi::OsStr;
 use std::path::Path;
 
-const SKIP_DIRS: [&str; 4] = [".git", "target", "node_modules", ".venv"];
+const SKIP_DIRS: [&str; 5] = [".git", ".repowalk", "target", "node_modules", ".venv"];
 
 /// Walk `root` (honors .gitignore; skips .git, target, node_modules, .venv).
 /// Fills path, lang (by extension), lines, mtime, is_entrypoint (main.rs/lib.rs/fn main/__main__).
@@ -18,7 +18,7 @@ pub fn walk(root: &Path) -> anyhow::Result<Vec<FileEntry>> {
     let mut entries = Vec::new();
     for result in walker {
         let entry = result?;
-        if !entry.file_type().map_or(false, |t| t.is_file()) {
+        if !entry.file_type().is_some_and(|t| t.is_file()) {
             continue;
         }
         let path = entry.path();

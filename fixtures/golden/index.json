@@ -1,0 +1,363 @@
+{
+  "version": 1,
+  "repo_root": "fixtures/sample",
+  "indexed_at": "",
+  "files": [
+    {
+      "path": "a.rs",
+      "lang": "rust",
+      "lines": 8,
+      "mtime": 0,
+      "is_entrypoint": false
+    },
+    {
+      "path": "b.rs",
+      "lang": "rust",
+      "lines": 8,
+      "mtime": 0,
+      "is_entrypoint": false
+    },
+    {
+      "path": "main.rs",
+      "lang": "rust",
+      "lines": 10,
+      "mtime": 0,
+      "is_entrypoint": true
+    },
+    {
+      "path": "model.rs",
+      "lang": "rust",
+      "lines": 18,
+      "mtime": 0,
+      "is_entrypoint": false
+    },
+    {
+      "path": "tool.py",
+      "lang": "python",
+      "lines": 20,
+      "mtime": 0,
+      "is_entrypoint": true
+    },
+    {
+      "path": "util.rs",
+      "lang": "rust",
+      "lines": 11,
+      "mtime": 0,
+      "is_entrypoint": false
+    }
+  ],
+  "symbols": [
+    {
+      "id": "a.rs:6",
+      "name": "a_fn",
+      "kind": "Function",
+      "signature": "pub fn a_fn()",
+      "doc": "Calls into b, closing the a → b → a cycle.",
+      "start_line": 6,
+      "end_line": 8,
+      "container": null,
+      "file": "a.rs"
+    },
+    {
+      "id": "b.rs:6",
+      "name": "b_fn",
+      "kind": "Function",
+      "signature": "pub fn b_fn()",
+      "doc": "Calls back into a, closing the cycle.",
+      "start_line": 6,
+      "end_line": 8,
+      "container": null,
+      "file": "b.rs"
+    },
+    {
+      "id": "main.rs:3",
+      "name": "model",
+      "kind": "Mod",
+      "signature": "mod model",
+      "doc": "",
+      "start_line": 3,
+      "end_line": 3,
+      "container": null,
+      "file": "main.rs"
+    },
+    {
+      "id": "main.rs:4",
+      "name": "util",
+      "kind": "Mod",
+      "signature": "mod util",
+      "doc": "",
+      "start_line": 4,
+      "end_line": 4,
+      "container": null,
+      "file": "main.rs"
+    },
+    {
+      "id": "main.rs:6",
+      "name": "main",
+      "kind": "Function",
+      "signature": "fn main()",
+      "doc": "",
+      "start_line": 6,
+      "end_line": 10,
+      "container": null,
+      "file": "main.rs"
+    },
+    {
+      "id": "model.rs:4",
+      "name": "Person",
+      "kind": "Struct",
+      "signature": "pub struct Person",
+      "doc": "A person in the sample domain.",
+      "start_line": 4,
+      "end_line": 6,
+      "container": null,
+      "file": "model.rs"
+    },
+    {
+      "id": "model.rs:8",
+      "name": "Person",
+      "kind": "Struct",
+      "signature": "impl Person",
+      "doc": "",
+      "start_line": 8,
+      "end_line": 18,
+      "container": null,
+      "file": "model.rs"
+    },
+    {
+      "id": "model.rs:10",
+      "name": "new",
+      "kind": "Method",
+      "signature": "pub fn new(name: &str) -> Self",
+      "doc": "Builds a person with one required field.",
+      "start_line": 10,
+      "end_line": 12,
+      "container": "Person",
+      "file": "model.rs"
+    },
+    {
+      "id": "model.rs:15",
+      "name": "rename",
+      "kind": "Method",
+      "signature": "pub fn rename(&mut self, name: &str)",
+      "doc": "Renames in place (mutating method sample).",
+      "start_line": 15,
+      "end_line": 17,
+      "container": "Person",
+      "file": "model.rs"
+    },
+    {
+      "id": "tool.py:4",
+      "name": "run",
+      "kind": "Function",
+      "signature": "def run()",
+      "doc": "Entry shim: delegates to step_one.",
+      "start_line": 4,
+      "end_line": 6,
+      "container": null,
+      "file": "tool.py"
+    },
+    {
+      "id": "tool.py:9",
+      "name": "step_one",
+      "kind": "Function",
+      "signature": "def step_one()",
+      "doc": "First half of the python cycle.",
+      "start_line": 9,
+      "end_line": 11,
+      "container": null,
+      "file": "tool.py"
+    },
+    {
+      "id": "tool.py:14",
+      "name": "_step_two",
+      "kind": "Function",
+      "signature": "def _step_two()",
+      "doc": "Second half of the python cycle.",
+      "start_line": 14,
+      "end_line": 16,
+      "container": null,
+      "file": "tool.py"
+    },
+    {
+      "id": "util.rs:4",
+      "name": "greet",
+      "kind": "Function",
+      "signature": "pub fn greet(name: &str) -> String",
+      "doc": "Greets one person by name.",
+      "start_line": 4,
+      "end_line": 6,
+      "container": null,
+      "file": "util.rs"
+    },
+    {
+      "id": "util.rs:9",
+      "name": "helper",
+      "kind": "Function",
+      "signature": "pub fn helper()",
+      "doc": "Runs the helper pipeline (called from main).",
+      "start_line": 9,
+      "end_line": 11,
+      "container": null,
+      "file": "util.rs"
+    }
+  ],
+  "call_sites": [
+    {
+      "file": "a.rs",
+      "callee": "b_fn",
+      "line": 7,
+      "enclosing": "a_fn"
+    },
+    {
+      "file": "b.rs",
+      "callee": "a_fn",
+      "line": 7,
+      "enclosing": "b_fn"
+    },
+    {
+      "file": "main.rs",
+      "callee": "new",
+      "line": 7,
+      "enclosing": "main"
+    },
+    {
+      "file": "main.rs",
+      "callee": "helper",
+      "line": 9,
+      "enclosing": "main"
+    },
+    {
+      "file": "model.rs",
+      "callee": "to_string",
+      "line": 11,
+      "enclosing": "new"
+    },
+    {
+      "file": "model.rs",
+      "callee": "to_string",
+      "line": 16,
+      "enclosing": "rename"
+    },
+    {
+      "file": "tool.py",
+      "callee": "step_one",
+      "line": 6,
+      "enclosing": "run"
+    },
+    {
+      "file": "tool.py",
+      "callee": "_step_two",
+      "line": 11,
+      "enclosing": "step_one"
+    },
+    {
+      "file": "tool.py",
+      "callee": "run",
+      "line": 20,
+      "enclosing": null
+    },
+    {
+      "file": "util.rs",
+      "callee": "greet",
+      "line": 10,
+      "enclosing": "helper"
+    }
+  ],
+  "edges": [
+    {
+      "caller": "a_fn",
+      "callee": "b.rs:6",
+      "line": 7,
+      "kind": "Call",
+      "confidence": "NameOnly"
+    },
+    {
+      "caller": "b_fn",
+      "callee": "a.rs:6",
+      "line": 7,
+      "kind": "Call",
+      "confidence": "NameOnly"
+    },
+    {
+      "caller": "main",
+      "callee": "model.rs:10",
+      "line": 7,
+      "kind": "Call",
+      "confidence": "NameOnly"
+    },
+    {
+      "caller": "main",
+      "callee": "util.rs:9",
+      "line": 9,
+      "kind": "Call",
+      "confidence": "NameOnly"
+    },
+    {
+      "caller": "new",
+      "callee": "to_string",
+      "line": 11,
+      "kind": "Call",
+      "confidence": "Unresolved"
+    },
+    {
+      "caller": "rename",
+      "callee": "to_string",
+      "line": 16,
+      "kind": "Call",
+      "confidence": "Unresolved"
+    },
+    {
+      "caller": "run",
+      "callee": "tool.py:9",
+      "line": 6,
+      "kind": "Call",
+      "confidence": "Exact"
+    },
+    {
+      "caller": "step_one",
+      "callee": "tool.py:14",
+      "line": 11,
+      "kind": "Call",
+      "confidence": "Exact"
+    },
+    {
+      "caller": "tool.py",
+      "callee": "tool.py:4",
+      "line": 20,
+      "kind": "Call",
+      "confidence": "Exact"
+    },
+    {
+      "caller": "helper",
+      "callee": "util.rs:4",
+      "line": 10,
+      "kind": "Call",
+      "confidence": "Exact"
+    },
+    {
+      "caller": "a.rs",
+      "callee": "b.rs",
+      "line": 0,
+      "kind": "Import",
+      "confidence": "Exact"
+    },
+    {
+      "caller": "b.rs",
+      "callee": "a.rs",
+      "line": 0,
+      "kind": "Import",
+      "confidence": "Exact"
+    }
+  ],
+  "imports": [
+    {
+      "file": "a.rs",
+      "target": "crate::b"
+    },
+    {
+      "file": "b.rs",
+      "target": "crate::a"
+    }
+  ]
+}

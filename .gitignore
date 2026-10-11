@@ -1,0 +1,18 @@
+# Rust build artifacts — target/ was accidentally committed once; never again
+/target/
+**/*.rs.bk
+
+# repowalk's own index cache (per-repo, generated on open)
+/.repowalk/
+**/.repowalk/
+
+# demo/export outputs
+repowalk-graph.png
+repowalk-report.md
+
+# editor / OS noise
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
