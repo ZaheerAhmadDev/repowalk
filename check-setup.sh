@@ -6,6 +6,7 @@ set -uo pipefail
 
 cd "$(dirname "$0")"
 CARGO="${CARGO:-cargo}"
+export CARGO
 fail=0
 
 check() { # check <label> <cmd...>
@@ -22,11 +23,11 @@ echo "== repowalk setup check (cargo: $CARGO) =="
 
 check "rustc present"          rustc --version
 check "$CARGO present"         $CARGO --version
-check "cargo cache: clap"      sh -c 'ls ~/.cargo/registry/cache/*/clap-4* >/dev/null 2>&1 || cargo metadata --format-version 1 >/dev/null'
-check "cargo cache: eframe"    sh -c 'ls ~/.cargo/registry/src/*/eframe-0.36* >/dev/null 2>&1 || cargo metadata --format-version 1 >/dev/null'
-check "cargo cache: egui_graphs"    sh -c 'ls ~/.cargo/registry/src/*/egui_graphs-0.32* >/dev/null 2>&1 || cargo metadata --format-version 1 >/dev/null'
-check "cargo cache: egui_code_editor" sh -c 'ls ~/.cargo/registry/src/*/egui_code_editor-0.4.2* >/dev/null 2>&1 || cargo metadata --format-version 1 >/dev/null'
-check "cargo cache: petgraph"  sh -c 'ls ~/.cargo/registry/src/*/petgraph-0.8* >/dev/null 2>&1 || cargo metadata --format-version 1 >/dev/null'
+check "cargo cache: clap"      sh -c 'ls ~/.cargo/registry/cache/*/clap-4* >/dev/null 2>&1 || "$CARGO" metadata --format-version 1 >/dev/null'
+check "cargo cache: eframe"    sh -c 'ls ~/.cargo/registry/src/*/eframe-0.36* >/dev/null 2>&1 || "$CARGO" metadata --format-version 1 >/dev/null'
+check "cargo cache: egui_graphs"    sh -c 'ls ~/.cargo/registry/src/*/egui_graphs-0.32* >/dev/null 2>&1 || "$CARGO" metadata --format-version 1 >/dev/null'
+check "cargo cache: egui_code_editor" sh -c 'ls ~/.cargo/registry/src/*/egui_code_editor-0.4.2* >/dev/null 2>&1 || "$CARGO" metadata --format-version 1 >/dev/null'
+check "cargo cache: petgraph"  sh -c 'ls ~/.cargo/registry/src/*/petgraph-0.8* >/dev/null 2>&1 || "$CARGO" metadata --format-version 1 >/dev/null'
 check "golden file"            test -f fixtures/golden/index.json
 
 echo "-- clap build smoke test --"
