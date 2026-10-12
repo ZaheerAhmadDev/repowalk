@@ -1,1 +1,2 @@
-
+# Remove the forced Zig linker so GitHub Actions uses the standard Rust linker.
+# This prevents CI failures on ubuntu-latest when `zigcc` is not installed.
