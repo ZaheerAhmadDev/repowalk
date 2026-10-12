@@ -44,11 +44,7 @@ mod tests {
     use crate::model::SymbolKind;
 
     fn temp_root(tag: &str) -> PathBuf {
-        let p = std::env::temp_dir().join(format!(
-            "rw-store-test-{}-{}",
-            std::process::id(),
-            tag
-        ));
+        let p = std::env::temp_dir().join(format!("rw-store-test-{}-{}", std::process::id(), tag));
         let _ = std::fs::remove_dir_all(&p);
         std::fs::create_dir_all(&p).unwrap();
         p
@@ -84,7 +80,10 @@ mod tests {
     #[test]
     fn cache_path_is_repowalk_index_json() {
         let root = Path::new("/repo");
-        assert_eq!(cache_path(root), PathBuf::from("/repo/.repowalk/index.json"));
+        assert_eq!(
+            cache_path(root),
+            PathBuf::from("/repo/.repowalk/index.json")
+        );
     }
 
     #[test]

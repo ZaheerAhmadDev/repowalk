@@ -28,7 +28,10 @@ const USES: &str = r#"
 /// Extract symbols, call sites and imports from one Rust source file.
 pub fn extract(source: &str, path: &str) -> (Vec<Symbol>, Vec<CallSite>, Vec<Import>) {
     let mut parser = Parser::new();
-    if parser.set_language(&tree_sitter_rust::LANGUAGE.into()).is_err() {
+    if parser
+        .set_language(&tree_sitter_rust::LANGUAGE.into())
+        .is_err()
+    {
         return (Vec::new(), Vec::new(), Vec::new());
     }
     let Some(tree) = parser.parse(source, None) else {
@@ -51,11 +54,15 @@ fn extract_defs(root: Node, source: &str, path: &str) -> Vec<Symbol> {
     let names = query.capture_names();
     let mut out = Vec::new();
     while let Some(m) = matches.next() {
-        let (Some(def), Some(name)) = (find_capture(m, names, "def"), find_capture(m, names, "name"))
-        else {
+        let (Some(def), Some(name)) = (
+            find_capture(m, names, "def"),
+            find_capture(m, names, "name"),
+        ) else {
             continue;
         };
-        let Some(name) = text(name, source) else { continue };
+        let Some(name) = text(name, source) else {
+            continue;
+        };
         let start_line = def.start_position().row + 1;
         let (kind, container) = classify(def, source);
         out.push(Symbol {
@@ -82,12 +89,15 @@ fn extract_calls(root: Node, source: &str, path: &str) -> Vec<CallSite> {
     let names = query.capture_names();
     let mut out = Vec::new();
     while let Some(m) = matches.next() {
-        let (Some(call), Some(callee)) =
-            (find_capture(m, names, "call"), find_capture(m, names, "callee"))
-        else {
+        let (Some(call), Some(callee)) = (
+            find_capture(m, names, "call"),
+            find_capture(m, names, "callee"),
+        ) else {
             continue;
         };
-        let Some(callee) = text(callee, source) else { continue };
+        let Some(callee) = text(callee, source) else {
+            continue;
+        };
         out.push(CallSite {
             file: path.to_string(),
             callee: callee.to_string(),

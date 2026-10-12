@@ -118,7 +118,10 @@ mod tests {
         // IHDR chunk: len 13, then "IHDR"
         assert_eq!(&png[8..12], &13u32.to_be_bytes());
         assert_eq!(&png[12..16], b"IHDR");
-        assert_eq!(&png[16..24], &[2u32.to_be_bytes(), 1u32.to_be_bytes()].concat());
+        assert_eq!(
+            &png[16..24],
+            &[2u32.to_be_bytes(), 1u32.to_be_bytes()].concat()
+        );
         assert_eq!(png[24], 8, "bit depth");
         assert_eq!(png[25], 6, "RGBA color type");
         // IEND chunk (len 0 + "IEND" + CRC) closes the stream

@@ -11,50 +11,64 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
     let m = metrics::compute(&idx);
 
     ui.heading("Map");
-    egui::ScrollArea::vertical().id_salt("sidebar-map").show(ui, |ui| {
-        ui.horizontal_wrapped(|ui| {
-            for (lang, n) in &m.langs {
-                ui.label(format!("{lang}: {n}"));
-            }
-        });
-        ui.label(format!("{} LOC", m.total_loc));
-        ui.horizontal_wrapped(|ui| {
-            ui.weak("entrypoints:");
-            for e in &m.entrypoints {
-                let path = e.clone();
-                if ui.link(format!("⟶ {e}")).clicked() {
-                    app.select(Selection::File(path));
+    egui::ScrollArea::vertical()
+        .id_salt("sidebar-map")
+        .show(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                for (lang, n) in &m.langs {
+                    ui.label(format!("{lang}: {n}"));
+                }
+            });
+            ui.label(format!("{} LOC", m.total_loc));
+            ui.horizontal_wrapped(|ui| {
+                ui.weak("entrypoints:");
+                for e in &m.entrypoints {
+                    let path = e.clone();
+                    if ui.link(format!("⟶ {e}")).clicked() {
+                        app.select(Selection::File(path));
+                    }
+                }
+                if m.entrypoints.is_empty() {
+                    ui.weak("none");
+                }
+            });
+
+            ui.separator();
+            ui.strong("Top files");
+            for (path, lines) in m.top_files.iter().take(5) {
+                let p = path.clone();
+                if ui
+                    .selectable_label(
+                        app.open_file.as_deref() == Some(path.as_str()),
+                        format!("{path} · {lines}"),
+                    )
+                    .clicked()
+                {
+                    app.select(Selection::File(p));
                 }
             }
-            if m.entrypoints.is_empty() {
-                ui.weak("none");
+
+            ui.separator();
+            ui.strong("Hottest symbols");
+            if m.fan_in.is_empty() {
+                ui.weak("no call edges");
             }
+            for (sym, n) in m.fan_in.iter().take(5) {
+                let id = sym.clone();
+                if ui
+                    .selectable_label(
+                        app.selection.as_ref() == Some(&Selection::Symbol(id.clone())),
+                        format!("{sym} ← {n}"),
+                    )
+                    .clicked()
+                {
+                    app.select(Selection::Symbol(id));
+                }
+            }
+
+            ui.separator();
+            health(ui, app, &m);
         });
-
-        ui.separator();
-        ui.strong("Top files");
-        for (path, lines) in m.top_files.iter().take(5) {
-            let p = path.clone();
-            if ui.selectable_label(app.open_file.as_deref() == Some(path.as_str()), format!("{path} · {lines}")).clicked() {
-                app.select(Selection::File(p));
-            }
-        }
-
-        ui.separator();
-        ui.strong("Hottest symbols");
-        if m.fan_in.is_empty() {
-            ui.weak("no call edges");
-        }
-        for (sym, n) in m.fan_in.iter().take(5) {
-            let id = sym.clone();
-            if ui.selectable_label(app.selection.as_ref() == Some(&Selection::Symbol(id.clone())), format!("{sym} ← {n}")).clicked() {
-                app.select(Selection::Symbol(id));
-            }
-        }
-
-        ui.separator();
-        health(ui, app, &m);
-    });
 }
 
 /// Health report: cycles ("spaghetti zones"), god-files, unresolved % (plan §7.4).
