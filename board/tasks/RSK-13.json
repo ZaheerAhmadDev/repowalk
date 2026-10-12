@@ -3,10 +3,13 @@
   "title": "cli: explain + find commands (repowalk/crates/cli/src/commands/explain.rs, find.rs)",
   "phase": "sdlc-implement",
   "skill": "sdlc-implement",
-  "status": "todo",
-  "assignee": null,
+  "status": "done",
+  "assignee": "main-agent",
   "description": "Implement explain::run (card: signature, doc, file:line, callers, callees, honest 'not found') and find::run (ranked hits 'path:line  name  score' via core::search) both on core::pipeline::build_index. Owner of explain.rs + find.rs only. Verify: cargo check -p repowalk-cli, CARGO_TARGET_DIR=/tmp/opencode/rw-13, else compile-pending.",
-  "artifacts": [],
+  "artifacts": [
+    "commands/explain.rs (render_explain honest not-found + 2 tests), commands/find.rs (render_find ranked hits + 3 tests)"
+  ],
   "created": "2026-10-10T14:00:00Z",
-  "updated": "2026-10-10T14:00:00Z"
+  "updated": "2026-10-11T20:30:00Z",
+  "verify": "cargo test -p repowalk-cli → 10 passed; smoke: explain greet + find fn on fixtures/sample"
 }

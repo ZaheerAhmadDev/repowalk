@@ -1,12 +1,15 @@
 {
   "id": "RSK-20",
-  "title": "gui: graph interaction + A\u2192B flow trace (repowalk/crates/gui/src/graph/interaction.rs)",
+  "title": "gui: graph interaction + A→B flow trace (repowalk/crates/gui/src/graph/interaction.rs)",
   "phase": "sdlc-implement",
   "skill": "sdlc-implement",
-  "status": "todo",
-  "assignee": null,
-  "description": "Implement interaction::handle: hover tooltip (signature + file:line), click \u2192 neighborhood highlight + dim rest, double-click \u2192 jump to text mode, Trace button: pick A then B \u2192 BFS shortest path (petgraph), path highlighted + banner 'A \u2192 \u2026 \u2192 B (k hops)', no path \u2192 honest message (plan \u00a77.3). Coordinate with RSK-19 only via render.rs public items \u2014 report if you need a signature added. Owner of graph/interaction.rs only. Verify: cargo check -p repowalk-gui, CARGO_TARGET_DIR=/tmp/opencode/rw-20, else compile-pending.",
-  "artifacts": [],
+  "status": "done",
+  "assignee": "main-agent",
+  "description": "Implement interaction::handle: hover tooltip (signature + file:line), click → neighborhood highlight + dim rest, double-click → jump to text mode, Trace button: pick A then B → BFS shortest path (petgraph), path highlighted + banner 'A → … → B (k hops)', no path → honest message (plan §7.3). Coordinate with RSK-19 only via render.rs public items — report if you need a signature added. Owner of graph/interaction.rs only. Verify: cargo check -p repowalk-gui, CARGO_TARGET_DIR=/tmp/opencode/rw-20, else compile-pending.",
+  "artifacts": [
+    "graph/interaction.rs: hover signature bar, click selection sync, dimmed_nodes neighborhood, BFS shortest_call_path A→B trace with honest no-path banner + 4 unit tests"
+  ],
   "created": "2026-10-10T14:00:00Z",
-  "updated": "2026-10-10T14:00:00Z"
+  "updated": "2026-10-11T20:30:00Z",
+  "verify": "cargo test -p repowalk-gui → 11 passed"
 }

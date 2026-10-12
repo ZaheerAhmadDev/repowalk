@@ -3,10 +3,13 @@
   "title": "cli: map + tour commands (repowalk/crates/cli/src/commands/map.rs, tour.rs)",
   "phase": "sdlc-implement",
   "skill": "sdlc-implement",
-  "status": "todo",
-  "assignee": null,
+  "status": "done",
+  "assignee": "main-agent",
   "description": "Implement map::run (orientation screen: languages, LOC, entrypoints, module tree, top files, health line from core::metrics) and tour::run (numbered reading order with why-lines from core::tour), both via core::pipeline::build_index. Use render.rs helpers. Owner of map.rs + tour.rs only. Verify: cargo check -p repowalk-cli, CARGO_TARGET_DIR=/tmp/opencode/rw-12, else compile-pending.",
-  "artifacts": [],
+  "artifacts": [
+    "commands/map.rs (render_map/health_line/render_module_tree + 3 tests), commands/tour.rs (render_tour + 2 tests), both via core::pipeline::build_index"
+  ],
   "created": "2026-10-10T14:00:00Z",
-  "updated": "2026-10-10T14:00:00Z"
+  "updated": "2026-10-11T20:30:00Z",
+  "verify": "cargo test -p repowalk-cli → 10 passed; smoke: repowalk-cli map/tour fixtures/sample"
 }

@@ -11,6 +11,7 @@ mod text;
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([1280.0, 800.0]),
+        wgpu_options: wgpu_options(),
         ..Default::default()
     };
     eframe::run_native(
@@ -18,4 +19,23 @@ fn main() -> eframe::Result {
         options,
         Box::new(|cc| Ok(Box::new(app::App::new(cc)))),
     )
+}
+
+/// Backend selection: eframe's default (`PRIMARY | GL`) tries Vulkan first, and
+/// some Windows Vulkan ICDs **segfault the process** during adapter enumeration
+/// (observed: 4/4 crashes with vulkan/default, 4/4 stable with dx12/gl). On
+/// Windows we therefore drop Vulkan from the default set; `WGPU_BACKEND=...`
+/// still forces any backend explicitly, and Linux keeps the stock behavior.
+fn wgpu_options() -> egui_wgpu::WgpuConfiguration {
+    let mut setup = egui_wgpu::WgpuSetupCreateNew::without_display_handle();
+    if cfg!(windows) {
+        setup
+            .instance_descriptor
+            .backends
+            .set(egui_wgpu::wgpu::Backends::VULKAN, false);
+    }
+    egui_wgpu::WgpuConfiguration {
+        wgpu_setup: egui_wgpu::WgpuSetup::CreateNew(setup),
+        ..Default::default()
+    }
 }

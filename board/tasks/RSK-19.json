@@ -3,10 +3,13 @@
   "title": "gui: graph render + egui_graphs spike (repowalk/crates/gui/src/graph/render.rs)",
   "phase": "sdlc-implement",
   "skill": "sdlc-implement",
-  "status": "todo",
-  "assignee": null,
-  "description": "SPIKE FIRST (plan \u00a79 B): prove eframe 0.36 + egui_graphs 0.32.0 render a 10-node graph with click response. Then implement render::ui: call/import graph from Index edges (skip Unresolved), force-directed layout, pan/zoom/drag, legend (node size=fan-in, color=module, dashed=? for non-Exact), dim non-neighbors on selection. Owner of graph/render.rs only. Verify: cargo check -p repowalk-gui, CARGO_TARGET_DIR=/tmp/opencode/rw-19, else compile-pending.",
-  "artifacts": [],
+  "status": "done",
+  "assignee": "main-agent",
+  "description": "SPIKE FIRST (plan §9 B): prove eframe 0.36 + egui_graphs 0.32.0 render a 10-node graph with click response. Then implement render::ui: call/import graph from Index edges (skip Unresolved), force-directed layout, pan/zoom/drag, legend (node size=fan-in, color=module, dashed=? for non-Exact), dim non-neighbors on selection. Owner of graph/render.rs only. Verify: cargo check -p repowalk-gui, CARGO_TARGET_DIR=/tmp/opencode/rw-19, else compile-pending.",
+  "artifacts": [
+    "graph/render.rs: WalkNodeShape (radius=fan-in, module color, entrypoint ring) + WalkEdgeShape (dashed ? for non-Exact) custom display impls, build_graph skipping Unresolved, force-directed (FruchtermanReingold) via GraphView, legend + edge-type toggles"
+  ],
   "created": "2026-10-10T14:00:00Z",
-  "updated": "2026-10-10T14:00:00Z"
+  "updated": "2026-10-11T20:30:00Z",
+  "verify": "cargo test -p repowalk-gui → 11 passed"
 }

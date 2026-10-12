@@ -7,6 +7,13 @@ license.workspace = true
 [dependencies]
 anyhow = "1"
 eframe = "0.36"
-egui_code_editor = "0.4.2"
+egui = "0.36"
+# vendored patch: adds the missing serde derives on CursorState so the crate
+# compiles with egui_graphs' forced egui/persistence feature (see vendor/README.md)
+egui_code_editor = { version = "0.4.2", features = ["serde"] }
 egui_graphs = "0.32.0"
+# same version eframe pulls; declared directly to configure backend selection
+egui-wgpu = "0.36"
+petgraph = "0.8"
 repowalk-core = { path = "../core" }
+serde = { version = "1", features = ["derive"] }

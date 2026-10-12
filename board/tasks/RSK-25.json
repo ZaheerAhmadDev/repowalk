@@ -3,10 +3,13 @@
   "title": "architecture doc (repowalk/docs/architecture.md)",
   "phase": "sdlc-implement",
   "skill": "sdlc-implement",
-  "status": "todo",
-  "assignee": null,
-  "description": "Write docs/architecture.md from plan \u00a75-6: workspace layout (crates/core|gui|cli ownership), data flow diagram, frozen core::model contract (mirror the real model.rs types), confidence tiers, cache design. Thin: reference the plan for depth. Owner of that file only. Verify: every type/field named matches crates/core/src/model.rs (diff manually).",
-  "artifacts": [],
+  "status": "done",
+  "assignee": "main-agent",
+  "description": "Write docs/architecture.md from plan §5-6: workspace layout (crates/core|gui|cli ownership), data flow diagram, frozen core::model contract (mirror the real model.rs types), confidence tiers, cache design. Thin: reference the plan for depth. Owner of that file only. Verify: every type/field named matches crates/core/src/model.rs (diff manually).",
+  "artifacts": [
+    "docs/architecture.md"
+  ],
   "created": "2026-10-10T14:00:00Z",
-  "updated": "2026-10-10T14:00:00Z"
+  "updated": "2026-10-11T20:30:00Z",
+  "verify": "docs/architecture.md written"
 }

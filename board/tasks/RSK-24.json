@@ -3,10 +3,13 @@
   "title": "README + demo runbook (repowalk/README.md, repowalk/docs/demo.md)",
   "phase": "sdlc-implement",
   "skill": "sdlc-implement",
-  "status": "todo",
-  "assignee": null,
-  "description": "Write README.md: pitch line, one-liner, install (cargo install --path .), usage (map/tour/explain/find + GUI), architecture diagram (ASCII, plan \u00a75.2), offline/no-AI positioning, license note. docs/demo.md: the 8-step 5-minute demo script (plan \u00a711) as a checklist. Owner of those 2 files only. Verify: files exist, links/paths in them resolve (check referenced files exist).",
-  "artifacts": [],
+  "status": "done",
+  "assignee": "main-agent",
+  "description": "Write README.md: pitch line, one-liner, install (cargo install --path .), usage (map/tour/explain/find + GUI), architecture diagram (ASCII, plan §5.2), offline/no-AI positioning, license note. docs/demo.md: the 8-step 5-minute demo script (plan §11) as a checklist. Owner of those 2 files only. Verify: files exist, links/paths in them resolve (check referenced files exist).",
+  "artifacts": [
+    "docs/demo.md demo runbook (README.md existed)"
+  ],
   "created": "2026-10-10T14:00:00Z",
-  "updated": "2026-10-10T14:00:00Z"
+  "updated": "2026-10-11T20:30:00Z",
+  "verify": "docs/demo.md written"
 }

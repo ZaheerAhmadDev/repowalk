@@ -51,7 +51,7 @@ fn extract_defs(root: Node, source: &str, path: &str) -> Vec<Symbol> {
     let names = query.capture_names();
     let mut out = Vec::new();
     while let Some(m) = matches.next() {
-        let (Some(def), Some(name)) = (find_capture(&m, names, "def"), find_capture(&m, names, "name"))
+        let (Some(def), Some(name)) = (find_capture(m, names, "def"), find_capture(m, names, "name"))
         else {
             continue;
         };
@@ -83,7 +83,7 @@ fn extract_calls(root: Node, source: &str, path: &str) -> Vec<CallSite> {
     let mut out = Vec::new();
     while let Some(m) = matches.next() {
         let (Some(call), Some(callee)) =
-            (find_capture(&m, names, "call"), find_capture(&m, names, "callee"))
+            (find_capture(m, names, "call"), find_capture(m, names, "callee"))
         else {
             continue;
         };
@@ -107,7 +107,7 @@ fn extract_imports(root: Node, source: &str, path: &str) -> Vec<Import> {
     let names = query.capture_names();
     let mut out = Vec::new();
     while let Some(m) = matches.next() {
-        let Some(target) = find_capture(&m, names, "target").and_then(|n| text(n, source)) else {
+        let Some(target) = find_capture(m, names, "target").and_then(|n| text(n, source)) else {
             continue;
         };
         out.push(Import {
@@ -149,6 +149,11 @@ fn leading_doc(def: Node, source: &str) -> String {
             break;
         }
         let Some(raw) = text(sib, source) else { break };
+        // `//!` inner docs belong to the module, not to the item after them;
+        // the doc chain stops there.
+        if raw.trim_start().starts_with("//!") {
+            break;
+        }
         parts.push(raw);
         prev = sib.prev_sibling();
     }
@@ -344,6 +349,15 @@ mod inner {
         assert_eq!(shape.doc, "A shape.");
         let point = symbols.iter().find(|s| s.name == "Point").unwrap();
         assert!(point.doc.is_empty());
+    }
+
+    #[test]
+    fn inner_module_docs_are_not_symbol_docs() {
+        // `//!` comments document the module, never the item that follows them.
+        let src = "//! Module docs.\n\n/// Real docs.\nfn f() {}\n";
+        let (symbols, _, _) = extract(src, "src/lib.rs");
+        let f = symbols.iter().find(|s| s.name == "f").unwrap();
+        assert_eq!(f.doc, "Real docs.");
     }
 
     #[test]

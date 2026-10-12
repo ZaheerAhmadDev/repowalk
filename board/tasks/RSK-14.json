@@ -3,10 +3,14 @@
   "title": "gui: app shell, layout, keyboard, selection sync (repowalk/crates/gui/src/main.rs, app.rs)",
   "phase": "sdlc-implement",
   "skill": "sdlc-implement",
-  "status": "todo",
-  "assignee": null,
-  "description": "Flesh App: load index (background thread + progress overlay, core::pipeline::build_index), Tab mode toggle preserving selection, / focus search, j/k lists, Esc clear, selection drives all panels (plan \u00a74.2-4.3), dark theme default. Wire explain::card into text mode. Keep existing type names (Mode/Selection/App fields) \u2014 other panels depend on them. Owner of main.rs + app.rs only. Verify: cargo check -p repowalk-gui, CARGO_TARGET_DIR=/tmp/opencode/rw-14, else compile-pending.",
-  "artifacts": [],
+  "status": "done",
+  "assignee": "main-agent",
+  "description": "Flesh App: load index (background thread + progress overlay, core::pipeline::build_index), Tab mode toggle preserving selection, / focus search, j/k lists, Esc clear, selection drives all panels (plan §4.2-4.3), dark theme default. Wire explain::card into text mode. Keep existing type names (Mode/Selection/App fields) — other panels depend on them. Owner of main.rs + app.rs only. Verify: cargo check -p repowalk-gui, CARGO_TARGET_DIR=/tmp/opencode/rw-14, else compile-pending.",
+  "artifacts": [
+    "app.rs rewritten for egui 0.36 (Panel API, App::ui), background indexing thread + progress overlay, keyboard (Tab / Esc ? g j/k Enter Ctrl+S), selection sync, export menu; main.rs unchanged shell",
+    "main.rs wgpu_options: drop Vulkan from default backends on Windows — broken ICDs segfault the process during adapter enumeration (4/4 segfault pre-fix → 4/4 stable post-fix; explicit WGPU_BACKEND=vulkan now fails cleanly)"
+  ],
   "created": "2026-10-10T14:00:00Z",
-  "updated": "2026-10-10T14:00:00Z"
+  "updated": "2026-10-11T20:30:00Z",
+  "verify": "cargo test -p repowalk-gui → 11 passed; cargo clippy --workspace -D warnings clean; GUI startup smoke: default/gl/dx12 4/4 alive, no segfaults"
 }

@@ -2,8 +2,11 @@
 pub mod interaction;
 pub mod render;
 
-pub fn ui(ui: &mut egui::Ui, app: &mut crate::app::App) {
+use crate::app::App;
+use eframe::egui;
+
+pub fn ui(ui: &mut egui::Ui, app: &mut App) {
+    render::legend(ui, app);
     render::ui(ui, app);
     interaction::handle(ui, app);
 }
-use eframe::egui;

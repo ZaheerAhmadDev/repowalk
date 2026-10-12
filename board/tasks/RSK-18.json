@@ -3,10 +3,13 @@
   "title": "gui: editable code pane (repowalk/crates/gui/src/text/editor.rs)",
   "phase": "sdlc-implement",
   "skill": "sdlc-implement",
-  "status": "todo",
-  "assignee": null,
+  "status": "done",
+  "assignee": "main-agent",
   "description": "Implement editor::ui using egui_code_editor 0.4.2: syntax-highlighted editable buffer, line numbers, Ctrl+S save (dirty_edits tracking), jump/scroll to selection line, load file content on Selection change. Owner of text/editor.rs only. Verify: cargo check -p repowalk-gui, CARGO_TARGET_DIR=/tmp/opencode/rw-18, else compile-pending.",
-  "artifacts": [],
+  "artifacts": [
+    "text/editor.rs: egui_code_editor AYU_DARK, numlines, rust/python syntax, buffer checkout pattern, dirty tracking, Ctrl+S save, jump-to-line scroll"
+  ],
   "created": "2026-10-10T14:00:00Z",
-  "updated": "2026-10-10T14:00:00Z"
+  "updated": "2026-10-11T20:30:00Z",
+  "verify": "cargo test -p repowalk-gui → 11 passed"
 }

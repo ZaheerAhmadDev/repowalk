@@ -3,10 +3,13 @@
   "title": "gui: PNG screenshot export (repowalk/crates/gui/src/export/png.rs)",
   "phase": "sdlc-implement",
   "skill": "sdlc-implement",
-  "status": "todo",
-  "assignee": null,
-  "description": "SPIKE (plan \u00a79 D): prove ViewportCommand::Screenshot API on eframe 0.36; implement request_screenshot(ctx) + save-to-file flow; if API differs, document fallback in your report and implement what works (Markdown-only fallback acceptable per cut order). Owner of export/png.rs only. Verify: cargo check -p repowalk-gui, CARGO_TARGET_DIR=/tmp/opencode/rw-23, else compile-pending.",
-  "artifacts": [],
+  "status": "done",
+  "assignee": "main-agent",
+  "description": "SPIKE (plan §9 D): prove ViewportCommand::Screenshot API on eframe 0.36; implement request_screenshot(ctx) + save-to-file flow; if API differs, document fallback in your report and implement what works (Markdown-only fallback acceptable per cut order). Owner of export/png.rs only. Verify: cargo check -p repowalk-gui, CARGO_TARGET_DIR=/tmp/opencode/rw-23, else compile-pending.",
+  "artifacts": [
+    "export/png.rs: spike proven — ViewportCommand::Screenshot(tag) → Event::Screenshot{image, user_data}; request_screenshot + save_png with hand-rolled stored-block PNG encoder (CRC32/Adler32 tested) — zero new deps"
+  ],
   "created": "2026-10-10T14:00:00Z",
-  "updated": "2026-10-10T14:00:00Z"
+  "updated": "2026-10-11T20:30:00Z",
+  "verify": "cargo test -p repowalk-gui → 11 passed (4 png tests)"
 }

@@ -3,10 +3,13 @@
   "title": "cli: dispatch + render helpers (repowalk/crates/cli/src/main.rs, render.rs)",
   "phase": "sdlc-implement",
   "skill": "sdlc-implement",
-  "status": "todo",
-  "assignee": null,
-  "description": "Flesh main.rs (clap derive, 4 subcommands \u2192 commands::*, clear no-subcommand message) and render.rs (head/dim/warn ANSI helpers via colored crate) per existing skeletons. Owner of those 2 files only. Verify: cargo check -p repowalk-cli, CARGO_TARGET_DIR=/tmp/opencode/rw-11, else compile-pending.",
-  "artifacts": [],
+  "status": "done",
+  "assignee": "main-agent",
+  "description": "Flesh main.rs (clap derive, 4 subcommands → commands::*, clear no-subcommand message) and render.rs (head/dim/warn ANSI helpers via colored crate) per existing skeletons. Owner of those 2 files only. Verify: cargo check -p repowalk-cli, CARGO_TARGET_DIR=/tmp/opencode/rw-11, else compile-pending.",
+  "artifacts": [
+    "cli dispatch + render.rs helpers already skeletal-complete; added missing deps (clap 4 derive, colored 2, anyhow) to crates/cli/Cargo.toml"
+  ],
   "created": "2026-10-10T14:00:00Z",
-  "updated": "2026-10-10T14:00:00Z"
+  "updated": "2026-10-11T20:30:00Z",
+  "verify": "cargo test -p repowalk-cli → 10 passed"
 }

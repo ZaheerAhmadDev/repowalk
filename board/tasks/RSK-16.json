@@ -3,10 +3,13 @@
   "title": "gui: sidebar tour + search panels (repowalk/crates/gui/src/sidebar/tour.rs, search.rs)",
   "phase": "sdlc-implement",
   "skill": "sdlc-implement",
-  "status": "todo",
-  "assignee": null,
-  "description": "Implement tour::ui (numbered reading order list, click \u2192 jump in text mode via Selection::File + line) and search::ui (fuzzy box wired to core::search, top-10 results, sortable symbol list by fan-in/LOC/name, click \u2192 select). Owner of sidebar/tour.rs + search.rs only. Verify: cargo check -p repowalk-gui, CARGO_TARGET_DIR=/tmp/opencode/rw-16, else compile-pending.",
-  "artifacts": [],
+  "status": "done",
+  "assignee": "main-agent",
+  "description": "Implement tour::ui (numbered reading order list, click → jump in text mode via Selection::File + line) and search::ui (fuzzy box wired to core::search, top-10 results, sortable symbol list by fan-in/LOC/name, click → select). Owner of sidebar/tour.rs + search.rs only. Verify: cargo check -p repowalk-gui, CARGO_TARGET_DIR=/tmp/opencode/rw-16, else compile-pending.",
+  "artifacts": [
+    "sidebar/tour.rs (numbered why-lines, hover text), sidebar/search.rs (fuzzy box wired to core::search, top-10, sortable symbol list fan-in/LOC/name)"
+  ],
   "created": "2026-10-10T14:00:00Z",
-  "updated": "2026-10-10T14:00:00Z"
+  "updated": "2026-10-11T20:30:00Z",
+  "verify": "cargo test -p repowalk-gui → 11 passed"
 }

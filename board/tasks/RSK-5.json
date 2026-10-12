@@ -3,10 +3,13 @@
   "title": "core: edge resolution + confidence tiers (repowalk/crates/core/src/resolve.rs)",
   "phase": "sdlc-implement",
   "skill": "sdlc-implement",
-  "status": "in_progress",
-  "assignee": "rsk-5-agent",
+  "status": "done",
+  "assignee": "main-agent",
   "description": "Implement resolve() + resolve_imports() per stub exactly per plan §7.1: same file/module→Exact, unique global→NameOnly, multi-candidate→Ambiguous, none→Unresolved; deterministic ordering. Owner of resolve.rs only. Unit tests covering ALL four tiers + import file resolution. Verify as RSK-1 (CARGO_TARGET_DIR=/tmp/opencode/rw-5).",
-  "artifacts": [],
+  "artifacts": [
+    "resolve.rs (pre-existing, verified)"
+  ],
   "created": "2026-10-10T14:00:00Z",
-  "updated": "2026-10-10T14:30:00Z"
+  "updated": "2026-10-11T20:30:00Z",
+  "verify": "cargo test -p repowalk-core → 54 passed"
 }
