@@ -1,0 +1,20 @@
+name: CSS Lint
+
+on:
+  push:
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  csslint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-hub/stylelint@master
+        env:
+          PATTERN: "site/**/*.css"
+        with:
+          config: '{ "extends": "stylelint-config-standard" }'

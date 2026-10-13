@@ -50,7 +50,10 @@ fn extract_defs(query: &Query, root: Node, source: &str, path: &str) -> Vec<Symb
     let mut matches = cursor.matches(query, root, source.as_bytes());
     let mut out = Vec::new();
     while let Some(m) = matches.next() {
-        let (Some(def), Some(name)) = (capture(m.captures(), names, "def"), capture(m.captures(), names, "name")) else {
+        let (Some(def), Some(name)) = (
+            capture(m.captures(), names, "def"),
+            capture(m.captures(), names, "name"),
+        ) else {
             continue;
         };
         let name_text = node_text(name, source);
@@ -73,7 +76,11 @@ fn extract_defs(query: &Query, root: Node, source: &str, path: &str) -> Vec<Symb
             doc: docstring_of(def, source),
             start_line,
             end_line: def.end_position().row + 1,
-            container: if enclosing.is_empty() { None } else { Some(enclosing.join(".")) },
+            container: if enclosing.is_empty() {
+                None
+            } else {
+                Some(enclosing.join("."))
+            },
             file: path.to_string(),
         });
     }
@@ -86,9 +93,10 @@ fn extract_calls(query: &Query, root: Node, source: &str, path: &str) -> Vec<Cal
     let mut matches = cursor.matches(query, root, source.as_bytes());
     let mut out = Vec::new();
     while let Some(m) = matches.next() {
-        let (Some(call), Some(callee)) =
-            (capture(m.captures(), names, "call"), capture(m.captures(), names, "callee"))
-        else {
+        let (Some(call), Some(callee)) = (
+            capture(m.captures(), names, "call"),
+            capture(m.captures(), names, "callee"),
+        ) else {
             continue;
         };
         if has_ancestor_kind(call, "decorator") {
@@ -111,15 +119,24 @@ fn extract_imports(query: &Query, root: Node, source: &str, path: &str) -> Vec<I
     let mut matches = cursor.matches(query, root, source.as_bytes());
     let mut out = Vec::new();
     while let Some(m) = matches.next() {
-        let Some(stmt) = capture(m.captures(), names, "import") else { continue };
+        let Some(stmt) = capture(m.captures(), names, "import") else {
+            continue;
+        };
         for target in import_targets(stmt, source) {
-            out.push(Import { file: path.to_string(), target });
+            out.push(Import {
+                file: path.to_string(),
+                target,
+            });
         }
     }
     out
 }
 
-fn capture<'tree>(caps: &[tree_sitter::QueryCapture<'tree>], names: &[&str], want: &str) -> Option<Node<'tree>> {
+fn capture<'tree>(
+    caps: &[tree_sitter::QueryCapture<'tree>],
+    names: &[&str],
+    want: &str,
+) -> Option<Node<'tree>> {
     caps.iter()
         .find(|c| names.get(c.index as usize).copied() == Some(want))
         .map(|c| c.node)
@@ -174,7 +191,11 @@ fn signature_of(node: Node, source: &str) -> String {
         .child_by_field_name("body")
         .map(|b| b.start_byte() - node.start_byte())
         .unwrap_or(text.len());
-    let header: String = text[..end].lines().map(str::trim).collect::<Vec<_>>().join(" ");
+    let header: String = text[..end]
+        .lines()
+        .map(str::trim)
+        .collect::<Vec<_>>()
+        .join(" ");
     header.trim().trim_end_matches(':').to_string()
 }
 
@@ -304,13 +325,20 @@ async def top():
 "#;
 
     fn find_symbol<'a>(syms: &'a [Symbol], name: &str) -> &'a Symbol {
-        syms.iter().find(|s| s.name == name).unwrap_or_else(|| panic!("missing symbol {name}"))
+        syms.iter()
+            .find(|s| s.name == name)
+            .unwrap_or_else(|| panic!("missing symbol {name}"))
     }
 
     #[test]
     fn extracts_defs_including_async_and_class() {
         let (syms, _, _) = extract(SRC, "m.py");
-        assert_eq!(syms.len(), 6, "symbols: {:?}", syms.iter().map(|s| &s.name).collect::<Vec<_>>());
+        assert_eq!(
+            syms.len(),
+            6,
+            "symbols: {:?}",
+            syms.iter().map(|s| &s.name).collect::<Vec<_>>()
+        );
 
         let greeter = find_symbol(&syms, "Greeter");
         assert_eq!(greeter.kind, SymbolKind::Class);
@@ -327,7 +355,10 @@ async def top():
         assert_eq!(hello.signature, "def hello(self, name: str) -> str");
 
         assert_eq!(find_symbol(&syms, "run").kind, SymbolKind::Method);
-        assert_eq!(find_symbol(&syms, "run").container.as_deref(), Some("Greeter"));
+        assert_eq!(
+            find_symbol(&syms, "run").container.as_deref(),
+            Some("Greeter")
+        );
 
         let deco = find_symbol(&syms, "decorated");
         assert_eq!(deco.kind, SymbolKind::Function);
@@ -355,7 +386,10 @@ async def top():
     fn calls_are_name_only_and_skip_decorators() {
         let (_, calls, _) = extract(SRC, "m.py");
         let get = |callee: &str| {
-            calls.iter().find(|c| c.callee == callee).unwrap_or_else(|| panic!("missing call {callee}"))
+            calls
+                .iter()
+                .find(|c| c.callee == callee)
+                .unwrap_or_else(|| panic!("missing call {callee}"))
         };
 
         // attribute call → name only
@@ -368,14 +402,20 @@ async def top():
         assert_eq!(get("main").enclosing.as_deref(), Some("top"));
 
         // decorator `@myapp.route("/x")` call is excluded
-        assert!(calls.iter().all(|c| c.callee != "route"), "decorator call leaked: {calls:?}");
+        assert!(
+            calls.iter().all(|c| c.callee != "route"),
+            "decorator call leaked: {calls:?}"
+        );
     }
 
     #[test]
     fn imports_cover_relative_and_aliased() {
         let (_, _, imports) = extract(SRC, "m.py");
         let targets: Vec<&str> = imports.iter().map(|i| i.target.as_str()).collect();
-        assert_eq!(targets, vec!["os", "pathlib.Path", ".sibling", ".utils.helper"]);
+        assert_eq!(
+            targets,
+            vec!["os", "pathlib.Path", ".sibling", ".utils.helper"]
+        );
     }
 
     #[test]

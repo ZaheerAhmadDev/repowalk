@@ -4,10 +4,10 @@ use eframe::egui;
 use egui_graphs::{DisplayEdge, DisplayNode, DrawContext, EdgeProps, Graph, Node, NodeProps};
 use petgraph::graph::DefaultIx;
 use petgraph::stable_graph::{NodeIndex, StableGraph};
-use std::collections::BTreeMap;
 use petgraph::Directed;
 use repowalk_core::model::{Confidence, EdgeKind, Index};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 use crate::app::App;
 
@@ -103,9 +103,9 @@ impl DisplayNode<NodeInfo, EdgeInfo, Directed, DefaultIx> for WalkNodeShape {
                 egui::Stroke::new(2.0, color),
             ));
         }
-        let galley = ctx
-            .painter
-            .layout_no_wrap(self.label.clone(), egui::FontId::monospace(11.0), color);
+        let galley =
+            ctx.painter
+                .layout_no_wrap(self.label.clone(), egui::FontId::monospace(11.0), color);
         let half = galley.size() * 0.5;
         let text = egui::epaint::TextShape::new(
             center - egui::vec2(half.x, radius + half.y + 2.0),
@@ -178,9 +178,11 @@ impl DisplayEdge<NodeInfo, EdgeInfo, Directed, DefaultIx, WalkNodeShape> for Wal
         if self.dashed {
             res.extend(egui::Shape::dashed_line(&[a, b], stroke, 6.0, 5.0));
             let mid = (a.to_vec2() + b.to_vec2()) * 0.5;
-            let galley = ctx
-                .painter
-                .layout_no_wrap("?".to_string(), egui::FontId::proportional(11.0), color);
+            let galley = ctx.painter.layout_no_wrap(
+                "?".to_string(),
+                egui::FontId::proportional(11.0),
+                color,
+            );
             let text = egui::epaint::TextShape::new(
                 egui::Pos2::ZERO + mid - galley.size() * 0.5,
                 galley,
@@ -222,36 +224,37 @@ pub fn build_graph(idx: &Index, edge_calls: bool, edge_imports: bool) -> WalkGra
         }
         *fan_in.entry(e.callee.clone()).or_insert(0) += 1;
 
-        let mut node_for = |id: &str, pet: &mut StableGraph<NodeInfo, EdgeInfo, Directed>| -> NodeIndex {
-            if let Some(n) = node_of.get(id) {
-                return *n;
-            }
-            let (module, label, entry) = match id.strip_prefix("file:") {
-                Some(path) => (
-                    App::module_of(path),
-                    path.to_string(),
-                    entrypoints.contains(path),
-                ),
-                None => {
-                    let sym = idx.symbols.iter().find(|s| s.id == id);
-                    (
-                        sym.map(|s| App::module_of(&s.file))
-                            .unwrap_or_else(|| "(root)".to_string()),
-                        label_of(idx, id),
-                        sym.is_some_and(|s| entrypoints.contains(s.file.as_str())),
-                    )
+        let mut node_for =
+            |id: &str, pet: &mut StableGraph<NodeInfo, EdgeInfo, Directed>| -> NodeIndex {
+                if let Some(n) = node_of.get(id) {
+                    return *n;
                 }
+                let (module, label, entry) = match id.strip_prefix("file:") {
+                    Some(path) => (
+                        App::module_of(path),
+                        path.to_string(),
+                        entrypoints.contains(path),
+                    ),
+                    None => {
+                        let sym = idx.symbols.iter().find(|s| s.id == id);
+                        (
+                            sym.map(|s| App::module_of(&s.file))
+                                .unwrap_or_else(|| "(root)".to_string()),
+                            label_of(idx, id),
+                            sym.is_some_and(|s| entrypoints.contains(s.file.as_str())),
+                        )
+                    }
+                };
+                let n = pet.add_node(NodeInfo {
+                    id: id.to_string(),
+                    label,
+                    module,
+                    fan_in: 0,
+                    entrypoint: entry,
+                });
+                node_of.insert(id.to_string(), n);
+                n
             };
-            let n = pet.add_node(NodeInfo {
-                id: id.to_string(),
-                label,
-                module,
-                fan_in: 0,
-                entrypoint: entry,
-            });
-            node_of.insert(id.to_string(), n);
-            n
-        };
 
         let a = node_for(&e.caller, &mut pet);
         let b = node_for(&e.callee, &mut pet);
@@ -291,7 +294,12 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
     let Some(idx) = app.index.clone() else {
         return;
     };
-    let signature = (idx.edges.len(), idx.symbols.len(), app.edge_calls, app.edge_imports);
+    let signature = (
+        idx.edges.len(),
+        idx.symbols.len(),
+        app.edge_calls,
+        app.edge_imports,
+    );
     let stale = app
         .graph_state
         .as_ref()
@@ -313,17 +321,15 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
                 egui_graphs::FruchtermanReingoldState,
                 egui_graphs::LayoutForceDirected<egui_graphs::FruchtermanReingold>,
             >::new()
-                .with_interactions(
-                    &egui_graphs::SettingsInteraction::new()
-                        .with_node_clicking_enabled(true)
-                        ,
-                )
-                .with_navigations(
-                    &egui_graphs::SettingsNavigation::new()
-                        .with_zoom_and_pan_enabled(true)
-                        .with_fit_to_screen_enabled(true),
-                )
-                .show(ui, g);
+            .with_interactions(
+                &egui_graphs::SettingsInteraction::new().with_node_clicking_enabled(true),
+            )
+            .with_navigations(
+                &egui_graphs::SettingsNavigation::new()
+                    .with_zoom_and_pan_enabled(true)
+                    .with_fit_to_screen_enabled(true),
+            )
+            .show(ui, g);
         });
 }
 

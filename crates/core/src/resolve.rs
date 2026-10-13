@@ -52,10 +52,7 @@ pub fn resolve(files: &[FileEntry], symbols: &[Symbol], sites: &[CallSite]) -> V
                 (cands[0].id.clone(), Confidence::Ambiguous)
             };
             Edge {
-                caller: site
-                    .enclosing
-                    .clone()
-                    .unwrap_or_else(|| site.file.clone()),
+                caller: site.enclosing.clone().unwrap_or_else(|| site.file.clone()),
                 callee,
                 line: site.line,
                 kind: EdgeKind::Call,
@@ -110,7 +107,9 @@ fn parent_dirs(path: &str) -> Vec<&str> {
 }
 
 fn parent_path(path: &str) -> &str {
-    path.rsplit_once('/').map(|(parent, _)| parent).unwrap_or("")
+    path.rsplit_once('/')
+        .map(|(parent, _)| parent)
+        .unwrap_or("")
 }
 
 fn file_name(path: &str) -> &str {
@@ -155,7 +154,10 @@ fn import_candidates(target: &str, from_file: &str, crate_roots: &BTreeSet<Strin
     } else if target.starts_with("super::") || target.starts_with("super.") {
         let mut r = target;
         let mut up = 0;
-        while let Some(next) = r.strip_prefix("super::").or_else(|| r.strip_prefix("super.")) {
+        while let Some(next) = r
+            .strip_prefix("super::")
+            .or_else(|| r.strip_prefix("super."))
+        {
             up += 1;
             r = next;
         }
@@ -184,10 +186,7 @@ fn import_candidates(target: &str, from_file: &str, crate_roots: &BTreeSet<Strin
         push_crate_roots(&mut bases, crate_roots);
     }
 
-    let segs: Vec<&str> = rest
-        .split([':', '.'])
-        .filter(|s| !s.is_empty())
-        .collect();
+    let segs: Vec<&str> = rest.split([':', '.']).filter(|s| !s.is_empty()).collect();
 
     let mut out: BTreeSet<String> = BTreeSet::new();
     for base in &bases {
@@ -206,7 +205,10 @@ fn import_candidates(target: &str, from_file: &str, crate_roots: &BTreeSet<Strin
             out.insert(path_join(base, &format!("{joined}/mod.rs")));
             if segs.len() > 1 {
                 // Last segment may be an inline module inside its parent's file.
-                out.insert(path_join(base, &format!("{}.rs", segs[..segs.len() - 1].join("/"))));
+                out.insert(path_join(
+                    base,
+                    &format!("{}.rs", segs[..segs.len() - 1].join("/")),
+                ));
             }
         }
         if python {
@@ -226,7 +228,10 @@ fn push_crate_roots(bases: &mut Vec<String>, crate_roots: &BTreeSet<String>) {
 }
 
 /// Classify candidate files against the known file set.
-fn import_tier<'a>(cands: &[String], known: &'a BTreeSet<&'a str>) -> Option<(&'a str, Confidence)> {
+fn import_tier<'a>(
+    cands: &[String],
+    known: &'a BTreeSet<&'a str>,
+) -> Option<(&'a str, Confidence)> {
     let mut exact: Vec<&str> = cands
         .iter()
         .filter_map(|c| known.get(c.as_str()).copied())
@@ -331,7 +336,12 @@ mod tests {
         // Callers in src/app, callee in src/lib: shared prefix "src" ≥ 1 dir.
         let files = vec![file("src/app/main.rs"), file("src/lib/util.rs")];
         let symbols = vec![sym("src/lib/util.rs", 7, "util_fn")];
-        let sites = vec![call("src/app/main.rs", "util_fn", 3, Some("src/app/main.rs:1"))];
+        let sites = vec![call(
+            "src/app/main.rs",
+            "util_fn",
+            3,
+            Some("src/app/main.rs:1"),
+        )];
 
         let edges = resolve(&files, &symbols, &sites);
         assert_eq!(edges[0].callee, "src/lib/util.rs:7");
@@ -394,7 +404,11 @@ mod tests {
         widget.container = Some("Widget".into());
         let mut panel = sym("ui/panel.rs", 5, "render");
         panel.container = Some("Panel".into());
-        let files = vec![file("app/main.rs"), file("ui/button.rs"), file("ui/panel.rs")];
+        let files = vec![
+            file("app/main.rs"),
+            file("ui/button.rs"),
+            file("ui/panel.rs"),
+        ];
         let symbols = vec![panel, widget];
         let sites = vec![call("app/main.rs", "Widget::render", 2, None)];
 

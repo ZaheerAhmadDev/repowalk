@@ -16,8 +16,7 @@ fn fixture_root() -> PathBuf {
 }
 
 fn golden_path() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../fixtures/golden/index.json")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/golden/index.json")
 }
 
 /// Canonical form: everything machine-dependent zeroed out.

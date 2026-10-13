@@ -352,7 +352,9 @@ impl App {
         let path = path.clone();
         let found = ctx.input(|i| {
             i.events.iter().find_map(|e| match e {
-                egui::Event::Screenshot { image, user_data, .. } => {
+                egui::Event::Screenshot {
+                    image, user_data, ..
+                } => {
                     let tag_ok = user_data
                         .data
                         .as_ref()
@@ -497,7 +499,14 @@ impl eframe::App for App {
                 .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
                 .show(ui.ctx(), |ui| {
                     egui::Frame::popup(ui.style()).show(ui, |ui| {
-                        ui.label(format!("indexing {} files…", if done > 0 { done.to_string() } else { "…".to_string() }));
+                        ui.label(format!(
+                            "indexing {} files…",
+                            if done > 0 {
+                                done.to_string()
+                            } else {
+                                "…".to_string()
+                            }
+                        ));
                     });
                 });
         }

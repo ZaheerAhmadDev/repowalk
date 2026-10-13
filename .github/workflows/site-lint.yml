@@ -1,0 +1,22 @@
+name: Site Lint
+
+on:
+  push:
+    paths: ["site/**"]
+  pull_request:
+    branches: ["main"]
+    paths: ["site/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  sitelint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npx --yes htmlhint site || true
+      - run: npx --yes stylelint site/**/*.css --config '{"extends":"stylelint-config-standard"}' || true

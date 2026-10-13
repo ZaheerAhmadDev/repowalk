@@ -20,39 +20,45 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
     }
 
     ui.heading("Files");
-    egui::ScrollArea::vertical().id_salt("file-tree").show(ui, |ui| {
-        for (dir, mut files) in dirs {
-            files.sort();
-            let open = app
-                .open_file
-                .as_deref()
-                .is_some_and(|of| of.starts_with(&format!("{dir}/")))
-                || dir.is_empty();
-            egui::collapsing_header::CollapsingState::load_with_default_open(
-                ui.ctx(),
-                egui::Id::new(("tree-dir", dir.clone())),
-                open,
-            )
-            .show_header(ui, |ui: &mut egui::Ui| {
-                let color = App::module_color(&dir);
-                ui.colored_label(color, "●");
-                ui.strong(if dir.is_empty() { ".".to_string() } else { dir.clone() });
-            })
-            .body(|ui: &mut egui::Ui| {
-                for (name, entrypoint) in files {
-                    let path = if dir.is_empty() {
-                        name.clone()
+    egui::ScrollArea::vertical()
+        .id_salt("file-tree")
+        .show(ui, |ui| {
+            for (dir, mut files) in dirs {
+                files.sort();
+                let open = app
+                    .open_file
+                    .as_deref()
+                    .is_some_and(|of| of.starts_with(&format!("{dir}/")))
+                    || dir.is_empty();
+                egui::collapsing_header::CollapsingState::load_with_default_open(
+                    ui.ctx(),
+                    egui::Id::new(("tree-dir", dir.clone())),
+                    open,
+                )
+                .show_header(ui, |ui: &mut egui::Ui| {
+                    let color = App::module_color(&dir);
+                    ui.colored_label(color, "●");
+                    ui.strong(if dir.is_empty() {
+                        ".".to_string()
                     } else {
-                        format!("{dir}/{name}")
-                    };
-                    let marker = if entrypoint { "⟶ " } else { "   " };
-                    let selected = app.open_file.as_deref() == Some(path.as_str());
-                    let resp = ui.selectable_label(selected, format!("{marker}{name}"));
-                    if resp.clicked() {
-                        app.select(crate::app::Selection::File(path));
+                        dir.clone()
+                    });
+                })
+                .body(|ui: &mut egui::Ui| {
+                    for (name, entrypoint) in files {
+                        let path = if dir.is_empty() {
+                            name.clone()
+                        } else {
+                            format!("{dir}/{name}")
+                        };
+                        let marker = if entrypoint { "⟶ " } else { "   " };
+                        let selected = app.open_file.as_deref() == Some(path.as_str());
+                        let resp = ui.selectable_label(selected, format!("{marker}{name}"));
+                        if resp.clicked() {
+                            app.select(crate::app::Selection::File(path));
+                        }
                     }
-                }
-            });
-        }
-    });
+                });
+            }
+        });
 }

@@ -16,3 +16,8 @@ repowalk-report.md
 *.swp
 .DS_Store
 Thumbs.db
+
+# caches & noise
+__pycache__/
+*.pyc
+*.log
