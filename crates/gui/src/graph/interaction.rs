@@ -15,7 +15,9 @@ pub fn shortest_call_path(idx: &Index, a: &str, b: &str) -> Option<Vec<String>> 
     let mut adj: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
     for e in &idx.edges {
         if e.kind == EdgeKind::Call && e.callee != e.caller {
-            adj.entry(e.caller.as_str()).or_default().push(e.callee.as_str());
+            adj.entry(e.caller.as_str())
+                .or_default()
+                .push(e.callee.as_str());
         }
     }
     for v in adj.values_mut() {

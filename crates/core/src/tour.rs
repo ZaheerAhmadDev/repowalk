@@ -52,9 +52,10 @@ pub fn tour(idx: &Index, limit: usize) -> Vec<TourItem> {
         }
     }
     for im in &idx.imports {
-        if let (Some(&a), Some(&b)) =
-            (node_of.get(im.file.as_str()), node_of.get(im.target.as_str()))
-        {
+        if let (Some(&a), Some(&b)) = (
+            node_of.get(im.file.as_str()),
+            node_of.get(im.target.as_str()),
+        ) {
             if a != b {
                 dag.insert((a, b));
             }
@@ -138,10 +139,9 @@ pub fn tour(idx: &Index, limit: usize) -> Vec<TourItem> {
     }
     let mut score = vec![0f64; n];
     for m in 0..n {
-        score[m] = fan_in[m] as f64
-            + 0.8 * (entry[m] as u8) as f64
-            + 0.5 * (has_docs[m] as u8) as f64
-            - 0.3 * depth[comp_of[m]] as f64;
+        score[m] =
+            fan_in[m] as f64 + 0.8 * (entry[m] as u8) as f64 + 0.5 * (has_docs[m] as u8) as f64
+                - 0.3 * depth[comp_of[m]] as f64;
     }
 
     let mut waves: Vec<Vec<usize>> = vec![Vec::new(); layer_idx];
@@ -189,7 +189,11 @@ pub fn tour(idx: &Index, limit: usize) -> Vec<TourItem> {
 
 fn why_line(idx: &Index, path: &str, fan_in: usize, fan_out: usize) -> String {
     let mut syms: Vec<&Symbol> = idx.symbols.iter().filter(|s| s.file == path).collect();
-    syms.sort_by(|a, b| a.start_line.cmp(&b.start_line).then_with(|| a.id.cmp(&b.id)));
+    syms.sort_by(|a, b| {
+        a.start_line
+            .cmp(&b.start_line)
+            .then_with(|| a.id.cmp(&b.id))
+    });
     if let Some(s) = syms.iter().find(|s| !s.doc.trim().is_empty()) {
         return first_sentence(&s.doc);
     }
@@ -291,7 +295,12 @@ mod tests {
         ];
         idx.symbols = vec![
             symbol("src/main.rs", 1, "main", ""),
-            symbol("src/a.rs", 1, "load_config", "Reads the config. Then parses it."),
+            symbol(
+                "src/a.rs",
+                1,
+                "load_config",
+                "Reads the config. Then parses it.",
+            ),
             symbol("src/b.rs", 1, "helper", ""),
         ];
         idx.edges = vec![

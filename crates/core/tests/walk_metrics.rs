@@ -21,7 +21,11 @@ fn walk_collects_sources_and_skips_build_dirs() {
     fs::create_dir_all(root.join(".git")).unwrap();
 
     fs::write(root.join("src/main.rs"), "fn main() {\n    run();\n}\n").unwrap();
-    fs::write(root.join("src/lib.rs"), "pub fn add(a: i32, b: i32) -> i32 { a + b }\n").unwrap();
+    fs::write(
+        root.join("src/lib.rs"),
+        "pub fn add(a: i32, b: i32) -> i32 { a + b }\n",
+    )
+    .unwrap();
     fs::write(root.join("target/junk.rs"), "fn nope() {}\n").unwrap();
     fs::write(root.join(".git/config"), "ignored\n").unwrap();
 
@@ -45,7 +49,11 @@ fn walk_collects_sources_and_skips_build_dirs() {
 fn metrics_aggregate_languages_and_largest_files() {
     let root = fixture("metrics");
     fs::create_dir_all(root.join("a")).unwrap();
-    fs::write(root.join("a/main.rs"), "fn main() {\n    one();\n    two();\n}\n").unwrap();
+    fs::write(
+        root.join("a/main.rs"),
+        "fn main() {\n    one();\n    two();\n}\n",
+    )
+    .unwrap();
     fs::write(root.join("a/other.rs"), "pub fn hi() {}\n").unwrap();
     fs::write(root.join("a/tool.py"), "print('hi')\n").unwrap();
 

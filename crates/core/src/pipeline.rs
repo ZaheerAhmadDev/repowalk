@@ -74,11 +74,8 @@ mod tests {
     use std::path::PathBuf;
 
     fn temp_root(tag: &str) -> PathBuf {
-        let p = std::env::temp_dir().join(format!(
-            "rw-pipeline-test-{}-{}",
-            std::process::id(),
-            tag
-        ));
+        let p =
+            std::env::temp_dir().join(format!("rw-pipeline-test-{}-{}", std::process::id(), tag));
         let _ = std::fs::remove_dir_all(&p);
         std::fs::create_dir_all(&p).unwrap();
         p
@@ -144,7 +141,10 @@ mod tests {
         crate::store::save(&root, &cached).unwrap();
 
         let again = build_index(&root, &|_| {}).unwrap();
-        assert!(again.symbols.is_empty(), "must load the valid cache, not rebuild");
+        assert!(
+            again.symbols.is_empty(),
+            "must load the valid cache, not rebuild"
+        );
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -162,7 +162,10 @@ mod tests {
         let second = build_index(&root, &|_| {}).unwrap();
         let names: Vec<&str> = second.symbols.iter().map(|s| s.name.as_str()).collect();
         assert!(names.contains(&"main"));
-        assert!(!names.contains(&"helper"), "stale symbol must be gone after re-index");
+        assert!(
+            !names.contains(&"helper"),
+            "stale symbol must be gone after re-index"
+        );
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -176,7 +179,10 @@ mod tests {
         let seen = seen.into_inner();
 
         assert!(!seen.is_empty(), "progress must be called at least once");
-        assert!(seen.windows(2).all(|w| w[0] <= w[1]), "counts must be monotonic");
+        assert!(
+            seen.windows(2).all(|w| w[0] <= w[1]),
+            "counts must be monotonic"
+        );
         assert_eq!(*seen.last().unwrap(), 2, "final count == number of files");
         let _ = std::fs::remove_dir_all(&root);
     }

@@ -10,7 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Metrics {
     pub total_loc: usize,
-    pub langs: Vec<(String, usize)>,   // (lang, file count) sorted desc
+    pub langs: Vec<(String, usize)>, // (lang, file count) sorted desc
     pub entrypoints: Vec<String>,
     pub top_files: Vec<(String, usize)>, // (path, lines) top 10
     pub fan_in: Vec<(String, usize)>,    // (symbol id, callers) sorted desc
@@ -119,12 +119,7 @@ pub fn compute(idx: &Index) -> Metrics {
     let weak = idx
         .edges
         .iter()
-        .filter(|e| {
-            matches!(
-                e.confidence,
-                Confidence::Ambiguous | Confidence::Unresolved
-            )
-        })
+        .filter(|e| matches!(e.confidence, Confidence::Ambiguous | Confidence::Unresolved))
         .count();
     let unresolved_pct = if idx.edges.is_empty() {
         0.0
@@ -271,19 +266,13 @@ mod tests {
         let mut idx = Index::new("/repo");
         idx.files = many_files(99, 10);
         idx.files.push(file("src/god.rs", "rust", 501, false));
-        assert_eq!(
-            compute(&idx).god_files,
-            vec!["src/god.rs".to_string()]
-        );
+        assert_eq!(compute(&idx).god_files, vec!["src/god.rs".to_string()]);
 
         // p99 = 550 > 500 → threshold 550: only 700 qualifies, the 550s do not.
         let mut idx = Index::new("/repo");
         idx.files = many_files(99, 550);
         idx.files.push(file("src/god.rs", "rust", 700, false));
-        assert_eq!(
-            compute(&idx).god_files,
-            vec!["src/god.rs".to_string()]
-        );
+        assert_eq!(compute(&idx).god_files, vec!["src/god.rs".to_string()]);
     }
 
     #[test]

@@ -28,7 +28,10 @@ pub fn render_find(idx: &Index, query: &str) -> String {
             .find(|s| s.id == h.target)
             .map(|s| s.name.clone())
             .unwrap_or_else(|| h.target.clone());
-        out.push_str(&format!("{}:{}  {}  {:.1}\n", h.path, h.line, name, h.score));
+        out.push_str(&format!(
+            "{}:{}  {}  {:.1}\n",
+            h.path, h.line, name, h.score
+        ));
     }
     out
 }

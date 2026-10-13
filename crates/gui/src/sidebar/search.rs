@@ -23,22 +23,25 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
     }
 
     if !app.query.trim().is_empty() {
-        egui::ScrollArea::vertical().id_salt("search-results").show(ui, |ui| {
-            for h in search::search(&idx, &app.query, 10) {
-                let name = idx
-                    .symbols
-                    .iter()
-                    .find(|s| s.id == h.target)
-                    .map(|s| s.name.clone())
-                    .unwrap_or_else(|| h.target.clone());
-                let selected = app.selection.as_ref() == Some(&Selection::Symbol(h.target.clone()));
-                let target = h.target.clone();
-                let label = format!("{name} · {}:{}", h.path, h.line);
-                if ui.selectable_label(selected, label).clicked() {
-                    app.select(Selection::Symbol(target));
+        egui::ScrollArea::vertical()
+            .id_salt("search-results")
+            .show(ui, |ui| {
+                for h in search::search(&idx, &app.query, 10) {
+                    let name = idx
+                        .symbols
+                        .iter()
+                        .find(|s| s.id == h.target)
+                        .map(|s| s.name.clone())
+                        .unwrap_or_else(|| h.target.clone());
+                    let selected =
+                        app.selection.as_ref() == Some(&Selection::Symbol(h.target.clone()));
+                    let target = h.target.clone();
+                    let label = format!("{name} · {}:{}", h.path, h.line);
+                    if ui.selectable_label(selected, label).clicked() {
+                        app.select(Selection::Symbol(target));
+                    }
                 }
-            }
-        });
+            });
         return;
     }
 
@@ -90,17 +93,23 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
         }),
     }
 
-    egui::ScrollArea::vertical().id_salt("symbol-list").show(ui, |ui| {
-        for (id, fan) in rows.iter().take(50) {
-            let name = symbol_name(&idx, id);
-            let selected = app.selection.as_ref() == Some(&Selection::Symbol(id.clone()));
-            let idc = id.clone();
-            let label = if *fan > 0 { format!("{name} ← {fan}") } else { name };
-            if ui.selectable_label(selected, label).clicked() {
-                app.select(Selection::Symbol(idc));
+    egui::ScrollArea::vertical()
+        .id_salt("symbol-list")
+        .show(ui, |ui| {
+            for (id, fan) in rows.iter().take(50) {
+                let name = symbol_name(&idx, id);
+                let selected = app.selection.as_ref() == Some(&Selection::Symbol(id.clone()));
+                let idc = id.clone();
+                let label = if *fan > 0 {
+                    format!("{name} ← {fan}")
+                } else {
+                    name
+                };
+                if ui.selectable_label(selected, label).clicked() {
+                    app.select(Selection::Symbol(idc));
+                }
             }
-        }
-    });
+        });
 }
 
 fn symbol_name(idx: &repowalk_core::model::Index, id: &str) -> String {

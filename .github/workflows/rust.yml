@@ -1,28 +1,54 @@
-name: Rust
+name: CI
 
 on:
+  # Run on every branch push and on PRs targeting main, so feature branches get
+  # feedback before they are merged.
   push:
-    branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  workflow_dispatch:
+
+# Cancel superseded runs on the same branch/PR.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+permissions:
+  contents: read
 
 jobs:
-  build:
+  # Everything in one job so the expensive dependency build is cached once and
+  # reused across the lint / build / test steps.
+  ci:
+    name: fmt · clippy · build · test
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Install Rust
+      - name: Install Rust (stable)
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
-      - name: Build
-        run: cargo build --verbose
+      - name: Cache cargo registry + build
+        uses: Swatinem/rust-cache@v2
 
-      - name: Run tests
-        run: cargo test --verbose
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy (deny warnings)
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Build workspace
+        run: cargo build --workspace --locked --verbose
+
+      - name: Test workspace
+        run: cargo test --workspace --locked --verbose

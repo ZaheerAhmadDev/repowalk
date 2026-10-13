@@ -77,7 +77,9 @@ fn mtime_secs(path: &Path) -> u64 {
 
 fn is_entrypoint(rel: &Path, text: &str) -> bool {
     let name = rel.file_name().and_then(OsStr::to_str).unwrap_or("");
-    name == "main.rs" || name == "lib.rs" || name == "__main__.py"
+    name == "main.rs"
+        || name == "lib.rs"
+        || name == "__main__.py"
         || text.contains("fn main")
         || text.contains("__main__")
 }

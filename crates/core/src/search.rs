@@ -176,7 +176,9 @@ mod tests {
         assert!(targets.contains(&"src/foo_helper.rs:1"));
         assert!(targets.contains(&"src/foo_helper.rs"));
         for w in hits.windows(2) {
-            assert!(w[0].score > w[1].score || (w[0].score == w[1].score && w[0].target < w[1].target));
+            assert!(
+                w[0].score > w[1].score || (w[0].score == w[1].score && w[0].target < w[1].target)
+            );
         }
     }
 
