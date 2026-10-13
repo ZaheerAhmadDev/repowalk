@@ -1,0 +1,27 @@
+name: Super Linter
+
+on:
+  push:
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: super-linter/super-linter@v8
+        env:
+          DEFAULT_BRANCH: main
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VALIDATE_YAML: true
+          VALIDATE_MARKDOWN: true
+          VALIDATE_JSON: true
+          VALIDATE_ACTIONS: true
+          FILTER_REGEX_EXCLUDE: 'target/|vendor/'

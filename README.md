@@ -173,5 +173,5 @@ Contributions are welcome. Look for small, labeled issues to get started, and op
 
 ## License
 
-<!-- TODO: add a LICENSE file and update this line (MIT / Apache-2.0 is planned) -->
-See [LICENSE](LICENSE).
+
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).

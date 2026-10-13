@@ -1,0 +1,20 @@
+name: Rust Audit
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  push:
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}

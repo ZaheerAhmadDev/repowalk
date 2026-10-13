@@ -1,0 +1,22 @@
+name: Rust MSRV
+
+on:
+  push:
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-msrv
+      - run: cargo msrv --path crates/core verify
+      - run: cargo msrv --path crates/cli verify
+      - run: cargo msrv --path crates/gui verify
