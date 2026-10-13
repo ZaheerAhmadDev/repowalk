@@ -1,4 +1,4 @@
-name: HTML5 Validator
+name: CI
 
 on:
   push:
@@ -9,10 +9,14 @@ permissions:
   contents: read
 
 jobs:
-  htmlval:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Cyb3r-Jak3/html5validator-action@v7
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          root: ./site
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test --all

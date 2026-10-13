@@ -1,0 +1,12 @@
+[files]
+extend-exclude = [
+  "vendor/",
+  "target/",
+  "andrej-karpathy-skills-main/",
+]
+
+[default.extend-words]
+ratatui = "ratatui"
+unparseable = "unparseable"
+FoO = "FoO"
+Fo = "Fo"

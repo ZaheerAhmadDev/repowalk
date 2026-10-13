@@ -15,5 +15,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: DavidAnson/markdownlint-cli2-action@v20
         with:
-          globs: '**/*.md'
-          config: '{ "MD013": false, "MD033": false }'
+          globs: |
+            **/*.md
+            !vendor/**
+            !target/**
+            !andrej-karpathy-skills-main/**
+          config: .markdown-lint.yml
