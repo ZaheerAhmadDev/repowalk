@@ -5,7 +5,7 @@ on:
   # feedback before they are merged.
   push:
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
   workflow_dispatch:
 
 # Cancel superseded runs on the same branch/PR.

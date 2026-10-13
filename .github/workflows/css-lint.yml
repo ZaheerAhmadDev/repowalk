@@ -13,8 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-hub/stylelint@master
-        env:
-          PATTERN: "site/**/*.css"
+      - uses: actions/setup-node@v4
         with:
-          config: '{ "extends": "stylelint-config-standard" }'
+          node-version: '22'
+      - name: Install stylelint
+        run: npm install --no-save --silent stylelint stylelint-config-standard
+      - name: Run stylelint
+        run: npx stylelint "site/**/*.css"

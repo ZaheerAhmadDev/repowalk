@@ -24,4 +24,4 @@ jobs:
           VALIDATE_MARKDOWN: true
           VALIDATE_JSON: true
           VALIDATE_ACTIONS: true
-          FILTER_REGEX_EXCLUDE: 'target/|vendor/'
+          FILTER_REGEX_EXCLUDE: 'target/|vendor/|andrej-karpathy-skills-main/'

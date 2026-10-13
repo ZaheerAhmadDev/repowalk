@@ -19,4 +19,3 @@ jobs:
         with:
           node-version: '22'
       - run: npx --yes htmlhint site || true
-      - run: npx --yes stylelint site/**/*.css --config '{"extends":"stylelint-config-standard"}' || true

@@ -6,6 +6,7 @@ members = ["crates/core", "crates/gui", "crates/cli"]
 version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
+rust-version = "1.95"
 
 # egui_code_editor 0.4.2 ships without the serde derives its own `serde`
 # feature implies; egui_graphs 0.32 forces egui/persistence, which makes
