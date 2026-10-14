@@ -1,7 +1,7 @@
 {
   "id": "RSK-13",
   "title": "cli: explain + find commands (repowalk/crates/cli/src/commands/explain.rs, find.rs)",
-  "phase": "sdlc-implement",
+  "phase": "implementation",
   "skill": "sdlc-implement",
   "status": "done",
   "assignee": "main-agent",

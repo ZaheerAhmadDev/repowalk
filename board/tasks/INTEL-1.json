@@ -1,0 +1,14 @@
+{
+  "id": "INTEL-1",
+  "title": "core: reachability stats for flow sources (crates/core/src/metrics.rs)",
+  "phase": "implementation",
+  "skill": "sdlc-implement",
+  "status": "todo",
+  "assignee": null,
+  "description": "Extend crates/core/src/metrics.rs with reachability analysis built on the CORE-1 contract (core::flow::waves(idx, source, max_depth) -> Vec<Vec<String>>): pub struct ReachStats { pub reachable: usize, pub max_depth: usize, pub symbols: usize } plus pub fn reachability(idx: &Index, source: &str, max_depth: usize) -> ReachStats (reachable = unique symbols across layers, symbols = total indexed symbols, honest zero on unknown source). Inline tests: known fixture chain, unknown source, depth cap. Depends: CORE-1 landed. Owner: crates/core/src/metrics.rs only. Verify: cargo test -p repowalk-core. Governing skill: skills/sdlc/sdlc-implement/SKILL.md.",
+  "artifacts": [
+    "crates/core/src/metrics.rs"
+  ],
+  "created": "2026-10-14T14:04:41Z",
+  "updated": "2026-10-14T14:04:41Z"
+}

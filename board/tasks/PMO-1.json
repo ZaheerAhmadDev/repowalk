@@ -1,0 +1,15 @@
+{
+  "id": "PMO-1",
+  "title": "Scale the agent scheme to a 100-agent hierarchy with per-team tasks",
+  "phase": "requirements",
+  "skill": "sdlc-requirements",
+  "status": "done",
+  "assignee": "main-agent",
+  "description": "Extend docs/agent-team per the previous scheme (LEADERSHIP.md): produce HIERARCHY.md with exactly 100 agents (5 directors + 10 leads + 85 ICs; main agent excluded), org chart, per-team file ownership (one writer per file), board task prefixes (CORE/INTEL/GRAPH/DSN/TEXT/PROD/VER/RISK/BLD/DOC, PMO for the program office); link it from LEADERSHIP.md; create one board task per team for the redesign build; fix the pre-existing baseline defect RSK-1 phase 'sdlc-implement' -> 'implementation'. Verify: grep -cE '^\\| [A-Z]+-[0-9]{2} \\|' docs/agent-team/HIERARCHY.md returns 85 AND python3 -m unittest board.tests.test_tasks passes. Governing skill: skills/sdlc/sdlc-requirements/SKILL.md.",
+  "artifacts": [
+    "docs/agent-team/HIERARCHY.md",
+    "docs/agent-team/LEADERSHIP.md"
+  ],
+  "created": "2026-10-14T14:04:41Z",
+  "updated": "2026-10-14T14:05:41Z"
+}

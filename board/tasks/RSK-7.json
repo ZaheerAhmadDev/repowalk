@@ -1,7 +1,7 @@
 {
   "id": "RSK-7",
   "title": "core: reading-order tour (repowalk/crates/core/src/tour.rs)",
-  "phase": "sdlc-implement",
+  "phase": "implementation",
   "skill": "sdlc-implement",
   "status": "done",
   "assignee": "main-agent",

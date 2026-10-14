@@ -1,0 +1,12 @@
+{
+  "id": "BLD-1",
+  "title": "CI: workspace gate covers the redesign branch",
+  "phase": "implementation",
+  "skill": "sdlc-implement",
+  "status": "todo",
+  "assignee": null,
+  "description": "Audit .github/workflows for the redesign milestone: confirm the Rust workflow runs workspace-wide cargo test + clippy -D warnings + fmt check so any crates/gui/src/flow change is gated, and that lint workflows (yamllint/super-linter) still pass with the new docs/tasks. Patch ONLY if a gap exists - surgical YAML edit, no new workflows unless one is genuinely missing. Owner: .github/workflows/* only. Verify: the changed/confirmed workflow parses (python3 -c 'import yaml,sys; yaml.safe_load(open(...))' or yamllint if installed) AND grep confirms '--workspace' cargo invocations. Governing skill: skills/sdlc/sdlc-implement/SKILL.md.",
+  "artifacts": [],
+  "created": "2026-10-14T14:04:41Z",
+  "updated": "2026-10-14T14:04:41Z"
+}

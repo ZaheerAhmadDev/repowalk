@@ -16,6 +16,7 @@ are the map. Goal: minimum tokens, maximum signal.
 | `skills/board/` | Skills about the agent board itself | board agents |
 | `board/tasks/*.json` | Task board source of truth (view: http://localhost:8765) | one writer per task file |
 | `board/docs`, `board/tests` | Board artifacts (requirements, design, tests, retro) | task owner |
+| `docs/agent-team/` | Org scheme: LEADERSHIP (operating model), HIERARCHY (100-agent roster + team ownership), VERIFICATION | main agent; VERIFICATION → VER lead |
 | `repowalk/` | The app: Rust workspace (`crates/core`, `crates/gui`, `crates/cli`) | repowalk agents |
 | `*.md` at root | Plan docs (source of truth: repowalk plan) | main agent |
 

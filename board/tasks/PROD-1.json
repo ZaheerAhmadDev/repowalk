@@ -1,0 +1,14 @@
+{
+  "id": "PROD-1",
+  "title": "CLI: flow command - A-to-B trace + wave report with markdown export",
+  "phase": "implementation",
+  "skill": "sdlc-implement",
+  "status": "todo",
+  "assignee": null,
+  "description": "Add a flow subcommand to the CLI: 'repowalk flow <A> <B>' prints a numbered step list (signature, file:line, edge confidence) via core::flow::trace with an honest 'no path from A to B' message + nonzero exit when None; 'repowalk flow --from <symbol> [--depth N]' renders waves from core::flow::waves with reachability stats from metrics::reachability (INTEL-1). Endpoint resolution follows the existing explain-arg handling (exact id, unique name, or fuzzy suffix). --md flag renders the same content as Markdown for export. Follow existing subcommand style: crates/cli/src/main.rs dispatch + new crates/cli/src/commands/flow.rs; clap derive; no new crates. Depends: CORE-1 (+ INTEL-1 for stats). Owner: crates/cli/* only. Verify: cargo run -p repowalk-cli -- flow --help && cargo test -p repowalk-cli. Governing skill: skills/sdlc/sdlc-implement/SKILL.md.",
+  "artifacts": [
+    "crates/cli/src/commands/flow.rs"
+  ],
+  "created": "2026-10-14T14:04:41Z",
+  "updated": "2026-10-14T14:04:41Z"
+}

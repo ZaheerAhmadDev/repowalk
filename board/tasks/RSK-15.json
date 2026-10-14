@@ -1,7 +1,7 @@
 {
   "id": "RSK-15",
   "title": "gui: sidebar map + health panel (repowalk/crates/gui/src/sidebar/map.rs)",
-  "phase": "sdlc-implement",
+  "phase": "implementation",
   "skill": "sdlc-implement",
   "status": "done",
   "assignee": "main-agent",

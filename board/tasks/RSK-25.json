@@ -1,7 +1,7 @@
 {
   "id": "RSK-25",
   "title": "architecture doc (repowalk/docs/architecture.md)",
-  "phase": "sdlc-implement",
+  "phase": "implementation",
   "skill": "sdlc-implement",
   "status": "done",
   "assignee": "main-agent",

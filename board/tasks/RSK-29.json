@@ -1,7 +1,7 @@
 {
   "id": "RSK-29",
   "title": "contract tests (repowalk/crates/core/tests/contract.rs)",
-  "phase": "sdlc-test",
+  "phase": "testing",
   "skill": "sdlc-test",
   "status": "done",
   "assignee": "main-agent",

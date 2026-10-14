@@ -1,7 +1,7 @@
 {
   "id": "RSK-18",
   "title": "gui: editable code pane (repowalk/crates/gui/src/text/editor.rs)",
-  "phase": "sdlc-implement",
+  "phase": "implementation",
   "skill": "sdlc-implement",
   "status": "done",
   "assignee": "main-agent",

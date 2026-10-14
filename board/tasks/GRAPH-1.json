@@ -1,0 +1,14 @@
+{
+  "id": "GRAPH-1",
+  "title": "GUI: Flow mode - dynamic workflow playback (crates/gui/src/flow/* + app wiring)",
+  "phase": "implementation",
+  "skill": "sdlc-implement",
+  "status": "todo",
+  "assignee": null,
+  "description": "Add a third mode Mode::Flow to the egui app that shows the workflow of the code in dynamic design form. New module crates/gui/src/flow/{mod.rs,playback.rs,render.rs} owns: FlowState (source pair or wave source, playhead, playing, speed, loop flag); time-driven animation from ctx.input(|i| i.time) with ctx.request_repaint_after while playing and NO repaint when idle/paused; stage strip of step cards lighting in sequence using theme::module_color + motion tokens from DSN-1 (no duration literals outside theme.rs); animated pulse on the active segment; controls (play/pause, step fwd/back, speed 0.5x/1x/2x, scrub); wave view fanning out layer by layer from an entrypoint; per-step detail (signature, file:line, callers/callees from Index); 'Open source' jump via app.open_file_with(path, line). Uses core::flow::trace/waves (CORE-1). Wiring ownership (authorized by main agent): crates/gui/src/app.rs (Mode::Flow enum arm, toolbar segment, keyboard cycling, command palette entry, central-pane match arm, App state field), crates/gui/src/main.rs module declaration, new crates/gui/src/sidebar/flow.rs + one added line in crates/gui/src/sidebar/mod.rs (handoff: DSN team notified, no concurrent sidebar edit in this milestone). No new crates; no network code. Verify: cargo build -p repowalk-gui && cargo clippy -p repowalk-gui --all-targets -- -D warnings. Governing skill: skills/sdlc/sdlc-implement/SKILL.md.",
+  "artifacts": [
+    "crates/gui/src/flow/mod.rs"
+  ],
+  "created": "2026-10-14T14:04:41Z",
+  "updated": "2026-10-14T14:04:41Z"
+}

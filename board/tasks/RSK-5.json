@@ -1,7 +1,7 @@
 {
   "id": "RSK-5",
   "title": "core: edge resolution + confidence tiers (repowalk/crates/core/src/resolve.rs)",
-  "phase": "sdlc-implement",
+  "phase": "implementation",
   "skill": "sdlc-implement",
   "status": "done",
   "assignee": "main-agent",

@@ -1,7 +1,7 @@
 {
   "id": "RSK-23",
   "title": "gui: PNG screenshot export (repowalk/crates/gui/src/export/png.rs)",
-  "phase": "sdlc-implement",
+  "phase": "implementation",
   "skill": "sdlc-implement",
   "status": "done",
   "assignee": "main-agent",
