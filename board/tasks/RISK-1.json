@@ -3,12 +3,12 @@
   "title": "Risk register for the dynamic flow redesign (motion, perf, scope)",
   "phase": "requirements",
   "skill": "sdlc-requirements",
-  "status": "todo",
-  "assignee": null,
+  "status": "done",
+  "assignee": "TL-RISK",
   "description": "Produce board/docs/risks-flow.md: a risk table for the redesign covering at least - animation repaint storms/battery drain; frame-time spikes on large graphs (>2k nodes); scope creep past the feature freeze; no-network guarantee vs any future dep; reduced-motion/accessibility; multi-team ownership conflicts on shared files; golden-fixture churn. Each row: id, risk, likelihood, impact, mitigation, owner (team lead ID from HIERARCHY.md), and the verification hook (exact command/grep) that proves the mitigation. Owner: board/docs/risks-flow.md only. Verify: file parses as Markdown table, every row has owner + verify hook, grep -c '^| R' board/docs/risks-flow.md >= 8. Governing skill: skills/sdlc/sdlc-requirements/SKILL.md.",
   "artifacts": [
     "board/docs/risks-flow.md"
   ],
   "created": "2026-10-14T14:04:41Z",
-  "updated": "2026-10-14T14:04:41Z"
+  "updated": "2026-10-14T14:15:31Z"
 }

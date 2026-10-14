@@ -3,12 +3,12 @@
   "title": "core: reusable flow model - A-to-B trace + entrypoint waves (crates/core/src/flow.rs)",
   "phase": "implementation",
   "skill": "sdlc-implement",
-  "status": "todo",
-  "assignee": null,
+  "status": "done",
+  "assignee": "TL-CORE",
   "description": "Add crates/core/src/flow.rs exposing the shared workflow primitives GUI and CLI both need: pub fn trace(idx: &Index, a: &str, b: &str) -> Option<Vec<String>> (BFS shortest call path over EdgeKind::Call, honest None when unreachable; endpoint-inclusive, deterministic) and pub fn waves(idx: &Index, source: &str, max_depth: usize) -> Vec<Vec<String>> (BFS layers, source = layer 0, cycle-safe, deterministic ordering). Adapt logic from crates/gui/src/graph/interaction.rs::shortest_call_path - do NOT edit any GUI file (the GUI switches to this API later). One export line in crates/core/src/lib.rs. Inline #[cfg(test)] covering: a==b single node, multi-hop path, no-path None, wave layering + cycle termination. Owner: crates/core/src/flow.rs + the lib.rs export line only. Verify: cargo test -p repowalk-core. Governing skill: skills/sdlc/sdlc-implement/SKILL.md.",
   "artifacts": [
     "crates/core/src/flow.rs"
   ],
   "created": "2026-10-14T14:04:41Z",
-  "updated": "2026-10-14T14:04:41Z"
+  "updated": "2026-10-14T14:13:11Z"
 }
