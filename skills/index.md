@@ -43,6 +43,7 @@ the map. Every skill's `description` frontmatter starts with its trigger
 | **repowalk-scope** | Adding, changing, or questioning a feature — freezes, never-cut list, cut order | [`repowalk/repowalk-scope/SKILL.md`](repowalk/repowalk-scope/SKILL.md) |
 | **repowalk-stack** | Adding a dependency or editing Cargo.toml — pinned versions, forbidden crates, fallbacks | [`repowalk/repowalk-stack/SKILL.md`](repowalk/repowalk-stack/SKILL.md) |
 | **repowalk-verify** | Finishing any repowalk task — test/clippy/golden/dogfood commands | [`repowalk/repowalk-verify/SKILL.md`](repowalk/repowalk-verify/SKILL.md) |
+| **repowalk-risk-register** | Writing or auditing a risk register in board/docs — R-rows with owner + machine-runnable verify hook | [`repowalk/repowalk-risk-register/SKILL.md`](repowalk/repowalk-risk-register/SKILL.md) |
 
 ## board/ — the agent board
 
