@@ -1,7 +1,7 @@
 {
   "id": "RSK-12",
   "title": "cli: map + tour commands (repowalk/crates/cli/src/commands/map.rs, tour.rs)",
-  "phase": "sdlc-implement",
+  "phase": "implementation",
   "skill": "sdlc-implement",
   "status": "done",
   "assignee": "main-agent",

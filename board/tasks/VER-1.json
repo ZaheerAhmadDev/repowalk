@@ -1,0 +1,12 @@
+{
+  "id": "VER-1",
+  "title": "Verify the redesign: workspace gate, golden tests, honesty checks",
+  "phase": "testing",
+  "skill": "sdlc-test",
+  "status": "todo",
+  "assignee": null,
+  "description": "Independent verification of the redesign branch per docs/agent-team/VERIFICATION.md without modifying worker implementations: (1) cargo fmt --all -- --check; (2) cargo clippy --workspace --all-targets --locked -- -D warnings; (3) cargo test --workspace --locked; (4) golden fixture unchanged: cargo test -p repowalk-core; (5) no-network proof: cargo tree -p repowalk-gui shows no reqwest/tokio/hyper; (6) demo: cargo run -p repowalk-cli -- flow on fixtures/sample (multi-hop A-to-B + no-path case + wave mode); (7) GUI builds: cargo build -p repowalk-gui. Add tests ONLY under crates/*/tests/ (test-file ownership). Discrepancy -> report on the owning team's task; you never edit worker code. Verify: all seven green; report the exact commands + results. Governing skill: skills/sdlc/sdlc-test/SKILL.md.",
+  "artifacts": [],
+  "created": "2026-10-14T14:04:41Z",
+  "updated": "2026-10-14T14:04:41Z"
+}

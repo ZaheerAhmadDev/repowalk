@@ -1,7 +1,7 @@
 {
   "id": "RSK-8",
   "title": "core: fuzzy search (repowalk/crates/core/src/search.rs)",
-  "phase": "sdlc-implement",
+  "phase": "implementation",
   "skill": "sdlc-implement",
   "status": "done",
   "assignee": "main-agent",

@@ -1,7 +1,7 @@
 {
   "id": "RSK-26",
   "title": "check-setup.sh (repowalk/check-setup.sh)",
-  "phase": "sdlc-implement",
+  "phase": "implementation",
   "skill": "sdlc-implement",
   "status": "done",
   "assignee": "main-agent",

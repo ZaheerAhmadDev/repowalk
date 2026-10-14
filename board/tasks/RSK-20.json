@@ -1,7 +1,7 @@
 {
   "id": "RSK-20",
   "title": "gui: graph interaction + A→B flow trace (repowalk/crates/gui/src/graph/interaction.rs)",
-  "phase": "sdlc-implement",
+  "phase": "implementation",
   "skill": "sdlc-implement",
   "status": "done",
   "assignee": "main-agent",

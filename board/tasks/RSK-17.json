@@ -1,7 +1,7 @@
 {
   "id": "RSK-17",
   "title": "gui: file tree pane (repowalk/crates/gui/src/text/tree.rs)",
-  "phase": "sdlc-implement",
+  "phase": "implementation",
   "skill": "sdlc-implement",
   "status": "done",
   "assignee": "main-agent",

@@ -1,7 +1,7 @@
 {
   "id": "RSK-21",
   "title": "gui: explain card (repowalk/crates/gui/src/explain.rs)",
-  "phase": "sdlc-implement",
+  "phase": "implementation",
   "skill": "sdlc-implement",
   "status": "done",
   "assignee": "main-agent",

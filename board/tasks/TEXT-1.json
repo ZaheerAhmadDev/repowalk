@@ -1,0 +1,14 @@
+{
+  "id": "TEXT-1",
+  "title": "GUI: explain card -> Flow handoff (Trace from here / Trace to here)",
+  "phase": "implementation",
+  "skill": "sdlc-implement",
+  "status": "todo",
+  "assignee": null,
+  "description": "In crates/gui/src/explain.rs, add two actions to the explain card: 'Trace from here' (sets app.trace = (this symbol, existing b or pending) and switches app.mode to Mode::Flow) and 'Trace to here' (sets the b endpoint the same way), wiring the reading surface into the dynamic workflow view. Reuse existing fields (app.trace, app.trace_pick, app.mode) and theme helpers; keyboard hint in the hover tooltip. Depends: GRAPH-1 (Mode::Flow exists). Owner: crates/gui/src/explain.rs only. Verify: cargo build -p repowalk-gui. Governing skill: skills/sdlc/sdlc-implement/SKILL.md.",
+  "artifacts": [
+    "crates/gui/src/explain.rs"
+  ],
+  "created": "2026-10-14T14:04:41Z",
+  "updated": "2026-10-14T14:04:41Z"
+}

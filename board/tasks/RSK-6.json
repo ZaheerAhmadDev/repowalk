@@ -1,7 +1,7 @@
 {
   "id": "RSK-6",
   "title": "core: index cache store (repowalk/crates/core/src/store.rs)",
-  "phase": "sdlc-implement",
+  "phase": "implementation",
   "skill": "sdlc-implement",
   "status": "done",
   "assignee": "main-agent",

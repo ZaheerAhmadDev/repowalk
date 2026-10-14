@@ -1,0 +1,12 @@
+{
+  "id": "PMO-2",
+  "title": "Integrate the redesign branch: README/CHANGELOG, final gate, merge readiness",
+  "phase": "release",
+  "skill": "sdlc-release",
+  "status": "todo",
+  "assignee": null,
+  "description": "As integrator (main agent): land root-doc updates for the redesign milestone (README feature row for Flow mode, CHANGELOG entry - root *.md are main-agent owned per agent.md), re-run the full verification gate after VER-1 signs off, confirm every team task is done or explicitly blocked, and report merge readiness for the redesign branch. Verify: cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace all green on the final commit.",
+  "artifacts": [],
+  "created": "2026-10-14T14:04:41Z",
+  "updated": "2026-10-14T14:04:41Z"
+}

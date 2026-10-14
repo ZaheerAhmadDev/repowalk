@@ -1,7 +1,7 @@
 {
   "id": "RSK-16",
   "title": "gui: sidebar tour + search panels (repowalk/crates/gui/src/sidebar/tour.rs, search.rs)",
-  "phase": "sdlc-implement",
+  "phase": "implementation",
   "skill": "sdlc-implement",
   "status": "done",
   "assignee": "main-agent",

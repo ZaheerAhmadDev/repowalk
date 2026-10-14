@@ -1,7 +1,7 @@
 {
   "id": "RSK-27",
   "title": "scripts: offline verify + bench (repowalk/scripts/verify-offline.sh, repowalk/scripts/bench.sh)",
-  "phase": "sdlc-implement",
+  "phase": "implementation",
   "skill": "sdlc-implement",
   "status": "done",
   "assignee": "main-agent",

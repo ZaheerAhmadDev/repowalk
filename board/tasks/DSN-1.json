@@ -1,0 +1,14 @@
+{
+  "id": "DSN-1",
+  "title": "GUI: motion design tokens for dynamic views (crates/gui/src/theme.rs)",
+  "phase": "design",
+  "skill": "sdlc-design",
+  "status": "todo",
+  "assignee": null,
+  "description": "Extend crates/gui/src/theme.rs with a motion section derived from the existing HCI/4pt system: duration tokens on a 100ms grid (hover/transition 200ms, edge pulse 600ms, flow step dwell 800ms), an easing helper (pub fn ease_in_out(t: f32) -> f32), and a playhead alpha helper (pub fn step_alpha(progress: f32) -> f32) so dynamic views never hand-roll math. Every dynamic view (flow playback, pulses) must consume these named tokens; no magic duration literals outside theme.rs. Document the reduced-motion rationale in the section doc comment (animation must never be the only carrier of information - the stage strip stays readable when static). Owner: crates/gui/src/theme.rs only. Verify: cargo build -p repowalk-gui warning-free AND grep -rnE '[0-9]+_MS|SECS' crates/gui/src/flow/ shows only theme:: token references. Governing skill: skills/sdlc/sdlc-design/SKILL.md.",
+  "artifacts": [
+    "crates/gui/src/theme.rs"
+  ],
+  "created": "2026-10-14T14:04:41Z",
+  "updated": "2026-10-14T14:04:41Z"
+}

@@ -1,7 +1,7 @@
 {
   "id": "RSK-24",
   "title": "README + demo runbook (repowalk/README.md, repowalk/docs/demo.md)",
-  "phase": "sdlc-implement",
+  "phase": "implementation",
   "skill": "sdlc-implement",
   "status": "done",
   "assignee": "main-agent",

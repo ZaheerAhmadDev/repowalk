@@ -2,6 +2,12 @@
 
 This repository is designed to be developed/tested by a team of agents with clear roles and verification.
 
+> **Update (2026-10-14):** this scheme is now scaled to a full 100-agent
+> organization — 5 division directors, 10 team leads, 85 contributors, with
+> per-team file ownership and board-task prefixes. See
+> [`HIERARCHY.md`](HIERARCHY.md). Everything below still applies unchanged;
+> the hierarchy is the roster, this file is the operating model.
+
 ## Structure
 - **Lead Agent (Orchestrator)**: Plans work, creates/updates tasks, assigns subtasks, coordinates merges, runs final verification, and is the single point of truth for integration. The lead does not duplicate independent worker work; it reviews outputs.
 - **Worker Agents (Specialists)**: Each owns specific files/areas. They execute one assigned task at a time, follow the governing skill, and return artifacts + verification command/result.

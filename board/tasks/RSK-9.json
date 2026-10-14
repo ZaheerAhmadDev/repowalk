@@ -1,7 +1,7 @@
 {
   "id": "RSK-9",
   "title": "core: index pipeline orchestrator (repowalk/crates/core/src/pipeline.rs)",
-  "phase": "sdlc-implement",
+  "phase": "implementation",
   "skill": "sdlc-implement",
   "status": "done",
   "assignee": "main-agent",

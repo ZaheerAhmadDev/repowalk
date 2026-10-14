@@ -1,7 +1,7 @@
 {
   "id": "RSK-4",
   "title": "core: Python extraction via tree-sitter (repowalk/crates/core/src/parse_py.rs)",
-  "phase": "sdlc-implement",
+  "phase": "implementation",
   "skill": "sdlc-implement",
   "status": "done",
   "assignee": "main-agent",
