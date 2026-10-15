@@ -1,0 +1,14 @@
+{
+  "id": "DSN-4",
+  "title": "gui: Onboarding report panel (Repo 101) — learn census + where to start",
+  "phase": "design",
+  "skill": "sdlc-design",
+  "status": "todo",
+  "assignee": null,
+  "description": "[v2 plan: docs/v2-plan.md (F1) · exec plan: docs/v2-execution-plan.md · wave B3]\nSeats: DSN-03, DSN-06, DOC-04\nGap found by the DOC-2 audit: the GUI block in v2-plan named crates/gui/src/onboard.rs but no card owned it. This card does.\nDeliverable: crates/gui/src/onboard.rs — the 'Repo 101' panel shown after learn() completes, driven by LearnProgress + the cached Analysis/Index (no re-analysis): language mix, file/LOC/symbol census, entrypoints, the module tree (crate -> dir -> file) from core::modules::build, top hotspot files from core::complexity, unused-variable count, cycle count, and a suggested reading order (entrypoints first, then highest fan-in symbols — reuse core::tour where it fits). Every row clicks through to Text/Graph/Diagrams. Honest empty state when there is no analysis yet ('run Learn first'), and a visible 'still learning' state driven by LearnProgress.\nDo not compute anything in the GUI that core already provides: read core::complexity::per_file / hotspots, core::modules::build, core::analysis. If a number is missing, show 'unknown' rather than guessing.\nOwner: crates/gui/src/onboard.rs (+ the sidebar tab line the integrator wires). Depends: CORE-7 (learn), CORE-4 (complexity/modules).\nVerify: cargo build -p repowalk-gui, clippy -D warnings, cargo test -p repowalk-gui; the displayed census equals the Analysis/Index contents on fixtures (spot-check numbers in the card evidence).",
+  "artifacts": [
+    "crates/gui/src/onboard.rs"
+  ],
+  "created": "2026-10-15T14:39:45Z",
+  "updated": "2026-10-15T14:39:45Z"
+}
