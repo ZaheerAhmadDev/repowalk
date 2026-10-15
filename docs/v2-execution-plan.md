@@ -63,7 +63,7 @@ before writing it.
 | `crates/core/src/rules.rs`, `rules.json` | CORE-6 |
 | `crates/core/src/export/**` | PROD-2 (shared by GUI **and** CLI — emitters live in core) |
 | `crates/core/Cargo.toml`, `Cargo.lock`, `crates/core/tests/grammar_abi.rs` | BLD-2 |
-| `crates/gui/src/diagrams/{mod,common,control}.rs` | GRAPH-2 |
+| `crates/gui/src/diagrams/{common,control}.rs` | GRAPH-2 |
 | `crates/gui/src/diagrams/{types,modules}.rs` | GRAPH-3 |
 | `crates/gui/src/graph/**` | GRAPH-4 |
 | `crates/gui/src/flow/**` | GRAPH-5 |
@@ -73,8 +73,9 @@ before writing it.
 | `crates/gui/src/theme.rs` | DSN-2 |
 | `crates/gui/src/health/**` | DSN-3 |
 | `crates/gui/src/onboard.rs` | DSN-4 (added by the DOC-2 audit — F1 had no owner) |
+| `crates/core/src/learn.rs` (modules wiring) | CORE-9 |
 | `crates/core/src/parallel.rs` | INTEL-5 (created by that card) |
-| `crates/gui/src/app.rs`, `main.rs` | **integrator** (shared wiring — seats send PNG-free diffs by message, PMO applies) |
+| `crates/gui/src/{app.rs,main.rs,sidebar/mod.rs,ui_kit.rs,diagrams/mod.rs,usage/mod.rs}` | **integrator — DONE (commit `0fd475c`)** |
 | `crates/cli/**` | PROD-3 |
 | `fixtures/vars/**`, `fixtures/ts/**` | VER-2 |
 | `fixtures/corpus/**` | VER-3 |
@@ -83,8 +84,11 @@ before writing it.
 | `site/**`, `docs/*.md` (not `docs/agent-team/**`) | DOC-3 / DOC-4 |
 | `README.md`, `CHANGELOG.md`, `docs/v2-plan.md`, `docs/v2-execution-plan.md` | **integrator** |
 
-Shared-file rule: `app.rs` is the only hot spot (mode/panel wiring). Seats post
-the exact hunk they need as a `handoff` message and PMO applies it, so 8 GUI seats
+Shared-file rule: `app.rs` and the GUI chrome (`sidebar/mod.rs`, `ui_kit.rs`,
+`diagrams/mod.rs`, `usage/mod.rs`) are pre-wired and integrator-owned — every GUI
+card fills exactly one panel file and never edits the chrome. If a card needs a
+new palette entry, sidebar tab or shared primitive, it posts the exact hunk as a
+`handoff` message and PMO applies it, so 8 GUI seats
 never fight over one file.
 
 ## 4. Message cadence (every seat, every batch)
@@ -147,8 +151,9 @@ re-runs them independently at the end, plus the F1–F15 acceptance list from
 
 | Batch | Closed at | Commit | Gate result | Notes |
 |---|---|---|---|---|
-| B2 | in flight | — | — | CORE-4 (complexity+modules), CORE-5 (types+feature), CORE-7 (learn+cache+incremental), PROD-2 (Mermaid/DOT/SVG+report), RISK-2 (budgets + risks-v2) running; DOC-2 ☑ (`docs/architecture.md` v2 map + a 6-item gap audit → DSN-4 created, stale store/pipeline headers assigned to CORE-7) |
-| B1 | in flight | — | 115 core tests green at last check | BLD-2 ☑ (grammars pinned, ABI-proven), VER-2 ☑ (harness + fixtures, per-language goldens parked `#[ignore]`), INTEL-2/3/4 writing real analyzers (~1.5k lines each, inline tests green; cards not yet closed) |
+| B3 | in flight | — | — | GUI surface wave — GRAPH-2/3 (diagrams), TEXT-2/TEXT-3 (usage panels), DSN-4 (Repo 101), CORE-9 (modules wiring into learn); then GRAPH-4/5, DSN-3, TEXT-4. Blocked on nothing: the chrome landed in `0fd475c`. |
+| B2 | closed | `1ef4649` | core 145 lib + 10 golden + 27 integration tests, 0 failed; clippy/fmt clean; board 8+23 green | CORE-4/5/7, PROD-2, RISK-2, DOC-2 (v2 map + a 6-item gap audit), CORE-6 (rules, self-rule 0 findings), INTEL-5 (metrics v2 + deterministic parallel, 2.24× measured). Four defects were found by *someone other than the author* and fixed: R-14 stale mtime cache and R-27 silent language drop (RISK-2 → CORE-9), TS not counting a declaration as a write (VER-2's golden), and augmented-assignment RHS counted as a write (INTEL-4, caught while fixing the first). |
+| B1 | closed | `129fc0e` | 7 per-language goldens ACTIVE and passing, 0 ignored | BLD-2, VER-2, INTEL-2/3/4. The goldens were parked behind `#[ignore]` while the analyzers were stubs; the integrator dropped the attribute once all three languages passed — from then on a regression fails the default `cargo test`. |
 | B0 | — | `c414b6a` | 71 core tests, clippy, fmt, 23 board tests green | contracts frozen; live message log live |
 
 Files named for a queued card may not exist yet — the owning card creates them.
