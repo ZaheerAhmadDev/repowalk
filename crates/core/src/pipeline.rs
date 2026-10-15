@@ -1,21 +1,40 @@
 //! Full index pipeline: walk → parse by lang → resolve → timestamp (+ store cache).
-//! OWNER: RSK-9. This is what CLI and GUI call.
-use crate::model::Index;
+//! OWNER: CORE-7 (v2). This is what CLI and GUI call.
+use crate::model::{FileEntry, Index};
 use std::path::Path;
 
 /// Build (or load from valid cache) the index for `root`.
 /// `progress(files_done)` is called during walks/parses for UI overlays.
 pub fn build_index(root: &Path, progress: &dyn Fn(usize)) -> anyhow::Result<Index> {
     let files = crate::walk::walk(root)?;
+    build_index_from_files(root, files, &|phase, done, _total| {
+        if phase == "parse" {
+            progress(done);
+        }
+    })
+}
+
+/// Build the index from an already-walked file list, reporting
+/// `progress(phase, done, total)` for the `parse` and `resolve` phases.
+///
+/// Split out of [`build_index`] so the v2 `learn` driver can reuse the walk it
+/// already needed for its incremental stamps (F10) instead of walking twice,
+/// while keeping all resolve/timestamp/cache logic in one place.
+pub(crate) fn build_index_from_files(
+    root: &Path,
+    files: Vec<FileEntry>,
+    progress: &dyn Fn(&'static str, usize, usize),
+) -> anyhow::Result<Index> {
     let total = files.len();
     if crate::store::cache_valid(root, &files) {
-        progress(total);
+        progress("parse", total, total);
+        progress("resolve", total, total);
         return Ok(crate::store::load(root).expect("cache_valid implies a loadable cache"));
     }
 
     let mut idx = Index::new(root.to_string_lossy());
     idx.files = files;
-    progress(0);
+    progress("parse", 0, total);
     for (done, file) in idx.files.iter().enumerate() {
         let text = std::fs::read_to_string(root.join(&file.path))?;
         let (symbols, sites, imports) = match file.lang.as_str() {
@@ -26,7 +45,7 @@ pub fn build_index(root: &Path, progress: &dyn Fn(usize)) -> anyhow::Result<Inde
         idx.symbols.extend(symbols);
         idx.call_sites.extend(sites);
         idx.imports.extend(imports);
-        progress(done + 1);
+        progress("parse", done + 1, total);
     }
 
     let mut edges = crate::resolve::resolve(&idx.files, &idx.symbols, &idx.call_sites);
@@ -34,6 +53,7 @@ pub fn build_index(root: &Path, progress: &dyn Fn(usize)) -> anyhow::Result<Inde
     idx.edges = edges;
     idx.indexed_at = timestamp_now_utc();
     crate::store::save(root, &idx)?;
+    progress("resolve", total, total);
     Ok(idx)
 }
 
