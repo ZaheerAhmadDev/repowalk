@@ -1,4 +1,5 @@
 //! repowalk core — indexing, model, and algorithms. No GUI/CLI deps.
+pub mod analysis;
 pub mod flow;
 pub mod metrics;
 pub mod model;
