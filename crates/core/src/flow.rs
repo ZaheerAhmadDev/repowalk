@@ -287,11 +287,7 @@ mod tests {
         idx.edges.push(call("a", "a"));
         assert_eq!(
             trace(&idx, "a", "d"),
-            Some(vec![
-                "a".to_string(),
-                "c".to_string(),
-                "d".to_string()
-            ])
+            Some(vec!["a".to_string(), "c".to_string(), "d".to_string()])
         );
     }
 

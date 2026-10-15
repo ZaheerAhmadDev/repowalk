@@ -6,6 +6,24 @@ The format is based on Keep a Changelog and this project adheres to Semantic Ver
 
 ## [Unreleased]
 ### Added
+- **Flow mode** — the third GUI mode shows the workflow of the code in dynamic
+  form: animated A→B stage playback (playhead, play/pause, step, 0.5×–2×
+  speed, scrub, loop), an entrypoint wave view fanning out layer by layer,
+  per-step detail (signature, `file:line`, callers/callees, edge confidence)
+  with jump-to-source, and a sidebar picker. Explain card gains
+  "Trace from here" / "Trace to here" handoffs; motion consumes the theme's
+  tokens (`TRANSITION_MS`/`PULSE_MS`/`STEP_DWELL_MS`, `ease_in_out`,
+  `step_alpha`) and stays reduced-motion safe.
+- CLI `flow` subcommand: `repowalk flow <A> <B>` (numbered steps with hop
+  confidence), `--from <symbol> [--depth N]` wave report with reachability
+  stats, and `--md` Markdown export; honest `no path` (exit 1) and
+  `unknown symbol` errors.
+- `core::flow` shared primitives (`trace`, `waves`) with canonicalization of
+  name-keyed call callers to symbol ids (fixes BFS truncation at the name/id
+  boundary); `metrics::reachability` for flow sources.
+- 100-agent team hierarchy (`docs/agent-team/HIERARCHY.md`: 5 directors,
+  10 leads, 85 contributors with per-team file ownership and task prefixes)
+  and per-team redesign board tasks; risk register `board/docs/risks-flow.md`.
 - Central design-token system `crates/gui/src/theme.rs` (HCI-based: 4pt spacing
   grid, 5-layer dark elevation, WCAG-checked text colors, semantic
   success/warning/danger tokens, deterministic module palette).

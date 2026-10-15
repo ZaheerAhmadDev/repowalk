@@ -31,9 +31,9 @@ pub fn run(
             if b.is_some() {
                 anyhow::bail!("usage: repowalk flow --from <symbol> <path> [--depth N] [--md]");
             }
-            let repo = path
-                .or_else(|| a.map(PathBuf::from))
-                .ok_or_else(|| anyhow!("usage: repowalk flow --from <symbol> <path> [--depth N] [--md]"))?;
+            let repo = path.or_else(|| a.map(PathBuf::from)).ok_or_else(|| {
+                anyhow!("usage: repowalk flow --from <symbol> <path> [--depth N] [--md]")
+            })?;
             (repo, Mode::Waves { source })
         }
         None => match (a, b, path) {
@@ -60,7 +60,11 @@ fn resolve_endpoint<'a>(idx: &'a Index, arg: &str) -> Option<&'a Symbol> {
     if by_name.len() == 1 {
         return Some(by_name[0]);
     }
-    let by_suffix: Vec<&Symbol> = idx.symbols.iter().filter(|s| s.name.ends_with(arg)).collect();
+    let by_suffix: Vec<&Symbol> = idx
+        .symbols
+        .iter()
+        .filter(|s| s.name.ends_with(arg))
+        .collect();
     if by_suffix.len() == 1 {
         return Some(by_suffix[0]);
     }
@@ -91,8 +95,7 @@ pub fn trace_report(idx: &Index, a: &str, b: &str, md: bool) -> anyhow::Result<S
 /// Wave layers from `source` plus a reachability footer. Honest error on an
 /// unresolvable source symbol.
 pub fn wave_report(idx: &Index, source: &str, depth: usize, md: bool) -> anyhow::Result<String> {
-    let sym = resolve_endpoint(idx, source)
-        .ok_or_else(|| anyhow!("unknown symbol: {source}"))?;
+    let sym = resolve_endpoint(idx, source).ok_or_else(|| anyhow!("unknown symbol: {source}"))?;
     let graph = normalized(idx);
     Ok(render_waves(&graph, &sym.id, depth, md))
 }
@@ -127,7 +130,11 @@ pub fn render_trace(idx: &Index, path: &[String], md: bool) -> String {
             .map(|s| s.name.clone())
             .unwrap_or_else(|| id.to_string())
     };
-    let title = format!("Flow: {} → {}", label(&path[0]), label(&path[path.len() - 1]));
+    let title = format!(
+        "Flow: {} → {}",
+        label(&path[0]),
+        label(&path[path.len() - 1])
+    );
     let mut out = String::new();
     if md {
         out.push_str(&format!("# {title}\n"));
@@ -142,7 +149,9 @@ pub fn render_trace(idx: &Index, path: &[String], md: bool) -> String {
         let loc = sym
             .map(|s| format!("{}:{}", s.file, s.start_line))
             .unwrap_or_else(|| id.clone());
-        let hop = (i + 1 < path.len()).then(|| hop_confidence(idx, id, &path[i + 1])).flatten();
+        let hop = (i + 1 < path.len())
+            .then(|| hop_confidence(idx, id, &path[i + 1]))
+            .flatten();
         if md {
             let mut line = format!("{}. **{name}**", i + 1);
             if !sig.is_empty() {
@@ -161,7 +170,10 @@ pub fn render_trace(idx: &Index, path: &[String], md: bool) -> String {
             }
             out.push_str(&format!("   {loc}\n"));
             if let Some(conf) = hop {
-                out.push_str(&format!("   hop → {}\n", crate::render::dim(&format!("{conf:?}"))));
+                out.push_str(&format!(
+                    "   hop → {}\n",
+                    crate::render::dim(&format!("{conf:?}"))
+                ));
             }
         }
     }
@@ -195,7 +207,10 @@ pub fn render_waves(idx: &Index, source_id: &str, depth: usize, md: bool) -> Str
         if md {
             out.push_str(&format!("\n*no call edges from {name}*\n\n{footer}\n"));
         } else {
-            out.push_str(&format!("  {}\n", crate::render::dim(&format!("no call edges from {name}"))));
+            out.push_str(&format!(
+                "  {}\n",
+                crate::render::dim(&format!("no call edges from {name}"))
+            ));
             out.push_str(&format!("{}\n", crate::render::dim(&footer)));
         }
         return out;
@@ -203,12 +218,20 @@ pub fn render_waves(idx: &Index, source_id: &str, depth: usize, md: bool) -> Str
     if md {
         out.push_str("\n| Layer | Count | Members |\n|------:|------:|---------|\n");
         for (k, layer) in layers.iter().enumerate() {
-            out.push_str(&format!("| {k} | {} | {} |\n", layer.len(), layer_names(idx, layer)));
+            out.push_str(&format!(
+                "| {k} | {} | {} |\n",
+                layer.len(),
+                layer_names(idx, layer)
+            ));
         }
         out.push_str(&format!("\n{footer}\n"));
     } else {
         for (k, layer) in layers.iter().enumerate() {
-            out.push_str(&format!("{k} ({}): {}\n", layer.len(), layer_names(idx, layer)));
+            out.push_str(&format!(
+                "{k} ({}): {}\n",
+                layer.len(),
+                layer_names(idx, layer)
+            ));
         }
         out.push_str(&format!("{}\n", crate::render::dim(&footer)));
     }
@@ -279,7 +302,13 @@ mod tests {
         let root = temp_root("resolve");
         let idx = sample_index(&root);
 
-        let id = idx.symbols.iter().find(|s| s.name == "helper").unwrap().id.clone();
+        let id = idx
+            .symbols
+            .iter()
+            .find(|s| s.name == "helper")
+            .unwrap()
+            .id
+            .clone();
         assert_eq!(resolve_endpoint(&idx, &id).unwrap().name, "helper");
         assert_eq!(resolve_endpoint(&idx, "helper").unwrap().name, "helper");
         // unique fuzzy suffix of a name
@@ -309,7 +338,10 @@ mod tests {
         let root = temp_root("nopath");
         let idx = sample_index(&root);
         let err = trace_report(&idx, "greet", "main", false).unwrap_err();
-        assert!(err.to_string().contains("no path from greet to main"), "{err}");
+        assert!(
+            err.to_string().contains("no path from greet to main"),
+            "{err}"
+        );
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -354,14 +386,23 @@ mod tests {
         let idx = sample_index(&root);
 
         let trace_md = trace_report(&idx, "main", "greet", true).unwrap();
-        assert!(trace_md.starts_with("# Flow: main → greet"), "heading: {trace_md}");
+        assert!(
+            trace_md.starts_with("# Flow: main → greet"),
+            "heading: {trace_md}"
+        );
         assert!(trace_md.contains("1. **main**"), "numbered: {trace_md}");
         assert!(trace_md.contains("hop: **Exact**"), "hop: {trace_md}");
         assert!(!trace_md.contains('\u{1b}'), "no ANSI: {trace_md}");
 
         let wave_md = wave_report(&idx, "main", 6, true).unwrap();
-        assert!(wave_md.starts_with("# Waves from main"), "heading: {wave_md}");
-        assert!(wave_md.contains("| Layer | Count | Members |"), "table: {wave_md}");
+        assert!(
+            wave_md.starts_with("# Waves from main"),
+            "heading: {wave_md}"
+        );
+        assert!(
+            wave_md.contains("| Layer | Count | Members |"),
+            "table: {wave_md}"
+        );
         assert!(!wave_md.contains('\u{1b}'), "no ANSI: {wave_md}");
         let _ = std::fs::remove_dir_all(&root);
     }

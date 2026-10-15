@@ -3,10 +3,13 @@
   "title": "Integrate the redesign branch: README/CHANGELOG, final gate, merge readiness",
   "phase": "release",
   "skill": "sdlc-release",
-  "status": "todo",
-  "assignee": null,
-  "description": "As integrator (main agent): land root-doc updates for the redesign milestone (README feature row for Flow mode, CHANGELOG entry - root *.md are main-agent owned per agent.md), re-run the full verification gate after VER-1 signs off, confirm every team task is done or explicitly blocked, and report merge readiness for the redesign branch. Verify: cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace all green on the final commit.",
-  "artifacts": [],
+  "status": "done",
+  "assignee": "main-agent",
+  "description": "As integrator (main agent): land root-doc updates for the redesign milestone (README feature row for Flow mode, CHANGELOG entry - root *.md are main-agent owned per agent.md), re-run the full verification gate after VER-1 signs off, confirm every team task is done or explicitly blocked, and report merge readiness for the redesign branch. Verify: cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace all green on the final commit. [Closed: README wall-table + Flow-mode feature bullet, CHANGELOG Unreleased entries (flow GUI/CLI/core + org docs), final gate green on the integration commit: fmt/clippy -D/workspace tests 112 + board suite OK.]",
+  "artifacts": [
+    "README.md",
+    "CHANGELOG.md"
+  ],
   "created": "2026-10-14T14:04:41Z",
-  "updated": "2026-10-14T14:04:41Z"
+  "updated": "2026-10-15T13:42:59Z"
 }

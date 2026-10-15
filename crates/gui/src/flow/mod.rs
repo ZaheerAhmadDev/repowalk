@@ -149,9 +149,7 @@ pub fn ui(ctx: &egui::Context, ui: &mut egui::Ui, app: &mut App) {
     let steps = seq.step_count();
 
     app.flow.playback.advance(ctx, steps);
-    app.flow
-        .playback
-        .request_repaint_while_playing(ctx, steps);
+    app.flow.playback.request_repaint_while_playing(ctx, steps);
     render::transport(ui, &mut app.flow, steps);
     ui.add_space(theme::SPACE_2);
 
@@ -199,11 +197,7 @@ pub fn ui(ctx: &egui::Context, ui: &mut egui::Ui, app: &mut App) {
     }
 
     // Step-detail panel for the current (or clicked) step.
-    let detail = app
-        .flow
-        .detail
-        .clone()
-        .or_else(|| seq.default_detail(step));
+    let detail = app.flow.detail.clone().or_else(|| seq.default_detail(step));
     if let Some(id) = detail {
         let incoming = incoming_edge(&idx, &seq, step, &id);
         theme::separator(ui);
@@ -228,11 +222,7 @@ fn incoming_edge(
     };
     idx.edges
         .iter()
-        .find(|e| {
-            e.kind == EdgeKind::Call
-                && e.callee == id
-                && prev.iter().any(|c| c == &e.caller)
-        })
+        .find(|e| e.kind == EdgeKind::Call && e.callee == id && prev.iter().any(|c| c == &e.caller))
         .map(|e| (render::display_name(idx, &e.caller), e.confidence))
 }
 
