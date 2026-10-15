@@ -1,0 +1,14 @@
+{
+  "id": "CORE-7",
+  "title": "core: learn pipeline + analysis cache + incremental reparse",
+  "phase": "implementation",
+  "skill": "sdlc-implement",
+  "status": "todo",
+  "assignee": null,
+  "description": "[v2 plan: docs/v2-plan.md (F1/F10) · exec plan: docs/v2-execution-plan.md · wave W2]\nSeats: CORE-01, CORE-02, CORE-08\nAdd crates/core/src/learn.rs: the phase driver that turns a repo into (Index, Analysis).\n  pub struct LearnProgress { pub phase: &'static str, pub done: usize, pub total: usize, pub variables: usize, pub cfgs: usize, pub types: usize, pub uses: usize }\n  pub fn learn(root: &Path, progress: &dyn Fn(LearnProgress)) -> anyhow::Result<(Index, Analysis)>\nPhases in order: walk -> parse -> resolve -> analyze -> cache. Reuse the existing\r pipeline::build_index for the Index half (or refactor build_index to call learn — do not break its callers: GUI/CLI/tests use it), then for each FileEntry call crate::analyze::analyze(file, Lang::from_walk(lang)?, source, &symbols_in_file, &mut analysis) and \nappend the results. Persist with crate::analysis::save; load a valid cache with crate::analysis::load (version-checked).\nINCREMENTAL (F10): compute a per-file stamp (mtime + line count, from FileEntry) and keep a stamps map so a re-learn reuses the cached Analysis entries for files whose stamp is unchanged and re-analyzes only changed/added files; deleted files drop out. The stamp map belongs in the analysis artifact or a sibling file you own — document the choice. Expose `pub fn analysis_for(root: &Path) -> Option<Analysis>` (cache-only, for the GUI/CLI) and keep `index.json` frozen.\nPARALLEL: if crates/core/src/parallel.rs exists (INTEL-5), use it for the parse/analyze stage; otherwise sequential is acceptable for this card and INTEL-5 wires it after.\nOwner: crates/core/src/learn.rs, plus additive edits to store.rs/pipeline.rs (you own them) and one `pub mod learn;` line in lib.rs.\nDepends: INTEL-2 (rust.rs) for a meaningful end-to-end run; the driver itself only needs the frozen analyze interface, so write it and unit-test with the stubs, then re-verify once INTEL-2 posts its handoff.\nVerify: cargo test -p repowalk-core with inline/`tests/` coverage for: learn() on a temp fixture yields a non-empty Analysis and writes analysis.json; a second learn() with unchanged files reuses the cache (assert via a counter or by asserting the progress 'analyze' phase reports 0 re-parsed files); touching one file re-analyzes exactly that file; an unknown/empty root is an Err, never a panic.",
+  "artifacts": [
+    "crates/core/src/learn.rs"
+  ],
+  "created": "2026-10-15T14:28:13Z",
+  "updated": "2026-10-15T14:28:13Z"
+}

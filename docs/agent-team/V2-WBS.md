@@ -171,3 +171,19 @@ Program Director, outside the count).
 - If a worker session dies (as happened in the v1 build), the main agent takes
   over the card as integrator and the takeover is recorded in the card's
   description.
+
+## Amendments (integrator, prerelease-v2)
+
+Kept here so the roster stays the single source of truth for *who owns what*.
+
+| Change | Reason |
+|---|---|
+| **CORE-7** added — *learn pipeline + analysis cache + incremental reparse* (W2); CORE-01/02/08 move their W2 slice here | the learn driver had no owner once INTEL owned extraction and CORE-4/5 owned aggregates |
+| Diagram/export **emitters live in `crates/core/src/export/**`**, owned by PROD-2 (not `crates/gui`) | GUI and CLI must share one emitter implementation instead of duplicating Mermaid/DOT/SVG |
+| **VER-2 scope narrowed** to `fixtures/vars/**` + `fixtures/ts/**`; VER-3 owns `fixtures/corpus/**` | `fixtures/**` as one glob would have made every verifier a single-writer bottleneck |
+| **`crates/gui/src/app.rs` + `main.rs` are integrator-owned** | it is the only file every GUI seat wants to touch; seats send the exact hunk by message, PMO applies it, then they verify |
+| File-ownership map, batch schedule, message cadence and gates: [`../v2-execution-plan.md`](../v2-execution-plan.md) | the plan was previously implicit in card descriptions |
+
+Ownership rule of thumb: **one writer per path, per batch**. If two cards need the
+same file, the second is either rescheduled into a later batch or hands its hunk to
+the integrator — never both writers at once.
