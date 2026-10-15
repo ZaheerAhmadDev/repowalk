@@ -26,11 +26,15 @@
 //! drop out. [`reanalyzed`] reports how many files the last `learn` re-analyzed
 //! (F10's "observable in logs/UI").
 //!
-//! # Scope note
+//! # Repo-level module graph
 //!
-//! This driver runs the per-file analyze stage ([`crate::analyze::analyze`]).
-//! Repo-level `modules`/`module_edges` are not per-file and are intentionally
-//! left to the modules card; `learn` does not compute them yet.
+//! After the per-file analyze stage this driver runs the repo-level module
+//! builder ([`crate::modules::build`]) and stores its output in
+//! [`Analysis::modules`]/[`Analysis::module_edges`] before `analysis::save`.
+//! `modules::build` is already deterministic and sorted, so `learn` stores its
+//! result verbatim (no re-sort/filter); a warm re-learn over an unchanged index
+//! therefore reproduces the identical graph. This step is folded into the
+//! existing `analyze`→`cache` boundary — it adds no sixth phase.
 use crate::analysis::Analysis;
 use crate::model::{FileEntry, Index, Symbol};
 use serde::{Deserialize, Serialize};
@@ -148,8 +152,8 @@ pub fn learn(root: &Path, progress: &dyn Fn(LearnProgress)) -> anyhow::Result<(I
         .collect();
 
     // Seed from the cached artifact, keeping only entries for files that still
-    // exist and did not change. Repo-level aggregates are carried over as-is
-    // (this driver does not recompute them).
+    // exist and did not change. Only the per-file stages are seeded here; the
+    // repo-level module graph is recomputed below (it is not per-file).
     let mut analysis = Analysis::new();
     if let Some(old) = crate::analysis::load(root) {
         let keep = |file: &str| current.contains_key(file) && !stale.contains(file);
@@ -170,8 +174,6 @@ pub fn learn(root: &Path, progress: &dyn Fn(LearnProgress)) -> anyhow::Result<(I
             .filter(|e| keep(&symbol_file(&e.from)))
             .collect();
         analysis.uses = old.uses.into_iter().filter(|u| keep(&u.file)).collect();
-        analysis.modules = old.modules;
-        analysis.module_edges = old.module_edges;
     }
 
     // Symbols grouped by file so each analyzer sees only its own file's symbols.
@@ -197,6 +199,13 @@ pub fn learn(root: &Path, progress: &dyn Fn(LearnProgress)) -> anyhow::Result<(I
         crate::analyze::analyze(f.path.as_str(), lang, &source, symbols, &mut analysis);
         emit(progress, "analyze", i + 1, total, &analysis);
     }
+
+    // ---- modules (repo-level, deterministic) ------------------------------
+    // Derived from the frozen index; `modules::build` is already sorted, so the
+    // result is stored verbatim. Folded into the analyze→cache boundary.
+    let (modules, module_edges) = crate::modules::build(&idx);
+    analysis.modules = modules;
+    analysis.module_edges = module_edges;
 
     // ---- cache ------------------------------------------------------------
     emit(progress, "cache", 0, 1, &analysis);
@@ -260,6 +269,7 @@ fn save_stamps(root: &Path, stamps: &StampFile) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::analysis::{ModuleEdgeKind, ModuleKind};
     use std::cell::RefCell;
 
     fn temp_root(tag: &str) -> PathBuf {
@@ -428,5 +438,111 @@ mod tests {
     fn missing_root_is_err_not_panic() {
         let root = temp_root("missing").join("does-not-exist");
         assert!(learn(&root, &|_| {}).is_err());
+    }
+
+    /// `fixtures/sample` is the real repo fixture (flat layout, one crate).
+    fn sample_root() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/sample")
+            .canonicalize()
+            .expect("fixtures/sample must exist")
+    }
+
+    #[test]
+    fn learns_sample_and_populates_modules() {
+        let root = sample_root();
+        let (idx, analysis) = learn(&root, &|_| {}).unwrap();
+
+        assert!(
+            !analysis.modules.is_empty(),
+            "learn must populate Analysis.modules"
+        );
+        assert!(
+            analysis
+                .module_edges
+                .iter()
+                .any(|e| e.kind == ModuleEdgeKind::Submodule),
+            "the tree must carry at least one Submodule edge"
+        );
+        for f in &idx.files {
+            assert!(
+                analysis
+                    .modules
+                    .iter()
+                    .any(|n| n.kind == ModuleKind::File && n.id == f.path),
+                "missing File node for indexed source {}",
+                f.path
+            );
+        }
+
+        // The artifact round-trips the graph exactly (save → analysis_for/load).
+        let loaded = analysis_for(&root).expect("saved analysis loads");
+        assert_eq!(loaded.modules, analysis.modules);
+        assert_eq!(loaded.module_edges, analysis.module_edges);
+        assert_eq!(loaded, analysis);
+    }
+
+    #[test]
+    fn learns_two_dir_fixture_with_crate_dir_file_shape() {
+        let root = temp_root("two-dir");
+        std::fs::create_dir_all(root.join("src/sub")).unwrap();
+        std::fs::write(root.join("src/alpha.rs"), "pub fn alpha() {}\n").unwrap();
+        std::fs::write(root.join("src/beta.rs"), "pub fn beta() {}\n").unwrap();
+        std::fs::write(root.join("src/sub/gamma.rs"), "pub fn gamma() {}\n").unwrap();
+
+        let (_, analysis) = learn(&root, &|_| {}).unwrap();
+
+        let count = |kind: ModuleKind| analysis.modules.iter().filter(|n| n.kind == kind).count();
+        assert_eq!(count(ModuleKind::Crate), 1, "one root crate");
+        assert_eq!(count(ModuleKind::Dir), 2, "src + src/sub are Dir nodes");
+        assert_eq!(count(ModuleKind::Module), 0, "no module-root file");
+        assert_eq!(count(ModuleKind::File), 3, "one File node per source");
+
+        let has_submodule = |from: &str, to: &str| {
+            analysis
+                .module_edges
+                .iter()
+                .any(|e| e.kind == ModuleEdgeKind::Submodule && e.from == from && e.to == to)
+        };
+        assert!(has_submodule("src", "src/sub"));
+        assert!(has_submodule("src", "src/alpha.rs"));
+        assert!(has_submodule("src/sub", "src/sub/gamma.rs"));
+    }
+
+    #[test]
+    fn empty_repo_yields_empty_modules() {
+        let root = temp_root("empty-modules");
+        let (idx, analysis) = learn(&root, &|_| {}).unwrap();
+        assert!(idx.files.is_empty());
+        assert!(analysis.modules.is_empty(), "no sources ⇒ no module nodes");
+        assert!(
+            analysis.module_edges.is_empty(),
+            "no sources ⇒ no module edges"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn warm_relearn_reproduces_modules_and_reanalyzes_nothing() {
+        let root = temp_root("modules-warm");
+        write_fixture(&root);
+
+        let (_, first) = learn(&root, &|_| {}).unwrap();
+        assert!(!first.modules.is_empty(), "cold learn builds the tree");
+
+        let seen = RefCell::new(Vec::new());
+        let (_, second) = learn(&root, &|p| seen.borrow_mut().push(p)).unwrap();
+        assert_eq!(
+            analyze_done(&seen.into_inner()),
+            0,
+            "warm re-learn must re-analyze 0 files"
+        );
+        assert_eq!(second.modules, first.modules, "warm modules identical");
+        assert_eq!(
+            second.module_edges, first.module_edges,
+            "warm module edges identical"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 }
