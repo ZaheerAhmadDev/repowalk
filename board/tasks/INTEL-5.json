@@ -3,12 +3,15 @@
   "title": "core: metrics v2 + parallel parse + incremental hooks",
   "phase": "implementation",
   "skill": "sdlc-implement",
-  "status": "todo",
-  "assignee": null,
-  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W2]\nSeats: INTEL-07, INTEL-08\nExtend crates/core/src/metrics.rs with v2 aggregates used by health-v2 (complexity per module, god files, hotspots, unused-variable count) and add parallel parsing for learn() via std::thread::scope (NO rayon): parse+analyze files across N threads (min(num_cpus-ish constant, files)), deterministic output ordering (sort results by path before merging). Do not change public Index shape. Owner: crates/core/src/metrics.rs + a new crates/core/src/parallel.rs if needed (register in lib.rs). Verify: cargo test -p repowalk-core; report a rough before/after timing on this repo (learn of ~700 symbols).",
+  "status": "done",
+  "assignee": "TL-INTEL",
+  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W2]\nSeats: INTEL-07, INTEL-08\nExtend crates/core/src/metrics.rs with v2 aggregates used by health-v2 (complexity per module, god files, hotspots, unused-variable count) and add parallel parsing for learn() via std::thread::scope (NO rayon): parse+analyze files across N threads (min(num_cpus-ish constant, files)), deterministic output ordering (sort results by path before merging). Do not change public Index shape. Owner: crates/core/src/metrics.rs + a new crates/core/src/parallel.rs if needed (register in lib.rs). Verify: cargo test -p repowalk-core; report a rough before/after timing on this repo (learn of ~700 symbols).\n\nEVIDENCE: metrics v2 additive in crates/core/src/metrics.rs (complexity_by_module, god_files, hotspots, unused_variable_count, MetricsV2/compute_v2); v1 compute + Metrics struct + all v1 tests unchanged. New crates/core/src/parallel.rs (std::thread::scope only, no new deps), registered 'pub mod parallel;' in lib.rs. GATES (real): cargo fmt --all -- --check -> exit 0; cargo clippy -p repowalk-core --all-targets -- -D warnings -> exit 0; cargo test -p repowalk-core -> 145 passed/0 failed (2 ignored) incl. 6 new metrics + 6 new parallel tests + 1 doctest. DETERMINISM: parallel::tests::two_runs_and_every_worker_count_are_byte_identical runs the same 257-job map at workers=1,2,8,0 and asserts equal fingerprints, plus a second default run. SPEEDUP (ignored bench, real per-file analyze on this repo): files=105 symbols=1355 workers=4 seq=4.006s par=1.785s = 2.24x. HANDOFF: exact map_files/FileJob API messaged to CORE-01 (re CORE-7).",
   "artifacts": [
-    "crates/core/src/metrics.rs"
+    "crates/core/src/metrics.rs",
+    "crates/core/src/parallel.rs",
+    "crates/core/src/lib.rs"
   ],
+  "evidence": "determinism: workers 1/2/8/0 byte-identical + repeat run (test two_runs_and_every_worker_count_are_byte_identical). speedup: files=105 symbols=1355 workers=4 seq=4.006s par=1.785s = 2.24x (ignored bench bench_parallel_analyze_on_this_repo). gates: fmt exit 0, clippy -D warnings exit 0, cargo test -p repowalk-core 145 passed/0 failed.",
   "created": "2026-10-15T14:11:51Z",
-  "updated": "2026-10-15T14:11:51Z"
+  "updated": "2026-10-15T14:55:30Z"
 }

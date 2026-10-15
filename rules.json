@@ -1,0 +1,9 @@
+{
+  "forbid_imports": [
+    ["core", "gui"],
+    ["gui", "cli"]
+  ],
+  "max_cyclomatic": 50,
+  "max_file_loc": 5000,
+  "no_cycles": ["crates/**"]
+}
