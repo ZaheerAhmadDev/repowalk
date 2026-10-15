@@ -72,6 +72,8 @@ before writing it.
 | `crates/gui/src/notes.rs` | TEXT-4 |
 | `crates/gui/src/theme.rs` | DSN-2 |
 | `crates/gui/src/health/**` | DSN-3 |
+| `crates/gui/src/onboard.rs` | DSN-4 (added by the DOC-2 audit — F1 had no owner) |
+| `crates/core/src/parallel.rs` | INTEL-5 (created by that card) |
 | `crates/gui/src/app.rs`, `main.rs` | **integrator** (shared wiring — seats send PNG-free diffs by message, PMO applies) |
 | `crates/cli/**` | PROD-3 |
 | `fixtures/vars/**`, `fixtures/ts/**` | VER-2 |
@@ -145,5 +147,9 @@ re-runs them independently at the end, plus the F1–F15 acceptance list from
 
 | Batch | Closed at | Commit | Gate result | Notes |
 |---|---|---|---|---|
-| B1 | in flight | — | — | BLD-2 ☑ (grammars pinned, ABI-proven), VER-2 ☑ (harness + fixtures, per-language goldens parked `#[ignore]`), INTEL-2/3/4 ▶ |
-| B0 | — | `ff77287` | 71 core tests, clippy, fmt, 23 board tests green | contracts frozen; live message log live |
+| B2 | in flight | — | — | CORE-4 (complexity+modules), CORE-5 (types+feature), CORE-7 (learn+cache+incremental), PROD-2 (Mermaid/DOT/SVG+report), RISK-2 (budgets + risks-v2) running; DOC-2 ☑ (`docs/architecture.md` v2 map + a 6-item gap audit → DSN-4 created, stale store/pipeline headers assigned to CORE-7) |
+| B1 | in flight | — | 115 core tests green at last check | BLD-2 ☑ (grammars pinned, ABI-proven), VER-2 ☑ (harness + fixtures, per-language goldens parked `#[ignore]`), INTEL-2/3/4 writing real analyzers (~1.5k lines each, inline tests green; cards not yet closed) |
+| B0 | — | `c414b6a` | 71 core tests, clippy, fmt, 23 board tests green | contracts frozen; live message log live |
+
+Files named for a queued card may not exist yet — the owning card creates them.
+Last gate run by PMO on the working tree (not a batch close): `cargo test -p repowalk-core` → 115 lib + 3 active + 7 parked golden + 13 integration tests, 0 failed.
