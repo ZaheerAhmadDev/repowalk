@@ -1,5 +1,6 @@
-//! Sidebar: map · health · tour · search · symbol list.
-//! OWNER of aggregate: main agent; panels: RSK-15/16.
+//! Sidebar: map · usage · health · notes · onboarding · search.
+//! OWNER of this aggregate: integrator (the tab strip is pre-wired so parallel
+//! panels never share a file); each panel belongs to its own card.
 pub mod flow;
 pub mod map;
 pub mod search;
@@ -9,6 +10,30 @@ use eframe::egui;
 
 use crate::theme;
 
+/// Sidebar view selector. `Map` keeps the v1 stacked panels unchanged; the other
+/// tabs are v2 panels, one card each.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Tab {
+    #[default]
+    Map,
+    Usage,
+    Health,
+    Notes,
+    Onboard,
+}
+
+impl Tab {
+    fn label(self) -> &'static str {
+        match self {
+            Tab::Map => "Map",
+            Tab::Usage => "Usage",
+            Tab::Health => "Health",
+            Tab::Notes => "Notes",
+            Tab::Onboard => "101",
+        }
+    }
+}
+
 /// All panels, top to bottom. Each panel owns its own `ScrollArea` sized to
 /// the space that is left, so the sidebar never overflows and long lists
 /// scroll in place.
@@ -17,13 +42,28 @@ pub fn ui(ui: &mut egui::Ui, app: &mut crate::app::App) {
         empty_state(ui);
         return;
     }
-    map::ui(ui, app);
+    let tabs = [Tab::Map, Tab::Usage, Tab::Health, Tab::Notes, Tab::Onboard];
+    let labels: Vec<(Tab, &str)> = tabs.iter().map(|t| (*t, t.label())).collect();
+    if let Some(tab) = crate::ui_kit::tab_strip(ui, app.sidebar_tab, &labels) {
+        app.sidebar_tab = tab;
+    }
     theme::separator(ui);
-    tour::ui(ui, app);
-    theme::separator(ui);
-    flow::ui(ui, app);
-    theme::separator(ui);
-    search::ui(ui, app);
+    match app.sidebar_tab {
+        // The v1 stacked panels, unchanged, under one tab.
+        Tab::Map => {
+            map::ui(ui, app);
+            theme::separator(ui);
+            tour::ui(ui, app);
+            theme::separator(ui);
+            flow::ui(ui, app);
+            theme::separator(ui);
+            search::ui(ui, app);
+        }
+        Tab::Usage => crate::usage::ui(ui, app),
+        Tab::Health => crate::health::ui(ui, app),
+        Tab::Notes => crate::notes::ui(ui, app),
+        Tab::Onboard => crate::onboard::ui(ui, app),
+    }
 }
 
 /// Muted hint shown while no repository is loaded (visibility of system status).

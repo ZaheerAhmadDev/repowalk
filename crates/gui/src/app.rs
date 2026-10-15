@@ -2,12 +2,13 @@
 //! Redesigned around the `theme` token system: toolbar (segmented control +
 //! export menu), sidebar, central pane, status bar. OWNER: RSK-14.
 use eframe::egui;
+use repowalk_core::analysis::Analysis;
 use repowalk_core::model::Index;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use crate::theme;
-use crate::{flow, graph, sidebar, text};
+use crate::{diagrams, flow, graph, sidebar, text, usage};
 
 /// (edges, symbols, edge_calls, edge_imports) signature guarding graph rebuilds.
 pub type GraphState = ((usize, usize, bool, bool), crate::graph::render::WalkGraph);
@@ -17,6 +18,8 @@ pub enum Mode {
     Text,
     Graph,
     Flow,
+    /// v2: CFG / type / module diagrams (F2, F3).
+    Diagrams,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -48,7 +51,11 @@ pub struct IndexProgress {
     pub total: usize,
     pub finished: bool,
     pub error: Option<String>,
+    /// Current learn phase (`walk` / `parse` / `resolve` / `analyze` / `cache`).
+    pub phase: String,
     pub index: Option<Arc<Index>>,
+    /// The v2 analysis artifact, produced by the same `learn` pass as the index.
+    pub analysis: Option<Arc<Analysis>>,
 }
 
 pub struct App {
@@ -80,6 +87,11 @@ pub struct App {
     pub status: String,
     pub graph_state: Option<GraphState>,
     pub flow: crate::flow::FlowState,
+    /// v2 analysis artifact; `None` until the first `learn` completes.
+    pub analysis: Option<Arc<Analysis>>,
+    pub sidebar_tab: sidebar::Tab,
+    pub usage: usage::UsageState,
+    pub diagrams: diagrams::DiagramsState,
 }
 
 /// The egui context handle used by the indexing thread to request repaints.
@@ -123,6 +135,10 @@ impl App {
             status: String::new(),
             graph_state: None,
             flow: Default::default(),
+            analysis: None,
+            sidebar_tab: sidebar::Tab::Map,
+            usage: Default::default(),
+            diagrams: Default::default(),
         };
         if let Some(repo) = repo {
             app.start_indexing(repo);
@@ -145,23 +161,30 @@ impl App {
         self.open_file = None;
         self.graph_state = None;
         self.flow = Default::default();
-        self.status = "indexing…".to_string();
+        self.analysis = None;
+        self.status = "learning…".to_string();
         std::thread::spawn(move || {
-            let notify = |done: usize| {
-                if let Ok(mut p) = shared.lock() {
-                    p.done = done;
+            // F1: `learn` walks, parses, resolves and analyzes in one pass, then
+            // caches both artifacts. The phases are surfaced so "open a codebase"
+            // also says what the app is doing, and how far it has got.
+            let notify = |p: repowalk_core::learn::LearnProgress| {
+                if let Ok(mut s) = shared.lock() {
+                    s.phase = p.phase.to_string();
+                    s.done = p.done;
+                    s.total = p.total;
                 }
                 if let Some(ctx) = &ctx {
                     ctx.request_repaint();
                 }
             };
-            let result = repowalk_core::pipeline::build_index(&repo, &notify);
+            let result = repowalk_core::learn::learn(&repo, &notify);
             let mut p = shared.lock().unwrap();
             p.finished = true;
             match result {
-                Ok(idx) => {
+                Ok((idx, analysis)) => {
                     p.total = idx.files.len();
                     p.index = Some(Arc::new(idx));
+                    p.analysis = Some(Arc::new(analysis));
                 }
                 Err(e) => p.error = Some(format!("{e:#}")),
             }
@@ -176,9 +199,24 @@ impl App {
     pub fn poll_progress(&mut self) {
         let mut p = self.progress.lock().unwrap();
         if p.finished {
+            let mut learned: Option<usize> = None;
             if let Some(idx) = p.index.take() {
-                self.status = format!("indexed {} files", idx.files.len());
+                learned = Some(idx.files.len());
                 self.index = Some(idx);
+            }
+            if let Some(a) = p.analysis.take() {
+                self.status = match learned {
+                    Some(files) => format!(
+                        "learned {files} files · {} variables · {} cfgs · {} types",
+                        a.variables.len(),
+                        a.cfgs.len(),
+                        a.types.len()
+                    ),
+                    None => format!("analysis ready: {} variables", a.variables.len()),
+                };
+                self.analysis = Some(a);
+            } else if let Some(files) = learned {
+                self.status = format!("learned {files} files");
             }
             if let Some(e) = p.error.take() {
                 self.error = Some(e);
@@ -292,7 +330,8 @@ impl App {
             self.mode = match self.mode {
                 Mode::Text => Mode::Graph,
                 Mode::Graph => Mode::Flow,
-                Mode::Flow => Mode::Text,
+                Mode::Flow => Mode::Diagrams,
+                Mode::Diagrams => Mode::Text,
             };
         }
         if slash {
@@ -427,6 +466,7 @@ impl App {
             let text_active = self.mode == Mode::Text;
             let graph_active = self.mode == Mode::Graph;
             let flow_active = self.mode == Mode::Flow;
+            let diagrams_active = self.mode == Mode::Diagrams;
             if mode_segment(ui, "Text", "Tab", text_active).clicked() {
                 self.mode = Mode::Text;
             }
@@ -435,6 +475,9 @@ impl App {
             }
             if mode_segment(ui, "Flow", "Tab", flow_active).clicked() {
                 self.mode = Mode::Flow;
+            }
+            if mode_segment(ui, "Diagrams", "Tab", diagrams_active).clicked() {
+                self.mode = Mode::Diagrams;
             }
 
             ui.separator();
@@ -590,6 +633,11 @@ impl App {
                 PaletteKind::ModeText => self.mode = Mode::Text,
                 PaletteKind::ModeGraph => self.mode = Mode::Graph,
                 PaletteKind::ModeFlow => self.mode = Mode::Flow,
+                PaletteKind::ModeDiagrams => self.mode = Mode::Diagrams,
+                PaletteKind::PanelUsage => self.sidebar_tab = sidebar::Tab::Usage,
+                PaletteKind::PanelHealth => self.sidebar_tab = sidebar::Tab::Health,
+                PaletteKind::PanelNotes => self.sidebar_tab = sidebar::Tab::Notes,
+                PaletteKind::PanelOnboard => self.sidebar_tab = sidebar::Tab::Onboard,
                 PaletteKind::FocusSearch => self.search_focus = true,
                 PaletteKind::OpenRepo => self.show_open_popup = true,
                 PaletteKind::ExportPng => self.export_png(ctx),
@@ -616,7 +664,7 @@ impl App {
                     .spacing([theme::SPACE_6, theme::SPACE_1])
                     .show(ui, |ui| {
                         for (keys, desc) in [
-                            ("Tab", "Cycle Text / Graph / Flow"),
+                            ("Tab", "Cycle Text / Graph / Flow / Diagrams"),
                             ("Ctrl+K", "Command palette"),
                             ("/", "Focus search"),
                             ("j / k", "Move through sidebar lists"),
@@ -640,18 +688,23 @@ impl App {
         if self.index.is_some() || self.error.is_some() {
             return;
         }
-        let done = self.progress.lock().unwrap().done;
+        let (done, total, phase) = {
+            let p = self.progress.lock().unwrap();
+            (p.done, p.total, p.phase.clone())
+        };
         egui::Area::new(egui::Id::new("progress-overlay"))
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ui.ctx(), |ui| {
                 egui::Frame::popup(ui.style()).show(ui, |ui| {
-                    ui.set_min_width(200.0);
+                    ui.set_min_width(220.0);
                     ui.horizontal(|ui| {
                         ui.spinner();
-                        ui.label(if done > 0 {
-                            format!("indexing {done} files…")
+                        ui.label(if phase.is_empty() {
+                            "learning…".to_string()
+                        } else if total > 0 {
+                            format!("{phase} · {done}/{total} files…")
                         } else {
-                            "indexing…".to_string()
+                            format!("{phase}…")
                         });
                     });
                 });
@@ -708,6 +761,12 @@ impl eframe::App for App {
                 egui::CentralPanel::default().show(ui, |ui| {
                     ui.add_space(theme::SPACE_1);
                     flow::ui(&ctx, ui, self);
+                });
+            }
+            Mode::Diagrams => {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    ui.add_space(theme::SPACE_1);
+                    diagrams::ui(ui, self);
                 });
             }
         }
@@ -771,6 +830,11 @@ enum PaletteKind {
     ModeText,
     ModeGraph,
     ModeFlow,
+    ModeDiagrams,
+    PanelUsage,
+    PanelHealth,
+    PanelNotes,
+    PanelOnboard,
     FocusSearch,
     OpenRepo,
     ExportPng,
@@ -801,6 +865,31 @@ fn palette_actions(_app: &App) -> Vec<PaletteAction> {
             label: "Switch to Flow mode",
             hint: "Tab",
             kind: PaletteKind::ModeFlow,
+        },
+        PaletteAction {
+            label: "Switch to Diagrams mode",
+            hint: "Tab",
+            kind: PaletteKind::ModeDiagrams,
+        },
+        PaletteAction {
+            label: "Show variables panel",
+            hint: "",
+            kind: PaletteKind::PanelUsage,
+        },
+        PaletteAction {
+            label: "Show repository health panel",
+            hint: "",
+            kind: PaletteKind::PanelHealth,
+        },
+        PaletteAction {
+            label: "Show notes panel",
+            hint: "",
+            kind: PaletteKind::PanelNotes,
+        },
+        PaletteAction {
+            label: "Show Repo 101 (onboarding)",
+            hint: "",
+            kind: PaletteKind::PanelOnboard,
         },
         PaletteAction {
             label: "Focus search",
