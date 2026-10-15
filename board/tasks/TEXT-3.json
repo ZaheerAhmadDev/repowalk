@@ -1,0 +1,14 @@
+{
+  "id": "TEXT-3",
+  "title": "gui: Find-all-references panel + Ctrl+click + Ctrl+P quick open + breadcrumbs",
+  "phase": "implementation",
+  "skill": "sdlc-implement",
+  "status": "todo",
+  "assignee": null,
+  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W3]\nSeats: TEXT-03, TEXT-04, TEXT-05\ncrates/gui/src/usage/refs.rs: references panel for the selection (symbol or variable) listing every UseSite (file:line + snippet + kind badge), grouped by file, jump-to each, count header; Ctrl+click on an identifier in the editor opens refs for it. Ctrl+P quick-open overlay over all files (fuzzy path match, reuses search scoring) as a new PaletteKind. Breadcrumbs row (module path > file > symbol) in Text mode header, each segment clickable. Owner: crates/gui/src/usage/refs.rs, app.rs palette/keys, text/ header. Verify: cargo build/clippy/test -p repowalk-gui; refs count for a fixture symbol matches grep (accounting for comments/strings).",
+  "artifacts": [
+    "crates/gui/src/usage/refs.rs"
+  ],
+  "created": "2026-10-15T14:11:51Z",
+  "updated": "2026-10-15T14:11:51Z"
+}

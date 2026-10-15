@@ -1,0 +1,14 @@
+{
+  "id": "RISK-3",
+  "title": "risk: final no-network proof, perf budget audit, scope freeze",
+  "phase": "testing",
+  "skill": "sdlc-test",
+  "status": "todo",
+  "assignee": null,
+  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W5]\nSeats: RISK-03, RISK-05, RISK-07\nConfirm the whole workspace is network-crate-free (cargo tree over gui/cli/core, grep for reqwest/tokio/hyper/hyper-util/ureq/native-tls = 0), re-check the RISK-2 budgets against VER-3's measured numbers (cold learn, incremental, idle CPU/repaints, memory), verify the dependency additions (grammar + regex) are offline-buildable and pinned, sweep for accidental secrets/PII in the new fixtures/docs, and confirm nothing beyond docs/v2-plan.md scope crept in (list any drift). Owner: board/docs/risks-v2.md updates + report only. Verify: the exact commands + raw outputs pasted.",
+  "artifacts": [
+    "board/docs/risks-v2.md"
+  ],
+  "created": "2026-10-15T14:11:51Z",
+  "updated": "2026-10-15T14:11:51Z"
+}

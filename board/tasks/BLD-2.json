@@ -1,0 +1,14 @@
+{
+  "id": "BLD-2",
+  "title": "build: add tree-sitter TS/JS + regex, prove ABI and offline CI",
+  "phase": "implementation",
+  "skill": "sdlc-implement",
+  "status": "todo",
+  "assignee": null,
+  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W1]\nSeats: BLD-01, BLD-02, BLD-03, BLD-04, BLD-07, BLD-08\nAdd to crates/core/Cargo.toml (workspace-pinned style): tree-sitter-typescript and tree-sitter-javascript versions whose ABI matches the pinned tree-sitter 0.27.1 (check with cargo add --dry-run then build), and regex for F12. Update the stack skill table note if needed (skills/repowalk/repowalk-stack is NOT yours: report the pins instead). Prove the build offline-capable (cargo build --offline -p repowalk-core after one online fetch) and that CI workspace gates still cover it. Do NOT add rayon/tokio/any network crate. Owner: crates/core/Cargo.toml, Cargo.lock, .github/workflows/* only. Verify: cargo build -p repowalk-core (with a tiny throwaway parse call in a scratch test if useful), then `cargo tree -p repowalk-core | grep -cE 'reqwest|tokio|hyper'` = 0; report the exact pinned versions.",
+  "artifacts": [
+    "crates/core/Cargo.toml"
+  ],
+  "created": "2026-10-15T14:11:51Z",
+  "updated": "2026-10-15T14:11:51Z"
+}

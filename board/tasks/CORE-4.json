@@ -1,0 +1,15 @@
+{
+  "id": "CORE-4",
+  "title": "core: complexity aggregates + module DAG (complexity.rs, modules.rs)",
+  "phase": "implementation",
+  "skill": "sdlc-implement",
+  "status": "todo",
+  "assignee": null,
+  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W2]\nSeats: CORE-03, CORE-04\ncrates/core/src/complexity.rs: aggregates over Analysis::cfgs — per-function complexity sorted, per-file sum/max, nesting extremes, hotspot ranking, unused-variable list, most-used variables, shadowed names (F6 surface). crates/core/src/modules.rs: build ModuleNode/ModuleEdge (Crate/Dir/Module/File + Import/Submodule with counts) from the index's FileEntry tree + import edges; deterministic ids, cycle-friendly. Both consume the frozen analysis.rs contract. Owner: crates/core/src/{complexity,modules}.rs + lib.rs lines. Verify: cargo test -p repowalk-core (inline tests: complexity ranking on fixtures, module tree of fixtures/sample has expected nodes/edges).",
+  "artifacts": [
+    "crates/core/src/complexity.rs",
+    "crates/core/src/modules.rs"
+  ],
+  "created": "2026-10-15T14:11:51Z",
+  "updated": "2026-10-15T14:11:51Z"
+}

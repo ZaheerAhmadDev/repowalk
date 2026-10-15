@@ -1,0 +1,14 @@
+{
+  "id": "GRAPH-5",
+  "title": "gui: Flow mode v3 — Feature tab (entrypoint call tree/sequence)",
+  "phase": "implementation",
+  "skill": "sdlc-implement",
+  "status": "todo",
+  "assignee": null,
+  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W3]\nSeats: GRAPH-08\nExtend crates/gui/src/flow/ with a third sub-tab Feature: pick an entrypoint + depth, render core::feature slice as an ordered call tree/sequence (depth columns or indented tree with call lines + confidence), playable with the existing playback engine (reuse playhead/pulse/step card), click-through to source, honest empty/unknown states. Owner: crates/gui/src/flow/* (feature.rs new). Depends: CORE-5 (feature.rs). Verify: cargo build/clippy/test -p repowalk-gui; feature slice of fixtures/sample entrypoint renders expected order.",
+  "artifacts": [
+    "crates/gui/src/flow/feature.rs"
+  ],
+  "created": "2026-10-15T14:11:51Z",
+  "updated": "2026-10-15T14:11:51Z"
+}

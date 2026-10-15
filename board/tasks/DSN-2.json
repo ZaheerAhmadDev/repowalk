@@ -1,0 +1,14 @@
+{
+  "id": "DSN-2",
+  "title": "gui: light theme + density + font scale + a11y pass",
+  "phase": "design",
+  "skill": "sdlc-design",
+  "status": "todo",
+  "assignee": null,
+  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W4]\nSeats: DSN-01, DSN-02, DSN-05, DSN-07, DSN-08\nExtend crates/gui/src/theme.rs: a light theme palette at the same token names (AAA body text), density modes (compact/comfortable spacing multiples), font scale factor. Add a Settings/View menu section to switch theme/density/scale at runtime. A11y pass: verify focus order and that no view encodes meaning in color or animation alone (reduce-motion honored); document the contrast ratios in the token doc comment. Owner: crates/gui/src/theme.rs + app.rs menu wiring. Verify: cargo build -p repowalk-gui 0 warnings; report the light-theme contrast ratios you computed.",
+  "artifacts": [
+    "crates/gui/src/theme.rs"
+  ],
+  "created": "2026-10-15T14:11:51Z",
+  "updated": "2026-10-15T14:11:51Z"
+}

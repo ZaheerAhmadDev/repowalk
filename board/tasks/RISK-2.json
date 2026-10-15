@@ -1,0 +1,14 @@
+{
+  "id": "RISK-2",
+  "title": "risk: perf budgets, memory guardrails, incremental correctness",
+  "phase": "requirements",
+  "skill": "sdlc-requirements",
+  "status": "todo",
+  "assignee": null,
+  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W2]\nSeats: RISK-01, RISK-02, RISK-04, RISK-06, RISK-08\nProduce board/docs/risks-v2.md (extends risks-flow.md): budgets (cold learn <5s on 10k LOC, incremental re-learn of 1 changed file parses only that file, GUI idle CPU ~0 and no repaint when static, memory <1.5GB for a 100k-LOC repo) each with a verify hook command; plus incremental-index correctness risks (stale analysis after save/revert, mtime tricks) and new-dependency risks (grammar ABI, build size). Review INTEL-5's incremental hooks and the new deps for regressions. Owner: board/docs/risks-v2.md only. Verify: every row has owner + verify hook; grep -c '^| R' >= 12.",
+  "artifacts": [
+    "board/docs/risks-v2.md"
+  ],
+  "created": "2026-10-15T14:11:51Z",
+  "updated": "2026-10-15T14:11:51Z"
+}

@@ -1,0 +1,15 @@
+{
+  "id": "PROD-2",
+  "title": "export: Mermaid + DOT + SVG emitters + architecture report",
+  "phase": "implementation",
+  "skill": "sdlc-implement",
+  "status": "todo",
+  "assignee": null,
+  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W4]\nSeats: PROD-01, PROD-02, PROD-03, PROD-04\ncrates/gui/src/export/{mermaid,dot,svg,report}.rs: text emitters for call graph, CFG, types, modules and (where sensible) flow trace; hand-rolled SVG (no new crate) for the same; report.rs builds a Markdown 'architecture report' (overview metrics, module map, hotspots/complexity table, refs summary, diagrams as embedded Mermaid fenced blocks). Extend the Export menu with these targets writing to a chosen path. Owner: crates/gui/src/export/*. Verify: cargo build/clippy/test -p repowalk-gui; unit tests assert Mermaid and DOT output for a fixed fixture graph is byte-stable and valid (balanced fences, unique node ids).",
+  "artifacts": [
+    "crates/gui/src/export/mermaid.rs",
+    "crates/gui/src/export/report.rs"
+  ],
+  "created": "2026-10-15T14:11:51Z",
+  "updated": "2026-10-15T14:11:51Z"
+}
