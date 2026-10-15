@@ -1,0 +1,14 @@
+{
+  "id": "TEXT-2",
+  "title": "gui: per-file Variables panel + highlight-all-uses",
+  "phase": "implementation",
+  "skill": "sdlc-implement",
+  "status": "todo",
+  "assignee": null,
+  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W3]\nSeats: TEXT-01, TEXT-02, TEXT-08, DSN-06\ncrates/gui/src/usage/{mod,variables}.rs: a 'Variables' panel for the file open in Text mode — sortable table (name | kind | type | uses | reads | writes | line) from analysis.json; row click selects the variable and HIGHLIGHTS every use site in the editor (use the existing editor highlight mechanism or add a line-range overlay), plus a use-site list with snippets and jump-to. Unused variables get a muted badge. Honest empty state when no analysis. Owner: crates/gui/src/usage/*, sidebar wiring line. Verify: cargo build/clippy/test -p repowalk-gui; on a fixture file the displayed use count equals the golden count from VER-2.",
+  "artifacts": [
+    "crates/gui/src/usage/variables.rs"
+  ],
+  "created": "2026-10-15T14:11:51Z",
+  "updated": "2026-10-15T14:11:51Z"
+}

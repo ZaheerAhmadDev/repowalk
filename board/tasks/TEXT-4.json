@@ -1,0 +1,14 @@
+{
+  "id": "TEXT-4",
+  "title": "gui: bookmarks, notes, reading progress, resume + tour v2",
+  "phase": "implementation",
+  "skill": "sdlc-implement",
+  "status": "todo",
+  "assignee": null,
+  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W4]\nSeats: TEXT-06, TEXT-07\ncrates/gui/src/notes.rs: bookmarks (file + line + label) and free-text notes per file/symbol/line, persisted to .repowalk/notes.json (serde, atomic write, tolerant parse: corrupted file -> empty + warning, never a crash); sidebar 'Notes' panel with jump-to and delete; reading-progress tracking (last visited file+line+symbol) with a 'Continue' affordance on open; tour v2: extend the tour panel with next/prev steps and per-step why (reuse core::tour), marking visited steps. Owner: crates/gui/src/notes.rs, sidebar/tour.rs additions. Verify: cargo build/clippy/test -p repowalk-gui (unit-test notes.json roundtrip + corrupted-file tolerance).",
+  "artifacts": [
+    "crates/gui/src/notes.rs"
+  ],
+  "created": "2026-10-15T14:11:51Z",
+  "updated": "2026-10-15T14:11:51Z"
+}

@@ -1,0 +1,14 @@
+{
+  "id": "GRAPH-2",
+  "title": "gui: Diagrams mode framework + Control-flow tab (CFG renderer)",
+  "phase": "implementation",
+  "skill": "sdlc-implement",
+  "status": "todo",
+  "assignee": null,
+  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W3]\nSeats: GRAPH-01, GRAPH-02, GRAPH-09\nAdd Mode::Diagrams (4th mode) and crates/gui/src/diagrams/{mod,common,control}.rs. common.rs: shared canvas kit (pan/zoom/click-to-source, node boxes with theme tokens, edge styles incl. labeled True/False/Back, no per-frame allocations of the graph). control.rs: render one function's FunctionCfg from analysis.json — Entry/Exit/Block/Branch/Loop/Match/Call/Return node shapes, labels carrying real condition text, complexity badge (cyclomatic + max nesting), function picker reusing search/explain selection; honest empty state when analysis is missing or the function has no CFG. Wiring: app.rs (Mode arm + toolbar segment + palette + Tab cycle), main.rs mod decl. Consume theme tokens only. Owner: crates/gui/src/diagrams/*, app.rs, main.rs. Verify: cargo build -p repowalk-gui && cargo clippy -p repowalk-gui --all-targets -- -D warnings && cargo test -p repowalk-gui.",
+  "artifacts": [
+    "crates/gui/src/diagrams/mod.rs"
+  ],
+  "created": "2026-10-15T14:11:51Z",
+  "updated": "2026-10-15T14:11:51Z"
+}

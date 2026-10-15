@@ -1,0 +1,14 @@
+{
+  "id": "INTEL-3",
+  "title": "core: Python analyzer (variables, CFG, types, use-sites)",
+  "phase": "implementation",
+  "skill": "sdlc-implement",
+  "status": "todo",
+  "assignee": null,
+  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W1]\nSeats: INTEL-04\nAdd crates/core/src/analyze/python.rs implementing the same output shape as INTEL-2's rust.rs using tree-sitter-python: variables (assignment targets, params, class attributes/globals) with read/write counts and scope; FunctionCfg (if/elif/else, for/while, try/except, with, return) with cyclomatic + nesting; TypeNode for classes (fields from self.x assignments, methods, docstring); UseSites for calls/field access/var reads+writes. Reuse analyze/mod.rs shared helpers from INTEL-2 (import them; do not duplicate). Owner: crates/core/src/analyze/python.rs only. Depends: INTEL-2 (analyze/mod.rs helpers) — if INTEL-2 has not landed yet, coordinate through the card. Verify: cargo test -p repowalk-core (inline test on a small python snippet: for+if -> cyclomatic, unused variable, class with method).",
+  "artifacts": [
+    "crates/core/src/analyze/python.rs"
+  ],
+  "created": "2026-10-15T14:11:51Z",
+  "updated": "2026-10-15T14:11:51Z"
+}

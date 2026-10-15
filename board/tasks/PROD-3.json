@@ -1,0 +1,14 @@
+{
+  "id": "PROD-3",
+  "title": "cli: report, graph --format, variables, complexity, refs + --json",
+  "phase": "implementation",
+  "skill": "sdlc-implement",
+  "status": "todo",
+  "assignee": null,
+  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W4]\nSeats: PROD-05, PROD-06, PROD-07, PROD-08\nAdd subcommands: `repowalk report [--md|--json]`, `graph [--format mermaid|dot] [--scope call|types|modules]`, `variables <file>`, `complexity [--by function|file] [--top N]`, `refs <symbol>`; global `--json` where useful (report/complexity/variables/refs). Reuse the export emitters from PROD-2 (share code: put emitters in core or expose them; do not duplicate logic). Honest exit codes (no path/unknown symbol/no analysis => nonzero + message). Owner: crates/cli/**. Depends: PROD-2 (emitters). Verify: cargo run -p repowalk-cli -- <each> on fixtures + this repo; paste real outputs incl. a --json one and an error case; cargo test -p repowalk-cli.",
+  "artifacts": [
+    "crates/cli/src/commands/report.rs"
+  ],
+  "created": "2026-10-15T14:11:51Z",
+  "updated": "2026-10-15T14:11:51Z"
+}
