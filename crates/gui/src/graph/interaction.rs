@@ -5,6 +5,7 @@ use repowalk_core::model::{EdgeKind, Index};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use crate::app::{App, Selection, TracePick};
+use crate::theme;
 
 /// BFS shortest call path from `a` to `b` over resolved call edges.
 /// Returns the node id path including both endpoints, or None (honest "no path").
@@ -70,65 +71,169 @@ pub fn dimmed_nodes(idx: &Index, selected: &str) -> BTreeSet<String> {
     dimmed
 }
 
+/// Human-readable node name for banners: symbol name, or bare file path.
+fn display_name(idx: &Index, id: &str) -> String {
+    if let Some(sym) = idx.symbols.iter().find(|s| s.id == id) {
+        return sym.name.clone();
+    }
+    id.strip_prefix("file:")
+        .map(|p| p.to_string())
+        .unwrap_or_else(|| id.to_string())
+}
+
+/// Small tinted strip button (Cancel / Clear affordances).
+fn strip_button(ui: &mut egui::Ui, label: &str, color: egui::Color32) -> bool {
+    ui.add(
+        egui::Button::new(
+            egui::RichText::new(label)
+                .size(theme::FONT_SMALL)
+                .color(color),
+        )
+        .fill(egui::Color32::TRANSPARENT)
+        .stroke(egui::Stroke::new(1.0, color.gamma_multiply(0.35)))
+        .corner_radius(egui::CornerRadius::same(theme::CORNER_SM)),
+    )
+    .clicked()
+}
+
 pub fn handle(ui: &mut egui::Ui, app: &mut App) {
     let Some(idx) = app.index.clone() else {
         return;
     };
 
-    // Trace banner + pickers (plan §3.2 pick 2).
-    ui.horizontal(|ui| {
-        match app.trace_pick {
-            TracePick::None => {
-                if ui.button("trace A→B").clicked() {
-                    app.trace_pick = TracePick::PickA;
-                    app.pending_trace_a = None;
-                }
-            }
-            TracePick::PickA => {
-                ui.weak("pick node A (click a graph node)");
-                if ui.button("cancel").clicked() {
-                    app.trace_pick = TracePick::None;
-                }
-            }
-            TracePick::PickB => {
-                ui.weak("pick node B (click a graph node)");
-                if ui.button("cancel").clicked() {
-                    app.trace_pick = TracePick::None;
-                }
-            }
+    // Trace banner (plan §3.2 pick 2): persistent strip while picking or
+    // showing a resolved path.
+    let banner_active = !matches!(app.trace_pick, TracePick::None) || app.trace.is_some();
+    if banner_active {
+        let mut cancel = false;
+        let mut clear = false;
+        egui::Frame::new()
+            .fill(theme::SURFACE_E1)
+            .stroke(egui::Stroke::new(1.0, theme::BORDER_SUBTLE))
+            .inner_margin(egui::Margin::symmetric(
+                theme::SPACE_3 as i8,
+                theme::SPACE_2 as i8,
+            ))
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    match app.trace_pick {
+                        TracePick::PickA => {
+                            ui.label(
+                                egui::RichText::new("Click node A")
+                                    .size(theme::FONT_SMALL)
+                                    .color(theme::TEXT_PRIMARY),
+                            );
+                            if strip_button(ui, "Cancel", theme::DANGER) {
+                                cancel = true;
+                            }
+                        }
+                        TracePick::PickB => {
+                            ui.label(
+                                egui::RichText::new("Click node B (from A)")
+                                    .size(theme::FONT_SMALL)
+                                    .color(theme::TEXT_PRIMARY),
+                            );
+                            if strip_button(ui, "Cancel", theme::DANGER) {
+                                cancel = true;
+                            }
+                        }
+                        TracePick::None => {}
+                    }
+                    if let Some((a, b)) = app.trace.clone() {
+                        match shortest_call_path(&idx, &a, &b) {
+                            Some(p) => {
+                                // Short chains read in full; long ones abbreviate.
+                                let shown = if p.len() > 4 {
+                                    format!(
+                                        "{} → … → {}",
+                                        display_name(&idx, &p[0]),
+                                        display_name(&idx, &p[p.len() - 1])
+                                    )
+                                } else {
+                                    p.iter()
+                                        .map(|id| display_name(&idx, id))
+                                        .collect::<Vec<_>>()
+                                        .join(" → ")
+                                };
+                                ui.colored_label(
+                                    theme::SUCCESS,
+                                    egui::RichText::new(format!(
+                                        "{} ({} hops)",
+                                        shown,
+                                        p.len() - 1
+                                    ))
+                                    .size(theme::FONT_SMALL),
+                                );
+                            }
+                            None => {
+                                ui.colored_label(
+                                    theme::DANGER,
+                                    egui::RichText::new(format!(
+                                        "no call path from {} to {}",
+                                        display_name(&idx, &a),
+                                        display_name(&idx, &b),
+                                    ))
+                                    .size(theme::FONT_SMALL),
+                                );
+                            }
+                        }
+                        if strip_button(ui, "Clear", theme::TEXT_SECONDARY) {
+                            clear = true;
+                        }
+                    }
+                });
+            });
+        if cancel {
+            app.trace_pick = TracePick::None;
+            app.pending_trace_a = None;
         }
-        if let Some((a, b)) = app.trace.clone() {
-            match shortest_call_path(&idx, &a, &b) {
-                Some(p) => ui.colored_label(
-                    egui::Color32::from_rgb(152, 195, 121),
-                    format!("{} ({} hops)", p.join(" → "), p.len() - 1),
-                ),
-                None => ui.colored_label(
-                    egui::Color32::from_rgb(224, 108, 117),
-                    format!("no call path from {a} to {b}"),
-                ),
-            };
-            if ui.button("clear trace").clicked() {
-                app.trace = None;
-            }
+        if clear {
+            app.trace = None;
         }
-    });
+    }
 
-    // Hover preview bar (signature + file:line) — shown under the legend.
-    if let Some(hovered) = app
-        .graph_state
-        .as_ref()
-        .and_then(|(_, g)| g.hovered_node())
-        .and_then(|h| app.graph_state.as_ref().unwrap().1.node(h))
-        .map(|node| node.payload().id.clone())
-    {
-        let tip = match idx.symbols.iter().find(|s| s.id == hovered) {
-            Some(s) => format!("{}\n{}:{}", s.signature, s.file, s.start_line),
-            None => hovered.clone(),
-        };
-        if !tip.is_empty() {
-            ui.weak(tip.replace('\n', "  ·  "));
-        }
+    // Hover preview strip (under the legend): signature in CODE + file:line.
+    let hovered_id: Option<String> = app.graph_state.as_ref().and_then(|(_, g)| {
+        g.hovered_node()
+            .and_then(|h| g.node(h))
+            .map(|node| node.payload().id.clone())
+    });
+    if let Some(hovered) = hovered_id {
+        egui::Frame::new()
+            .fill(theme::SURFACE_E2)
+            .inner_margin(egui::Margin::symmetric(
+                theme::SPACE_2 as i8,
+                theme::SPACE_1 as i8,
+            ))
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    match idx.symbols.iter().find(|s| s.id == hovered) {
+                        Some(s) => {
+                            ui.colored_label(
+                                theme::TEXT_PRIMARY,
+                                egui::RichText::new(&s.signature)
+                                    .family(egui::FontFamily::Monospace)
+                                    .size(theme::FONT_CODE),
+                            );
+                            ui.colored_label(
+                                theme::TEXT_MUTED,
+                                egui::RichText::new(format!("{}:{}", s.file, s.start_line))
+                                    .size(theme::FONT_SMALL),
+                            );
+                        }
+                        None => {
+                            // File-level node: show its path in code face.
+                            let path = hovered.strip_prefix("file:").unwrap_or(hovered.as_str());
+                            ui.colored_label(
+                                theme::TEXT_SECONDARY,
+                                egui::RichText::new(path)
+                                    .family(egui::FontFamily::Monospace)
+                                    .size(theme::FONT_SMALL),
+                            );
+                        }
+                    }
+                });
+            });
     }
 
     // Node click: trace picking first, else selection sync. The graph borrow

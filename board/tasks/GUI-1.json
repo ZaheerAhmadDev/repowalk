@@ -1,0 +1,12 @@
+{
+  "id": "GUI-1",
+  "title": "Central design-token system for the GUI (HCI-based)",
+  "phase": "design",
+  "skill": "sdlc-design",
+  "status": "done",
+  "assignee": "gui-redesign-agent",
+  "description": "Introduce crates/gui/src/theme.rs as the single source of truth for color, spacing, and type. Derived from an HCI research brief: 4pt spacing grid, cool-neutral 5-layer dark elevation, WCAG-checked text contrast (AAA for body), semantic success/warning/danger/info tokens, deterministic 8-color module palette. Expose helpers (module_color, accent_subtle, dim_alpha, with_alpha, section_header, separator, list_row). Syntax colors are delegated to the egui_code_editor built-in ColorTheme::AYU_DARK instead of a local palette. Verify: cargo build -p repowalk-gui is warning-free and no from_rgb/from_rgba_unmultiplied literals remain outside theme.rs (except the export/png.rs ColorImage test fixture). Governing skill: skills/sdlc/sdlc-design/SKILL.md + skills/meta/karpathy-guidelines/SKILL.md.",
+  "artifacts": ["crates/gui/src/theme.rs"],
+  "created": "2026-10-14T00:00:00Z",
+  "updated": "2026-10-14T00:00:00Z"
+}

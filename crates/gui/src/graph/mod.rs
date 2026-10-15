@@ -6,7 +6,9 @@ use crate::app::App;
 use eframe::egui;
 
 pub fn ui(ui: &mut egui::Ui, app: &mut App) {
+    // Fixed strips first (legend, then trace/hover chrome), then the
+    // BG_BASE canvas frame — chrome never scrolls with the graph.
     render::legend(ui, app);
-    render::ui(ui, app);
     interaction::handle(ui, app);
+    render::ui(ui, app);
 }

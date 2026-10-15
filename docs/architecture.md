@@ -66,6 +66,15 @@ Graph preserving selection. The graph is rebuilt only when the index or edge
 filters change; node size encodes fan-in, color encodes module
 (deterministic 8-color palette), entrypoints get a ring.
 
+All GUI color, spacing, and type decisions come from the central token system
+in `crates/gui/src/theme.rs` (HCI-derived: 4pt spacing grid, 5-layer dark
+elevation, WCAG-checked text colors, semantic success/warning/danger). The
+shell is a toolbar + sidebar + central pane + status bar; a `Ctrl+K` command
+palette and a `?` shortcut overlay provide recognition-over-recall. Syntax
+highlighting colors are supplied by the `egui_code_editor` built-in
+`ColorTheme::AYU_DARK` rather than a local palette. Hardcoded hexes outside
+`theme.rs` are treated as defects.
+
 **Backend selection**: eframe's default wgpu set is `PRIMARY | GL`, which
 tries Vulkan first. Some Windows Vulkan ICDs segfault the *process* during
 adapter enumeration (not catchable from Rust), so on Windows the app drops
