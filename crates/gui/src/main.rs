@@ -2,13 +2,19 @@
 use eframe::egui;
 
 mod app;
+mod diagrams;
 mod explain;
 mod export;
 mod flow;
 mod graph;
+mod health;
+mod notes;
+mod onboard;
 mod sidebar;
 mod text;
 mod theme;
+mod ui_kit;
+mod usage;
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
