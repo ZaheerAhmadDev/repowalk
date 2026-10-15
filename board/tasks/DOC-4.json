@@ -1,0 +1,14 @@
+{
+  "id": "DOC-4",
+  "title": "docs: v2 demo script + typo pass",
+  "phase": "maintenance",
+  "skill": "sdlc-maintenance",
+  "status": "todo",
+  "assignee": null,
+  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W5]\nSeats: DOC-05, DOC-08\ndocs/demo.md gets a rehearsed 90-second v2 script (open TS repo -> learn report -> variables -> CFG -> types -> modules -> refs -> export architecture report -> CLI parity), with the exact commands. Typo pass over new docs. Ownership: docs/demo.md only. Verify: commands in the script were actually run (paste 2-3 real outputs) and _typos/spell-check style grep passes.",
+  "artifacts": [
+    "docs/demo.md"
+  ],
+  "created": "2026-10-15T14:11:51Z",
+  "updated": "2026-10-15T14:11:51Z"
+}

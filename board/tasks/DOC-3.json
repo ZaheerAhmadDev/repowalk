@@ -1,0 +1,14 @@
+{
+  "id": "DOC-3",
+  "title": "docs: site + tutorial + feature how-tos for v2",
+  "phase": "maintenance",
+  "skill": "sdlc-maintenance",
+  "status": "todo",
+  "assignee": null,
+  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W4]\nSeats: DOC-02, DOC-03, DOC-04, DOC-07, DOC-09, BLD-06\nsite/index.html feature grid + a new site/v2.html tour (variables table, CFG, types/modules diagrams, graph v2, refs, report export, bookmarks/notes) in the existing markup style; docs/demo.md gains the v2 flows (learn -> inventory -> variables -> CFG -> refs -> export report); a how-to per major feature under docs/ (short, task-oriented). Keep root README/CHANGELOG for the main agent. Owner: site/**, docs/** (except docs/agent-team/{HIERARCHY,LEADERSHIP,VERIFICATION}.md). Verify: grep shows the new sections; html5 structure unchanged otherwise; link check clean (report the command).",
+  "artifacts": [
+    "site/index.html"
+  ],
+  "created": "2026-10-15T14:11:51Z",
+  "updated": "2026-10-15T14:11:51Z"
+}

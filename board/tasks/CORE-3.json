@@ -1,0 +1,14 @@
+{
+  "id": "CORE-3",
+  "title": "core: analysis.json contract + v2 model aggregation",
+  "phase": "implementation",
+  "skill": "sdlc-implement",
+  "status": "todo",
+  "assignee": null,
+  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W1]\nSeats: CORE-01, CORE-02, CORE-08\nDONE by integrator as the contract freeze: crates/core/src/analysis.rs holds all v2 types (Variable/VarKind, CfgNode/CfgEdge/CfgKind/FunctionCfg, TypeNode/Field/TypeEdge, ModuleNode/ModuleEdge, UseSite/UseKind, Analysis) with ANALYSIS_VERSION=1, versioned load() and atomic save(). Follow-up owned by this team: keep the contract additive (index.json frozen), add helpers only when a consumer needs them, and update the schema notes for DOC-2. Verify: cargo test -p repowalk-core.",
+  "artifacts": [
+    "crates/core/src/analysis.rs"
+  ],
+  "created": "2026-10-15T14:11:51Z",
+  "updated": "2026-10-15T14:11:51Z"
+}

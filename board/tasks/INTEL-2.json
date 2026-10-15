@@ -1,0 +1,15 @@
+{
+  "id": "INTEL-2",
+  "title": "core: analyze framework + Rust analyzer (variables, CFG, types, use-sites)",
+  "phase": "implementation",
+  "skill": "sdlc-implement",
+  "status": "todo",
+  "assignee": null,
+  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W1]\nSeats: INTEL-01, INTEL-02, INTEL-03\nAdd crates/core/src/analyze/{mod,rust}.rs filling the frozen crates/core/src/analysis.rs types for Rust. mod.rs: `pub fn analyze(file:&str, lang:Lang, source:&str, symbols:&[Symbol], out:&mut Analysis)` dispatching per language (Lang from file extension; keep the enum local to analyze/mod.rs), plus shared helpers: enclosing_symbol(symbols,line)->String, snippet(source,line)->String, symbol-by-line-range. rust.rs via tree-sitter-rust queries: variables (local let, params, struct fields, const/static) with reads/writes counted from identifier uses inside the declaration's scope, type_name from annotations, scope from block ranges; FunctionCfg per fn (Entry/Block/Branch(if,else-if)/Loop(Loop,While,For)/Match/Call/Return nodes, edges labeled Normal|True|False|Back, cyclomatic = decisions+1, max_nesting) with labels carrying real condition text; TypeNode for struct/enum/trait (+impl methods) with fields, doc, methods; TypeEdges (Field containment via field types, Impl, Inherit for trait impls, Variant); UseSite entries with kind Call|TypeRef|FieldAccess|VarRead|VarWrite and a snippet. Enclosing symbol id must be the canonical `file:line` id (fixes the old name-vs-id gap at the source). Owner: crates/core/src/analyze/mod.rs + analyze/rust.rs only. Verify: cargo test -p repowalk-core (add inline tests: a fn with if/else+loop -> cyclomatic, an unused local detected, a struct field edge).",
+  "artifacts": [
+    "crates/core/src/analyze/mod.rs",
+    "crates/core/src/analyze/rust.rs"
+  ],
+  "created": "2026-10-15T14:11:51Z",
+  "updated": "2026-10-15T14:11:51Z"
+}

@@ -1,0 +1,14 @@
+{
+  "id": "VER-2",
+  "title": "verify: v2 golden harness + fixtures (Rust/Python/TS variables+CFG)",
+  "phase": "testing",
+  "skill": "sdlc-test",
+  "status": "todo",
+  "assignee": null,
+  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W1]\nSeats: VER-01, VER-02, VER-03, VER-04, INTEL-09\nExtend fixtures/ with: fixtures/sample already (Rust+Python) — add fixtures/ts/sample.ts (a small module with a fn containing if/else + loop + a class with fields/methods + one unused variable) and a Rust/Python fixture file with KNOWN variable counts. Add crates/core/tests/analysis_golden.rs asserting: variable reads/writes/uses for named fixture variables match hand-counted values; one CFG's cyclomatic + node/edge counts match; analysis.json schema test (all required fields, version==ANALYSIS_VERSION). Goldens compare selected fields (not whole-file) so formatting churn does not break them. Owner: fixtures/**, crates/core/tests/analysis_golden.rs only. Depends: INTEL-2/3/4 land before the TS/Rust parts go green — report blocked per-language if needed, never weaken an assertion silently. Verify: cargo test -p repowalk-core --test analysis_golden.",
+  "artifacts": [
+    "crates/core/tests/analysis_golden.rs"
+  ],
+  "created": "2026-10-15T14:11:51Z",
+  "updated": "2026-10-15T14:11:51Z"
+}

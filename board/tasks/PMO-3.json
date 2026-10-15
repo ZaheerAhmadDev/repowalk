@@ -1,0 +1,12 @@
+{
+  "id": "PMO-3",
+  "title": "integrate + release prep v2 (README/CHANGELOG/tag plan)",
+  "phase": "release",
+  "skill": "sdlc-release",
+  "status": "todo",
+  "assignee": null,
+  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W5]\nSeats: main agent + BLD-05, DOC-06\nIntegrator close-out: land README feature updates + CHANGELOG v2 entry (root *.md are main-agent owned), run the final gate on the frozen commit, confirm every card done/blocked-with-reason, and write the tag plan (v2.0.0-pre or v0.2.0 — propose with rationale). Verify: fmt/clippy/test workspace green on the final commit + board suite OK.",
+  "artifacts": [],
+  "created": "2026-10-15T14:11:51Z",
+  "updated": "2026-10-15T14:11:51Z"
+}

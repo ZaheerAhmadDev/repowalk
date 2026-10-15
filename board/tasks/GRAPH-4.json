@@ -1,0 +1,14 @@
+{
+  "id": "GRAPH-4",
+  "title": "gui: Graph v2 — real-name labels, clustering, layouts, filters",
+  "phase": "implementation",
+  "skill": "sdlc-implement",
+  "status": "todo",
+  "assignee": null,
+  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W3]\nSeats: GRAPH-05, GRAPH-06, GRAPH-07\nUpgrade crates/gui/src/graph/*: always-readable REAL symbol names (zoom-aware LOD: full name -> short -> hidden, never id-only), clustering by module/crate/dir (group hull or collapsed super-nodes), layout modes (force existing, hierarchical by module depth, radial around selection), filters (edge kind, confidence, module, language, entrypoints-only), focus+context dimming (existing), call-site edge labels on hover, search-to-focus. Keep honest dashed `?` unresolved edges. Owner: crates/gui/src/graph/*. Verify: cargo build/clippy/test -p repowalk-gui; on repowalk every visible node label is a real name (spot-check in report).",
+  "artifacts": [
+    "crates/gui/src/graph/render.rs"
+  ],
+  "created": "2026-10-15T14:11:51Z",
+  "updated": "2026-10-15T14:11:51Z"
+}

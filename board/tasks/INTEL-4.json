@@ -1,0 +1,14 @@
+{
+  "id": "INTEL-4",
+  "title": "core: TypeScript/JavaScript analyzer (variables, CFG, types, use-sites)",
+  "phase": "implementation",
+  "skill": "sdlc-implement",
+  "status": "todo",
+  "assignee": null,
+  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W1]\nSeats: INTEL-05, INTEL-06\nAdd crates/core/src/analyze/ts.rs filling the frozen crates/core/src/analysis.rs types for TypeScript/JavaScript (.ts .tsx .js .jsx .mjs .cjs) via tree-sitter-typescript (+ tree-sitter-javascript for .js). Same output shape as INTEL-2/INTEL-3: variables (let/const/var, function params, class fields, top-level globals) with reads/writes and scope; FunctionCfg per function/arrow (if/else, for/while/do, switch, try/catch, ternary where sensible, return) with cyclomatic = decisions+1 and max_nesting; TypeNode for class/interface (fields + methods + doc) and type aliases/enums best-effort; TypeEdges (Field containment, Impl for `implements`/method owners, Inherit for `extends`, Variant); UseSites with kind Call|TypeRef|FieldAccess|VarRead|VarWrite. Reuse analyze/mod.rs shared helpers from INTEL-2 (import them; do not duplicate). Register the new language in the analyze/mod.rs dispatch (that one file is shared: coordinate via the card, keep the edit minimal). Owner: crates/core/src/analyze/ts.rs (+ one dispatch line in analyze/mod.rs). Depends: BLD-2 (grammar crates added to crates/core/Cargo.toml) and INTEL-2 (analyze/mod.rs helpers). Do not start until BLD-2 reports the pinned versions; report blocked otherwise. Verify: cargo test -p repowalk-core (inline test on a small .ts snippet: if/else+loop -> cyclomatic, a class with fields/methods -> TypeNode, an unused variable detected).",
+  "artifacts": [
+    "crates/core/src/analyze/ts.rs"
+  ],
+  "created": "2026-10-15T14:12:31Z",
+  "updated": "2026-10-15T14:12:31Z"
+}

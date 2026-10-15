@@ -1,0 +1,14 @@
+{
+  "id": "DOC-2",
+  "title": "docs: v2 architecture (analysis.json schema, learn phases, module map)",
+  "phase": "maintenance",
+  "skill": "sdlc-maintenance",
+  "status": "todo",
+  "assignee": null,
+  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W2]\nSeats: DOC-01, CORE-09\nUpdate docs/architecture.md for v2: the learn pipeline phases, the analysis.json schema (from crates/core/src/analysis.rs — read it), the new core module map (analyze/, complexity, modules, types, feature, rules), GUI mode map (Text/Graph/Flow/Diagrams), and the CLI surface. Keep it factual: only document what exists in code at commit time (grep the crates). Owner: docs/architecture.md only. Verify: every type/module named in the doc exists (grep each) and no network/LLM claims; markdown headings consistent with the previous version.",
+  "artifacts": [
+    "docs/architecture.md"
+  ],
+  "created": "2026-10-15T14:11:51Z",
+  "updated": "2026-10-15T14:11:51Z"
+}

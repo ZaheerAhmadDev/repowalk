@@ -1,0 +1,14 @@
+{
+  "id": "CORE-6",
+  "title": "core: architecture guardrails (rules.json, F15)",
+  "phase": "implementation",
+  "skill": "sdlc-implement",
+  "status": "todo",
+  "assignee": null,
+  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W5]\nSeats: CORE-07\ncrates/core/src/rules.rs: read .repowalk/rules.json (serde; tolerant parse) with rules: forbid module/crate import edges matching a glob pair, max cyclomatic per function, no cycles within a module set, max file LOC. Produce findings (rule, severity, file:line, message) used by health-v2, report, and CLI (`repowalk report` exit code nonzero on error-severity findings). Ship a sample rules.json in the repo (self-rule: no core->gui imports) — and make repowalk's own repo pass it. Owner: crates/core/src/rules.rs, rules.json sample. Verify: cargo test -p repowalk-core (inline: a synthetic violating graph yields the expected finding; a clean graph yields none); `cargo run -p repowalk-cli -- report --json` on this repo passes the sample rule.",
+  "artifacts": [
+    "crates/core/src/rules.rs"
+  ],
+  "created": "2026-10-15T14:11:51Z",
+  "updated": "2026-10-15T14:11:51Z"
+}

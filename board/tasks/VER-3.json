@@ -1,0 +1,14 @@
+{
+  "id": "VER-3",
+  "title": "verify: full v2 battery + external-repo dogfood",
+  "phase": "testing",
+  "skill": "sdlc-test",
+  "status": "todo",
+  "assignee": null,
+  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W5]\nSeats: VER-05, VER-06, VER-07, VER-08, VER-09\nIndependent verification of the whole v2 surface: the usual gates (fmt/clippy -D/test --workspace incl. goldens/contract) + F1-F15 acceptance checks from docs/v2-plan.md, run on (1) fixtures, (2) repowalk itself, (3) one EXTERNAL repo of ~10k+ LOC — preferably TypeScript/JavaScript to prove F9 end-to-end. Record exact commands + observed numbers (learn time, variable counts, CFG counts, export files produced). Also verify the honest-state cases (no analysis -> empty states, no path, unknown symbol) and that animation is never the only information carrier. Write no production code; add tests only under crates/*/tests. Discrepancies -> blocked on the owning card. Owner: crates/*/tests + VERIFICATION.md v2 section. Verify: all gates green + a written checklist with real outputs.",
+  "artifacts": [
+    "docs/agent-team/VERIFICATION.md"
+  ],
+  "created": "2026-10-15T14:11:51Z",
+  "updated": "2026-10-15T14:11:51Z"
+}

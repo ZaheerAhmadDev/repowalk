@@ -1,0 +1,15 @@
+{
+  "id": "GRAPH-3",
+  "title": "gui: Diagrams tabs — Types (class/type diagram) + Modules (crate DAG)",
+  "phase": "implementation",
+  "skill": "sdlc-implement",
+  "status": "todo",
+  "assignee": null,
+  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W3]\nSeats: GRAPH-03, GRAPH-04\ncrates/gui/src/diagrams/{types,modules}.rs using the GRAPH-2 common kit: types.rs renders TypeNode/TypeEdge with fields (+types), methods, and Field/Impl/Inherit/Variant edges at file|module|repo scope with a scope switcher and real names; modules.rs renders ModuleNode/ModuleEdge (Crate/Dir/Module/File) as a layered DAG with import counts on edges and cycle highlighting. Both click-through to source. Depends: GRAPH-2 (kit) + CORE-4/CORE-5 (data). Owner: crates/gui/src/diagrams/{types,modules}.rs. Verify: cargo build/clippy/test -p repowalk-gui; report a screenshot-free structural check (node/edge counts shown in the UI vs analysis.json counts).",
+  "artifacts": [
+    "crates/gui/src/diagrams/types.rs",
+    "crates/gui/src/diagrams/modules.rs"
+  ],
+  "created": "2026-10-15T14:11:51Z",
+  "updated": "2026-10-15T14:11:51Z"
+}

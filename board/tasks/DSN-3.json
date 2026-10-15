@@ -1,0 +1,14 @@
+{
+  "id": "DSN-3",
+  "title": "gui: Health v2 panel (complexity, hotspots, god files, cycles) + graph tinting",
+  "phase": "design",
+  "skill": "sdlc-design",
+  "status": "todo",
+  "assignee": null,
+  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W4]\nSeats: DSN-03, DSN-04\ncrates/gui/src/health/mod.rs + sidebar section: sortable lists for most-complex functions, hotspots, god files (fan-out/LOC), cycles, unused-variable count; each row clickable (function -> CFG tab, file -> text, cycle -> graph). Graph tinting option: color nodes by complexity (diverging token ramp) or cycle membership, off by default. Uses core::complexity + existing metrics. Owner: crates/gui/src/health/*, sidebar wiring. Verify: cargo build/clippy/test -p repowalk-gui; values shown equal core::complexity output on fixtures.",
+  "artifacts": [
+    "crates/gui/src/health/mod.rs"
+  ],
+  "created": "2026-10-15T14:11:51Z",
+  "updated": "2026-10-15T14:11:51Z"
+}
