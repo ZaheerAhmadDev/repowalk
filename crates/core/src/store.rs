@@ -1,5 +1,5 @@
 //! `.repowalk/index.json` cache: read/write + mtime-based invalidation (plan §7.6).
-//! OWNER: RSK-6.
+//! OWNER: CORE-7 (v2).
 use crate::model::{FileEntry, Index, SCHEMA_VERSION};
 use std::path::{Path, PathBuf};
 
