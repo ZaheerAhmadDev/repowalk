@@ -3,12 +3,12 @@
   "title": "GUI: explain card -> Flow handoff (Trace from here / Trace to here)",
   "phase": "implementation",
   "skill": "sdlc-implement",
-  "status": "todo",
-  "assignee": null,
-  "description": "In crates/gui/src/explain.rs, add two actions to the explain card: 'Trace from here' (sets app.trace = (this symbol, existing b or pending) and switches app.mode to Mode::Flow) and 'Trace to here' (sets the b endpoint the same way), wiring the reading surface into the dynamic workflow view. Reuse existing fields (app.trace, app.trace_pick, app.mode) and theme helpers; keyboard hint in the hover tooltip. Depends: GRAPH-1 (Mode::Flow exists). Owner: crates/gui/src/explain.rs only. Verify: cargo build -p repowalk-gui. Governing skill: skills/sdlc/sdlc-implement/SKILL.md.",
+  "status": "done",
+  "assignee": "main-agent",
+  "description": "In crates/gui/src/explain.rs, add two actions on the explain card: 'Trace from here' (app.trace = (this symbol, existing b or empty) then app.mode = Mode::Flow; arm app.flow.pick = PickB when b is empty so the sidebar picker waits for it) and 'Trace to here' (symmetric: set b, arm PickA when a is empty). Reuse existing public fields (app.trace, app.flow, app.mode) and theme helpers; hover tooltips explain the two-step pick. Depends: GRAPH-1 (Mode::Flow + FlowState seeding exist). Owner: crates/gui/src/explain.rs only. Verify: cargo build -p repowalk-gui && cargo clippy -p repowalk-gui --all-targets -- -D warnings && cargo test -p repowalk-gui. [Integrator takeover: TL-TEXT worker session lost to restarts.] Governing skill: skills/sdlc/sdlc-implement/SKILL.md.",
   "artifacts": [
     "crates/gui/src/explain.rs"
   ],
-  "created": "2026-10-14T14:04:41Z",
-  "updated": "2026-10-14T14:04:41Z"
+  "created": "2026-10-15T13:26:09Z",
+  "updated": "2026-10-15T13:36:01Z"
 }

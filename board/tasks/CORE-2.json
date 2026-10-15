@@ -1,0 +1,14 @@
+{
+  "id": "CORE-2",
+  "title": "core: canonicalize name-keyed Call-edge callers in flow (fix BFS truncation)",
+  "phase": "implementation",
+  "skill": "sdlc-implement",
+  "status": "done",
+  "assignee": "main-agent",
+  "description": "Follow-up to CORE-1, surfaced by PROD-1: the pipeline keys Call-edge caller by the enclosing *name* while callee is a symbol id, silently truncating trace()/waves() at the name/id boundary on real indexes. Fix at the source in crates/core/src/flow.rs: build the adjacency with callers canonicalized to symbol ids (unique symbol with that name whose range contains the call line -> id; ids round-trip; ambiguous or file-level callers stay raw - honest partial resolution beats a wrong path), and resolve user-facing endpoints (A/B/wave source) the same way (exact id -> unique name -> raw-in-edges -> honest miss). Existing edge-only tests must stay green unchanged; add tests for name-keyed multi-hop trace, waves from a name source, and ambiguous-caller honesty. The CLI's local workaround in commands/flow.rs::normalized stays (idempotent). Owner: crates/core/src/flow.rs only. Verify: cargo test -p repowalk-core. [Integrator takeover: TL-CORE worker sessions lost to restarts.] Governing skill: skills/sdlc/sdlc-implement/SKILL.md.",
+  "artifacts": [
+    "crates/core/src/flow.rs"
+  ],
+  "created": "2026-10-15T13:26:09Z",
+  "updated": "2026-10-15T13:36:01Z"
+}
