@@ -22,7 +22,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/configure-pages@v6
+      - name: Ensure Pages is enabled and configured
+        uses: actions/configure-pages@v6
+        with:
+          enablement: true
+      - name: Verify site directory exists
+        run: |
+          if [ -d "site" ]; then
+            echo "site directory found"
+            ls -la site
+          else
+            echo "Error: site directory not found. Make sure your built site is in the 'site' directory." >&2
+            exit 1
+          fi
       - uses: actions/upload-pages-artifact@v3
         with:
           path: ./site
