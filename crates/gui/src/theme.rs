@@ -75,16 +75,23 @@ pub const FONT_CODE: f32 = 13.0;
 // readable (WCAG 2.3.3): the stage strip, edge labels, and selection states
 // must all remain legible when durations are honored at zero / suppressed by
 // a reduced-motion preference.
+// `allow(dead_code)`: tokens are pinned for dynamic views (flow playback,
+// edge pulses) landing in follow-up tasks; consumers must reference these
+// names rather than hand-roll durations.
 
 /// Hover/selection transitions.
+#[allow(dead_code)]
 pub const TRANSITION_MS: u64 = 200;
 /// Edge-pulse loop.
+#[allow(dead_code)]
 pub const PULSE_MS: u64 = 600;
 /// Flow stage dwell per step.
+#[allow(dead_code)]
 pub const STEP_DWELL_MS: u64 = 800;
 
 /// Smooth 0→1 easing for playhead motion: t in [0,1] -> eased in [0,1].
 /// Clamped smoothstep; panics-free, allocation-free.
+#[allow(dead_code)]
 pub fn ease_in_out(t: f32) -> f32 {
     let t = t.clamp(0.0, 1.0);
     t * t * (3.0 - 2.0 * t)
@@ -92,6 +99,7 @@ pub fn ease_in_out(t: f32) -> f32 {
 
 /// Alpha wash for the active flow stage: full at progress 0.5, softer at edges.
 /// Clamped to [0,1]; panics-free, allocation-free.
+#[allow(dead_code)]
 pub fn step_alpha(progress: f32) -> f32 {
     let p = progress.clamp(0.0, 1.0);
     (0.15 + 0.25 * (1.0 - (p * 2.0 - 1.0).abs())).clamp(0.0, 1.0)
