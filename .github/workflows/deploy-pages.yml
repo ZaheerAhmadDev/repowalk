@@ -21,22 +21,40 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - name: Ensure Pages is enabled and configured
-        uses: actions/configure-pages@v6
+      - uses: actions/checkout@v4
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
         with:
           enablement: true
-      - name: Verify site directory exists
+
+      - name: Prepare deploy root (ensure index.html at artifact root)
         run: |
-          if [ -d "site" ]; then
-            echo "site directory found"
-            ls -la site
+          rm -rf .deploy_root
+          mkdir -p .deploy_root
+
+          if [ -f "site/index.html" ]; then
+            echo "index.html found at site/"
+            cp -a site/. .deploy_root/
+          elif [ -f "site/dist/index.html" ]; then
+            echo "index.html found at site/dist/"
+            cp -a site/dist/. .deploy_root/
+          elif [ -f "site/site/index.html" ]; then
+            echo "index.html found at site/site/"
+            cp -a site/site/. .deploy_root/
           else
-            echo "Error: site directory not found. Make sure your built site is in the 'site' directory." >&2
+            echo "Error: index.html not found under site/, site/dist/, or site/site/ — listing site/ for debug:" >&2
+            ls -la site || true
             exit 1
           fi
+
+          echo "Contents of .deploy_root (top-level):"
+          ls -la .deploy_root
+          find .deploy_root -maxdepth 2 -type f | sort
+
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: ./site
+          path: .deploy_root
+
       - id: deployment
         uses: actions/deploy-pages@v4
