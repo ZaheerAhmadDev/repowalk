@@ -1,0 +1,14 @@
+{
+  "id": "CORE-9",
+  "title": "core: populate Analysis.modules / module_edges in the learn pipeline",
+  "phase": "implementation",
+  "skill": "sdlc-implement",
+  "status": "todo",
+  "assignee": null,
+  "description": "[from CORE-7's handoff · exec plan: docs/v2-execution-plan.md · batch B3]\nSeats: CORE-07 (learn.rs/pipeline.rs owner) + CORE-04 (modules::build author)\nGap proved by CORE-7: learn() fills variables/cfgs/types/uses but leaves Analysis.modules and Analysis.module_edges EMPTY. CORE-4 landed modules::build(&Index) -> (Vec<ModuleNode>, Vec<ModuleEdge>) but nothing calls it, so the Modules diagram (GRAPH-3), the Markdown report (PROD-2) and the onboarding census (DSN-4) all render an empty module map even though the data exists.\nDeliverable: after the analyze phase in crates/core/src/learn.rs, call crate::modules::build(&index) and store the result in Analysis.modules / Analysis.module_edges before analysis::save, so the artifact and its round-trip carry the tree. Set module node loc/symbols from the rolled-up Index data (modules::build already does this) and do not duplicate any of CORE-4's logic.\nTests (required): learn() on fixtures/sample yields a non-empty modules list with at least one Submodule edge and a File node per indexed source; a 2-dir fixture yields the expected Crate/Dir/File shape; an empty repo yields empty vectors (no panic); analysis::save -> load round-trip preserves modules and module_edges byte-for-byte in value equality.\nVerify hook: after learn on fixtures/sample, `grep -c '\"modules\"' <root>/.repowalk/analysis.json` > 0 AND the modules list length equals the File-node count asserted in the test.\nOwner files: crates/core/src/learn.rs (+ tests). Do NOT touch modules.rs (CORE-4), analysis.rs (frozen), or GUI.",
+  "artifacts": [
+    "crates/core/src/learn.rs"
+  ],
+  "created": "2026-10-15T14:50:26Z",
+  "updated": "2026-10-15T14:50:26Z"
+}

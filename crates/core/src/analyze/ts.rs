@@ -55,6 +55,10 @@ fn pick_language(file: &str) -> tree_sitter::Language {
 struct VarRec {
     var: Variable,
     name_byte: usize,
+    /// Whether the declaration itself counts as one write (`let`/`const`/`var`
+    /// bindings and class fields do; function parameters do not — the
+    /// cross-language contract INTEL-2/INTEL-3 follow).
+    count_decl_write: bool,
 }
 
 /// One identifier occurrence with its read/write role.
@@ -158,7 +162,7 @@ impl<'a> Analyzer<'a> {
                 continue;
             };
             for name in bindings(name_node) {
-                self.push_var(name, VarKind::Local, type_name.clone());
+                self.push_var(name, VarKind::Local, type_name.clone(), true);
             }
         }
     }
@@ -175,11 +179,17 @@ impl<'a> Analyzer<'a> {
             .map(|t| strip_annotation(self.text(t)));
         let names = param_bindings(param);
         for name in names {
-            self.push_var(name, VarKind::Param, type_name.clone());
+            self.push_var(name, VarKind::Param, type_name.clone(), false);
         }
     }
 
-    fn push_var(&mut self, name_node: Node, kind: VarKind, type_name: Option<String>) {
+    fn push_var(
+        &mut self,
+        name_node: Node,
+        kind: VarKind,
+        type_name: Option<String>,
+        count_decl_write: bool,
+    ) {
         let name = self.text(name_node).to_string();
         if name.is_empty() {
             return;
@@ -213,6 +223,7 @@ impl<'a> Analyzer<'a> {
                 enclosing,
             },
             name_byte: byte,
+            count_decl_write,
         });
     }
 
@@ -291,7 +302,7 @@ impl<'a> Analyzer<'a> {
                             self.pending_field_edges.push((id.clone(), base, fline));
                         }
                         let tn = if ftype.is_empty() { None } else { Some(ftype) };
-                        self.push_var(nf, VarKind::Field, tn);
+                        self.push_var(nf, VarKind::Field, tn, true);
                     }
                     "method_definition" | "method_signature" | "abstract_method_signature" => {
                         if let Some(n) = member.child_by_field_name("name") {
@@ -617,8 +628,10 @@ impl<'a> Analyzer<'a> {
         }
 
         for rec in self.vars.iter_mut() {
+            // The declaration itself counts as exactly one write for
+            // `let`/`const`/`var` bindings and class fields (params excluded).
             let mut reads = 0usize;
-            let mut writes = 0usize;
+            let mut writes = usize::from(rec.count_decl_write);
             let mut first: Option<usize> = None;
             let mut last: Option<usize> = None;
             for u in &self.idents {
@@ -805,7 +818,18 @@ fn ident_role(node: Node) -> (bool, bool) {
                 (true, false)
             }
         }
-        "augmented_assignment_expression" | "update_expression" => (true, true),
+        "augmented_assignment_expression" => {
+            let is_left = parent
+                .child_by_field_name("left")
+                .map(|l| l.id() == node.id())
+                .unwrap_or(false);
+            if is_left {
+                (true, true)
+            } else {
+                (true, false)
+            }
+        }
+        "update_expression" => (true, true),
         _ => (true, false),
     }
 }
@@ -1298,13 +1322,43 @@ mod tests {
         };
         let used = find("used");
         assert!(used.reads >= 2, "used reads: {}", used.reads);
+        assert_eq!(used.writes, 1, "declaration counts as exactly one write");
         assert_eq!(used.type_name.as_deref(), Some("number"));
         assert_eq!(used.kind, VarKind::Global);
         assert_eq!(used.first_use, Some(3));
 
         let unused = find("unused");
         assert_eq!(unused.reads, 0);
+        assert_eq!(unused.writes, 1, "unused const is still declared (1 write)");
         assert_eq!(unused.first_use, None);
+    }
+
+    #[test]
+    fn declaration_write_contract_across_shapes() {
+        // Params contribute 0 writes (matches the Rust/Python goldens); a
+        // multi-declarator + destructuring each bind one write; augmented
+        // assignment is read+write and does not double-count the declaration.
+        let src = "let a = 1, b = 2;\n\
+                   const { c, d: e } = obj;\n\
+                   function f(p: number): number {\n\
+                   \x20 p += a;\n\
+                   \x20 return p + b + c + e;\n\
+                   }\n";
+        let out = run("w.ts", src);
+        let find = |name: &str| {
+            out.variables
+                .iter()
+                .find(|v| v.name == name)
+                .unwrap_or_else(|| panic!("missing variable {name}"))
+        };
+        for name in ["a", "b", "c", "e"] {
+            let v = find(name);
+            assert_eq!(v.reads, 1, "{name} reads");
+            assert_eq!(v.writes, 1, "{name} writes (declaration only)");
+        }
+        let p = find("p");
+        assert_eq!(p.kind, VarKind::Param);
+        assert_eq!((p.reads, p.writes), (2, 1), "param: no decl write, one +=");
     }
 
     #[test]
@@ -1327,6 +1381,7 @@ mod tests {
         // class fields become Field variables
         let field = out.variables.iter().find(|v| v.name == "x").unwrap();
         assert_eq!(field.kind, VarKind::Field);
+        assert_eq!(field.writes, 1, "field declaration counts as one write");
         // method parameters become Param variables
         let param = out
             .variables
@@ -1334,6 +1389,7 @@ mod tests {
             .find(|v| v.name == "dx")
             .expect("dx param");
         assert_eq!(param.kind, VarKind::Param);
+        assert_eq!(param.writes, 0, "params do not count a declaration write");
     }
 
     #[test]

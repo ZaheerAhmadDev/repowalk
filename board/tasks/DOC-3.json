@@ -3,12 +3,21 @@
   "title": "docs: site + tutorial + feature how-tos for v2",
   "phase": "maintenance",
   "skill": "sdlc-maintenance",
-  "status": "todo",
-  "assignee": null,
-  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W4]\nSeats: DOC-02, DOC-03, DOC-04, DOC-07, DOC-09, BLD-06\nsite/index.html feature grid + a new site/v2.html tour (variables table, CFG, types/modules diagrams, graph v2, refs, report export, bookmarks/notes) in the existing markup style; docs/demo.md gains the v2 flows (learn -> inventory -> variables -> CFG -> refs -> export report); a how-to per major feature under docs/ (short, task-oriented). Keep root README/CHANGELOG for the main agent. Owner: site/**, docs/** (except docs/agent-team/{HIERARCHY,LEADERSHIP,VERIFICATION}.md). Verify: grep shows the new sections; html5 structure unchanged otherwise; link check clean (report the command).",
+  "status": "done",
+  "assignee": "TL-DOC",
+  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W4]\nSeats: DOC-02, DOC-03, DOC-04, DOC-07, DOC-09, BLD-06\nsite/index.html feature grid + a new site/v2.html tour (variables table, CFG, types/modules diagrams, graph v2, refs, report export, bookmarks/notes) in the existing markup style; docs/demo.md gains the v2 flows (learn -> inventory -> variables -> CFG -> refs -> export report); a how-to per major feature under docs/ (short, task-oriented). Keep root README/CHANGELOG for the main agent. Owner: site/**, docs/** (except docs/agent-team/{HIERARCHY,LEADERSHIP,VERIFICATION}.md). Verify: grep shows the new sections; html5 structure unchanged otherwise; link check clean (report the command).\n\nEVIDENCE (TL-DOC, 2026-10-15T14:54:29Z; snapshotted from the working tree at commit ef11b9d):\nFiles added: site/v2.html; docs/howto-learn.md, howto-variables.md, howto-control-flow.md, howto-graph.md, howto-structure.md, howto-refs.md, howto-export.md. Files changed: site/index.html (nav link + 'New in v2' section), docs/demo.md (added the v2 flows section; v1 content untouched). No file outside site/** and docs/*.md touched; README/CHANGELOG untouched. docs/index.md does not exist, so no index edit (per task).\n\nHonesty-status table (engine = core analysis works; surface = GUI/CLI wiring):\n- learn (F1): engine working (learn.rs + .repowalk/analysis.json + incremental stamp cache); onboarding panel in progress (DSN-4).\n- inventory (F6): engine working (complexity.rs); health-v2 panel in progress (DSN-3).\n- control flow (F2a): engine working (Rust/Python/TS CFGs, goldens pass); Diagrams -> Control flow in progress (GRAPH-2).\n- connections (F3): v1 graph working (module colour, fan-in, dashed ?); real-name LOD / clustering / filters / layouts in progress (GRAPH-4).\n- structure (F2c/F2d): engines working (types.rs, modules.rs; repo module graph 390 nodes/468 edges); Types + Modules diagrams in progress (GRAPH-3).\n- usage (F4/F7): engines working (variables Rust 7 / Python 7 / TS 13; refs.rs 8 green tests, resolved-vs-name-only split); variables panel (TEXT-2) + refs panel (TEXT-3) in progress.\n- export (F8/F14): core emitters working and byte-stable (Mermaid/DOT/SVG/report, 10 green tests); CLI report/graph/variables/complexity/refs and GUI format export in progress (PROD-3) - GUI today exports PNG + tour/health Markdown only.\nMeasured numbers quoted (verified at this snapshot): analysis_golden pending report -> rust 7 vars/3 cfgs, python 7/3, ts 13/6; all 7 analyzer goldens pass with --ignored; export_emitters 10/10; learn lib 5/5; refs 8/8; module graph 390 nodes/468 edges (CORE-4 evidence).\nAdvertised in v2-plan but NOT implemented at this snapshot (reported to integrator): CLI F14 commands not registered in Cmd; GUI has no Diagrams mode (Mode = Text|Graph|Flow) and no usage/diagrams/health/notes/onboard modules; Feature-flow GUI tab absent (GRAPH-5); F11 notes (TEXT-4), F12 regex search, F13 light theme/density (DSN-2) absent. Note: docs/architecture.md's module-status table is now stale (marks landed modules as stubs) - conservative, not an over-claim.\n\nGATES: `python3 -m unittest board.tests.test_tasks` -> OK (8 tests). Link check command: `grep -o 'href=\"[^\"]*\"' site/v2.html` -> 23 hrefs; every local target resolves (css/style.css, index.html, v2.html, tutorial.html, ../docs/howto-*.md x7, ../docs/v2-plan.md, ../docs/v2-execution-plan.md, ../docs/demo.md); 1 external (GitHub). MISSING 0.",
   "artifacts": [
-    "site/index.html"
+    "site/index.html",
+    "site/v2.html",
+    "docs/howto-learn.md",
+    "docs/howto-variables.md",
+    "docs/howto-control-flow.md",
+    "docs/howto-graph.md",
+    "docs/howto-structure.md",
+    "docs/howto-refs.md",
+    "docs/howto-export.md",
+    "docs/demo.md"
   ],
   "created": "2026-10-15T14:11:51Z",
-  "updated": "2026-10-15T14:11:51Z"
+  "updated": "2026-10-15T14:54:29Z"
 }
