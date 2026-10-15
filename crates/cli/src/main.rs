@@ -20,6 +20,24 @@ pub enum Cmd {
     Explain { symbol: String, path: PathBuf },
     /// Ranked fuzzy hits: path:line  name  score
     Find { query: String, path: PathBuf },
+    /// Call flow: A→B trace with hop confidence, or wave report from a source
+    Flow {
+        /// First endpoint (trace mode); with --from, the repo path
+        a: Option<String>,
+        /// Second endpoint (trace mode)
+        b: Option<String>,
+        /// Wave mode: source symbol (replaces A and B)
+        #[arg(long)]
+        from: Option<String>,
+        /// Wave-mode depth cap
+        #[arg(long, default_value_t = 6)]
+        depth: usize,
+        /// Markdown export (no ANSI colors)
+        #[arg(long)]
+        md: bool,
+        /// Repository path to index (trace mode)
+        path: Option<PathBuf>,
+    },
 }
 
 mod commands;
@@ -31,5 +49,13 @@ fn main() -> anyhow::Result<()> {
         Cmd::Tour { path } => commands::tour::run(&path),
         Cmd::Explain { symbol, path } => commands::explain::run(&symbol, &path),
         Cmd::Find { query, path } => commands::find::run(&query, &path),
+        Cmd::Flow {
+            a,
+            b,
+            from,
+            depth,
+            md,
+            path,
+        } => commands::flow::run(a, b, from, depth, md, path),
     }
 }

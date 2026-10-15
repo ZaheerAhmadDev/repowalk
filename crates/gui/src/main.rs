@@ -4,6 +4,7 @@ use eframe::egui;
 mod app;
 mod explain;
 mod export;
+mod flow;
 mod graph;
 mod sidebar;
 mod text;
