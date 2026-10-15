@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use crate::theme;
-use crate::{graph, sidebar, text};
+use crate::{flow, graph, sidebar, text};
 
 /// (edges, symbols, edge_calls, edge_imports) signature guarding graph rebuilds.
 pub type GraphState = ((usize, usize, bool, bool), crate::graph::render::WalkGraph);
@@ -16,6 +16,7 @@ pub type GraphState = ((usize, usize, bool, bool), crate::graph::render::WalkGra
 pub enum Mode {
     Text,
     Graph,
+    Flow,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,8 +33,9 @@ pub enum SortBy {
 }
 
 /// What the A→B trace picker is waiting for.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TracePick {
+    #[default]
     None,
     PickA,
     PickB,
@@ -77,6 +79,7 @@ pub struct App {
     pub pending_screenshot: Option<(u64, PathBuf)>,
     pub status: String,
     pub graph_state: Option<GraphState>,
+    pub flow: crate::flow::FlowState,
 }
 
 /// The egui context handle used by the indexing thread to request repaints.
@@ -119,6 +122,7 @@ impl App {
             pending_screenshot: None,
             status: String::new(),
             graph_state: None,
+            flow: Default::default(),
         };
         if let Some(repo) = repo {
             app.start_indexing(repo);
@@ -140,6 +144,7 @@ impl App {
         self.dirty_edits.clear();
         self.open_file = None;
         self.graph_state = None;
+        self.flow = Default::default();
         self.status = "indexing…".to_string();
         std::thread::spawn(move || {
             let notify = |done: usize| {
@@ -202,7 +207,7 @@ impl App {
         self.selection = Some(sel);
     }
 
-    fn open_file_with(&mut self, path: String, line: Option<usize>) {
+    pub fn open_file_with(&mut self, path: String, line: Option<usize>) {
         if self.open_file.as_deref() != Some(path.as_str())
             && !self.editor_buffers.contains_key(&path)
         {
@@ -286,7 +291,8 @@ impl App {
         if tab {
             self.mode = match self.mode {
                 Mode::Text => Mode::Graph,
-                Mode::Graph => Mode::Text,
+                Mode::Graph => Mode::Flow,
+                Mode::Flow => Mode::Text,
             };
         }
         if slash {
@@ -417,14 +423,18 @@ impl App {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = theme::SPACE_3;
 
-            // Segmented mode control (Fitts: two adjacent large targets).
+            // Segmented mode control (Fitts: adjacent large targets).
             let text_active = self.mode == Mode::Text;
             let graph_active = self.mode == Mode::Graph;
+            let flow_active = self.mode == Mode::Flow;
             if mode_segment(ui, "Text", "Tab", text_active).clicked() {
                 self.mode = Mode::Text;
             }
             if mode_segment(ui, "Graph", "Tab", graph_active).clicked() {
                 self.mode = Mode::Graph;
+            }
+            if mode_segment(ui, "Flow", "Tab", flow_active).clicked() {
+                self.mode = Mode::Flow;
             }
 
             ui.separator();
@@ -579,6 +589,7 @@ impl App {
             match action.kind {
                 PaletteKind::ModeText => self.mode = Mode::Text,
                 PaletteKind::ModeGraph => self.mode = Mode::Graph,
+                PaletteKind::ModeFlow => self.mode = Mode::Flow,
                 PaletteKind::FocusSearch => self.search_focus = true,
                 PaletteKind::OpenRepo => self.show_open_popup = true,
                 PaletteKind::ExportPng => self.export_png(ctx),
@@ -605,7 +616,7 @@ impl App {
                     .spacing([theme::SPACE_6, theme::SPACE_1])
                     .show(ui, |ui| {
                         for (keys, desc) in [
-                            ("Tab", "Toggle Text ⇄ Graph"),
+                            ("Tab", "Cycle Text / Graph / Flow"),
                             ("Ctrl+K", "Command palette"),
                             ("/", "Focus search"),
                             ("j / k", "Move through sidebar lists"),
@@ -693,6 +704,12 @@ impl eframe::App for App {
                     graph::ui(ui, self);
                 });
             }
+            Mode::Flow => {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    ui.add_space(theme::SPACE_1);
+                    flow::ui(&ctx, ui, self);
+                });
+            }
         }
 
         // Bottom status bar.
@@ -753,6 +770,7 @@ fn toolbar_button(ui: &mut egui::Ui, label: &str, tooltip: &str) -> egui::Respon
 enum PaletteKind {
     ModeText,
     ModeGraph,
+    ModeFlow,
     FocusSearch,
     OpenRepo,
     ExportPng,
@@ -778,6 +796,11 @@ fn palette_actions(_app: &App) -> Vec<PaletteAction> {
             label: "Switch to Graph mode",
             hint: "Tab / g",
             kind: PaletteKind::ModeGraph,
+        },
+        PaletteAction {
+            label: "Switch to Flow mode",
+            hint: "Tab",
+            kind: PaletteKind::ModeFlow,
         },
         PaletteAction {
             label: "Focus search",

@@ -1,5 +1,6 @@
 //! Sidebar: map · health · tour · search · symbol list.
 //! OWNER of aggregate: main agent; panels: RSK-15/16.
+pub mod flow;
 pub mod map;
 pub mod search;
 pub mod tour;
@@ -19,6 +20,8 @@ pub fn ui(ui: &mut egui::Ui, app: &mut crate::app::App) {
     map::ui(ui, app);
     theme::separator(ui);
     tour::ui(ui, app);
+    theme::separator(ui);
+    flow::ui(ui, app);
     theme::separator(ui);
     search::ui(ui, app);
 }
