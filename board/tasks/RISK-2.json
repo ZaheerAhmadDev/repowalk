@@ -3,12 +3,13 @@
   "title": "risk: perf budgets, memory guardrails, incremental correctness",
   "phase": "requirements",
   "skill": "sdlc-requirements",
-  "status": "todo",
-  "assignee": null,
+  "status": "done",
+  "assignee": "TL-RISK",
   "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W2]\nSeats: RISK-01, RISK-02, RISK-04, RISK-06, RISK-08\nProduce board/docs/risks-v2.md (extends risks-flow.md): budgets (cold learn <5s on 10k LOC, incremental re-learn of 1 changed file parses only that file, GUI idle CPU ~0 and no repaint when static, memory <1.5GB for a 100k-LOC repo) each with a verify hook command; plus incremental-index correctness risks (stale analysis after save/revert, mtime tricks) and new-dependency risks (grammar ABI, build size). Review INTEL-5's incremental hooks and the new deps for regressions. Owner: board/docs/risks-v2.md only. Verify: every row has owner + verify hook; grep -c '^| R' >= 12.",
   "artifacts": [
     "board/docs/risks-v2.md"
   ],
   "created": "2026-10-15T14:11:51Z",
-  "updated": "2026-10-15T14:11:51Z"
+  "updated": "2026-10-15T14:40:03Z",
+  "evidence": "EVIDENCE RISK-2 (B2, batch B2, seats RISK-01/02/04/06/08, lead TL-RISK)\n- Artifact: board/docs/risks-v2.md (new). Extends risks-flow.md; v1 rows R-01..R-11 untouched.\n- Row count: grep -c '^| R' board/docs/risks-v2.md -> 16 (R-12..R-27, >= 12 gate OK). Every row has a non-empty owner seat (script-checked) and a non-empty verify hook (script-checked: 0 bad rows).\n- Budgets table: cold learn <5s (axios/axios ~13k LOC JS/TS), incremental reparse==1 file, idle ~0% CPU / 0 repaints, memory <1.5GB for 100k LOC. Flagged as TARGETS until VER-3 measures them.\n- Secrets/PII sweep (command + result): grep -rnoE '(AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{30,}|sk-[A-Za-z0-9]{20,}|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}|[0-9a-fA-F]{32,})' fixtures/ docs/ board/ crates/  -> 0 matches. Long base64-ish >=40: 0. Measured token prefixes: 0. Emails: 0. Long hex >=32: 0. CLEAN.\n- Typo list (manual wordlist scan of v2 docs + new fixtures/tests): 0 real misspellings; only flagged token was the acronym 'YAML' (yaml) in docs/agent-team/{HIERARCHY,VERIFICATION,LEADERSHIP,V2-WBS}.md and no hits in docs/v2-plan.md, docs/v2-execution-plan.md, board/docs/*, crates/core/tests/{analysis_golden,grammar_abi}.rs, fixtures/{ts,vars}/**. typos/codespell binaries not installed locally; CI runs crate-ci/typos (.github/workflows/spellcheck.yml).\n- Gates run: python3 -m unittest board.tests.test_tasks -> OK; cargo tree --workspace --locked | grep -cE 'reqwest|tokio|hyper|ureq|native-tls' -> 0; cargo test -p repowalk-core --locked --test grammar_abi -> 4 passed.\n- MATERIALIZED risks (act now): (1) R-14 stale analysis - store.rs::cache_valid compares only max(mtime) at whole-second granularity (walk.rs mtime_secs uses as_secs); proved: two writes in one second share mtime 1792075000 (cache hit => stale), and editing a file with preserved mtime leaves max 1577836805 unchanged; pipeline.rs test only passes because it sleeps 1100ms. Owner CORE-07 / card CORE-7. (2) R-27 silent language drop - pipeline.rs lines 21-25 dispatch only rust/python with `_ => empty`, TS/JS not wired; proved: `repowalk map` on a TS-only dir prints typescript(1 files) with 0 symbols and 'no call edges found'. Owners CORE-07+INTEL-04 / cards CORE-7+INTEL-4."
 }
