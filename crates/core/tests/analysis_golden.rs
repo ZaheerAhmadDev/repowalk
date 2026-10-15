@@ -6,14 +6,15 @@
 //!    required field is present, and `version == ANALYSIS_VERSION`. This passes
 //!    today and is the regression net for the frozen `analysis.json` contract.
 //!
-//!  * **GOLDEN** (one per language): hand-counted variables / CFG / types from
-//!    the fixtures under `fixtures/vars/` and `fixtures/ts/`. The language
-//!    analyzers (`crates/core/src/analyze/{rust,python,ts}.rs`) are being written
-//!    right now by INTEL-2/3/4 and are currently interface stubs, so each golden
-//!    test carries `#[ignore = "awaiting INTEL-x"]`. **Drop the attribute when
-//!    the analyzer lands.** `pending_analyzers_are_reported` shouts (via
-//!    `eprintln!`) as soon as a stub starts producing data, so nothing is
-//!    silently skipped.
+//!  * **GOLDEN** (one per language, all active): hand-counted variables / CFG /
+//!    types from the fixtures under `fixtures/vars/` and `fixtures/ts/`, checked
+//!    against `crates/core/src/analyze/{rust,python,ts}.rs` (INTEL-2/3/4 landed).
+//!    They were parked behind `#[ignore = "awaiting INTEL-x"]` while the
+//!    analyzers were interface stubs; the integrator dropped the attribute once
+//!    all three languages passed, so a regression now fails the default
+//!    `cargo test`. `golden_ts_variables` earned its keep at once: it caught
+//!    TypeScript not counting a declaration as a write, unlike Rust and Python.
+//!    `pending_analyzers_are_reported` still prints per-language readiness.
 //!
 //! Goldens compare SELECTED fields only (named variables, one function's
 //! cyclomatic/nesting/back-edge, and the expected type fields/methods/edges) —
@@ -189,10 +190,10 @@ fn schema_roundtrips_a_populated_analysis() {
 // PENDING report — always active, never fails on a stub
 // ---------------------------------------------------------------------------
 
-/// Shines a light on which analyzers are still stubs, so the matching
-/// `#[ignore]` above can be dropped the moment a language lands. It never fails
-/// just because an analyzer is empty — that is the expected pre-INTEL state —
-/// but it does require the frozen schema artifact to be constructible.
+/// Prints per-language readiness (variable / cfg counts). It never fails on an
+/// empty analyzer — but that is no longer an expected state now that all three
+/// languages have landed, so an empty result here is the first place a silent
+/// extraction regression would surface.
 #[test]
 fn pending_analyzers_are_reported() {
     let checks = [
@@ -204,16 +205,12 @@ fn pending_analyzers_are_reported() {
     let mut results: Vec<(&str, String)> = Vec::new();
     for (lang, a) in &checks {
         if a.variables.is_empty() && a.cfgs.is_empty() {
-            let reason = format!("{lang}: analyzer is still an interface stub");
-            eprintln!(
-                "PENDING {reason} — golden assertions remain #[ignore]d \
-                 (awaiting INTEL-2/3/4)"
-            );
+            let reason = format!("{lang}: analyzer produced nothing");
+            eprintln!("REGRESSION {reason} — the analyzer must find variables and cfgs here");
             results.push((lang, reason));
         } else {
             eprintln!(
-                "READY {lang}: analyzer produced {} variables / {} cfgs — drop \
-                 #[ignore] on the matching golden test",
+                "READY {lang}: analyzer produced {} variables / {} cfgs",
                 a.variables.len(),
                 a.cfgs.len()
             );
@@ -227,11 +224,10 @@ fn pending_analyzers_are_reported() {
 }
 
 // ---------------------------------------------------------------------------
-// GOLDEN — Rust (activate by removing `#[ignore]` when INTEL-2 lands)
+// GOLDEN — Rust (active)
 // ---------------------------------------------------------------------------
 
 #[test]
-#[ignore = "awaiting INTEL-2: crates/core/src/analyze/rust.rs is an interface stub"]
 fn golden_rust_variable_counts() {
     let (a, symbols) = run_rust("vars/rust_counts.rs");
 
@@ -265,7 +261,6 @@ fn golden_rust_variable_counts() {
 }
 
 #[test]
-#[ignore = "awaiting INTEL-2: crates/core/src/analyze/rust.rs is an interface stub"]
 fn golden_rust_cfg() {
     let (a, symbols) = run_rust("vars/rust_counts.rs");
 
@@ -295,11 +290,10 @@ fn golden_rust_cfg() {
 }
 
 // ---------------------------------------------------------------------------
-// GOLDEN — Python (activate by removing `#[ignore]` when INTEL-3 lands)
+// GOLDEN — Python (active)
 // ---------------------------------------------------------------------------
 
 #[test]
-#[ignore = "awaiting INTEL-3: crates/core/src/analyze/python.rs is an interface stub"]
 fn golden_python_variable_counts() {
     let (a, symbols) = run_python("vars/python_counts.py");
 
@@ -334,7 +328,6 @@ fn golden_python_variable_counts() {
 }
 
 #[test]
-#[ignore = "awaiting INTEL-3: crates/core/src/analyze/python.rs is an interface stub"]
 fn golden_python_cfg() {
     let (a, symbols) = run_python("vars/python_counts.py");
 
@@ -355,11 +348,10 @@ fn golden_python_cfg() {
 }
 
 // ---------------------------------------------------------------------------
-// GOLDEN — TypeScript (activate by removing `#[ignore]` when INTEL-4 lands)
+// GOLDEN — TypeScript (active)
 // ---------------------------------------------------------------------------
 
 #[test]
-#[ignore = "awaiting INTEL-4: crates/core/src/analyze/ts.rs is an interface stub"]
 fn golden_ts_variables() {
     let (a, _symbols) = run_ts("ts/sample.ts");
 
@@ -388,7 +380,6 @@ fn golden_ts_variables() {
 }
 
 #[test]
-#[ignore = "awaiting INTEL-4: crates/core/src/analyze/ts.rs is an interface stub"]
 fn golden_ts_cfg() {
     let (a, _symbols) = run_ts("ts/sample.ts");
 
@@ -412,7 +403,6 @@ fn golden_ts_cfg() {
 }
 
 #[test]
-#[ignore = "awaiting INTEL-4: crates/core/src/analyze/ts.rs is an interface stub"]
 fn golden_ts_types() {
     let (a, _symbols) = run_ts("ts/sample.ts");
 

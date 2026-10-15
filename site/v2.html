@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>repowalk v2 — complete understanding suite</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header>
+  <nav>
+    <h1><a href="index.html">repowalk</a></h1>
+    <ul>
+      <li><a href="v2.html">v2 tour</a></li>
+      <li><a href="tutorial.html">Add HTML/CSS/JS</a></li>
+      <li><a href="https://github.com/ZaheerAhmadDev/repowalk">GitHub</a></li>
+    </ul>
+  </nav>
+</header>
+<main>
+  <section class="hero">
+    <h2>Open any codebase. Understand all of it.</h2>
+    <p>v2 is the <strong>complete understanding suite</strong>: repowalk learns the repo once, then answers the whole set of questions in seven moves — <strong>learn &rarr; inventory &rarr; control flow &rarr; connections &rarr; structure &rarr; usage &rarr; export</strong>. Still pure static analysis: no AI, no network, no keys.</p>
+    <p>This page is honest about what runs today. Each group below carries a status line; nothing is advertised that you cannot point at in the code at this commit (<code>ef11b9d</code>, 2026-10-15).</p>
+  </section>
+
+  <section class="tutorial">
+    <h2>The suite at a glance</h2>
+    <ol>
+      <li><strong>Learn</strong> — index the repo and cache the analysis (<a href="../docs/howto-learn.md">how-to</a>).</li>
+      <li><strong>Inventory</strong> — LOC, languages, entrypoints, complexity, hotspots, god files, cycles.</li>
+      <li><strong>Control flow</strong> — a CFG per function: branches, loops, match arms, cyclomatic badge (<a href="../docs/howto-control-flow.md">how-to</a>).</li>
+      <li><strong>Connections</strong> — the call/import graph with real names, clusters and filters (<a href="../docs/howto-graph.md">how-to</a>).</li>
+      <li><strong>Structure</strong> — type diagrams (structs/enums/traits/classes) and the module DAG (<a href="../docs/howto-structure.md">how-to</a>).</li>
+      <li><strong>Usage</strong> — per-file variables with read/write counts and highlight-all-uses (<a href="../docs/howto-variables.md">how-to</a>), plus find-all-references (<a href="../docs/howto-refs.md">how-to</a>).</li>
+      <li><strong>Export</strong> — Mermaid / DOT / SVG and a self-contained Markdown report (<a href="../docs/howto-export.md">how-to</a>).</li>
+    </ol>
+  </section>
+
+  <section class="features">
+    <article>
+      <h3>Learn</h3>
+      <p>Walk &rarr; parse &rarr; resolve &rarr; analyze &rarr; cache, with per-phase counts and a per-file incremental cache so a re-learn only re-parses what changed.</p>
+      <p><strong>Status:</strong> working (engine). The onboarding "Repo 101" panel is <em>in progress</em> (card DSN-4).</p>
+      <p><a href="../docs/howto-learn.md">Read the learn how-to &rarr;</a></p>
+    </article>
+    <article>
+      <h3>Inventory</h3>
+      <p>Cyclomatic complexity and max nesting per function, per-file fan-in/out, hotspot ranking, god files and cycles.</p>
+      <p><strong>Status:</strong> working (engine: <code>complexity.rs</code>). The <code>health-v2</code> panel is <em>in progress</em> (card DSN-3).</p>
+    </article>
+    <article>
+      <h3>Control flow</h3>
+      <p>Per-function CFG with Entry/Block/Branch/Loop/Match/Call/Return/Exit nodes and <code>normal|true|false|back</code> edges, plus a cyclomatic badge.</p>
+      <p><strong>Status:</strong> analysis working (Rust/Python/TS CFGs pass their goldens). The Diagrams &rarr; Control flow view is <em>in progress</em> (card GRAPH-2).</p>
+      <p><a href="../docs/howto-control-flow.md">Read the control-flow how-to &rarr;</a></p>
+    </article>
+    <article>
+      <h3>Connections</h3>
+      <p>Graph v2: always-readable real symbol names, clustering by module, layout modes, filters, focus+context dimming, and honest dashed <code>?</code> edges for unresolved calls.</p>
+      <p><strong>Status:</strong> v1 graph working (module colour, fan-in sizing, dashed <code>?</code>). Real-name LOD, clustering, layouts and filters are <em>in progress</em> (card GRAPH-4).</p>
+      <p><a href="../docs/howto-graph.md">Read the graph how-to &rarr;</a></p>
+    </article>
+    <article>
+      <h3>Structure</h3>
+      <p>Type diagram (struct/enum/trait/class/interface with fields, methods and containment/impl/inheritance edges) and the modules DAG (crate/dir/module with import edges, cycles tinted).</p>
+      <p><strong>Status:</strong> engines working (<code>types.rs</code>, <code>modules.rs</code> — this repo's module graph measures 390 nodes / 468 edges). The Types and Modules diagram views are <em>in progress</em> (card GRAPH-3).</p>
+      <p><a href="../docs/howto-structure.md">Read the structure how-to &rarr;</a></p>
+    </article>
+    <article>
+      <h3>Usage</h3>
+      <p>Per-file variable table — name, kind, declared type, declaration line, scope, <strong>reads / writes / total uses</strong>, first/last use, enclosing symbol — and find-all-references for any symbol.</p>
+      <p><strong>Status:</strong> working &mdash; variable analysis (Rust 7 vars &middot; Python 7 &middot; TS 13 on the fixtures) and the core reference index <code>refs.rs</code> (8 green tests). The variables panel + highlight-all-uses (card TEXT-2) and the refs panel + Ctrl+click (card TEXT-3) are <em>in progress</em>; no <code>crates/gui/src/usage/</code> directory exists yet.</p>
+      <p><a href="../docs/howto-variables.md">Variables how-to &rarr;</a> &middot; <a href="../docs/howto-refs.md">References how-to &rarr;</a></p>
+    </article>
+    <article>
+      <h3>Export</h3>
+      <p>Mermaid, DOT/Graphviz and hand-rolled SVG for every diagram, plus a generated architecture report in self-contained Markdown; PNG stays.</p>
+      <p><strong>Status:</strong> emitters working and byte-stable (10 green tests). The CLI (<code>report</code>, <code>graph</code>, &hellip;) and the GUI export of these formats are <em>in progress</em> (card PROD-3); today the GUI exports PNG and the tour+health Markdown.</p>
+      <p><a href="../docs/howto-export.md">Read the export how-to &rarr;</a></p>
+    </article>
+  </section>
+
+  <section class="tutorial">
+    <h2>What is still on the way</h2>
+    <p>Everything above is either running today or has an owner card in the build. The panels and modes still to be wired are: the Diagrams mode (Control flow / Types / Modules), the v2 Graph (real names, clusters, filters), the Flow <em>Feature</em> tab, the variables / refs / health-v2 / notes panels, the onboarding report, the F14 CLI commands and the F14/F8 export wiring. The feature list is <a href="../docs/v2-plan.md">F1&ndash;F15</a>; the batch/ownership map is in the <a href="../docs/v2-execution-plan.md">execution plan</a>. The full v2 walkthrough is in the <a href="../docs/demo.md">demo runbook</a>.</p>
+  </section>
+</main>
+<footer><p>&copy; 2026 repowalk contributors &mdash; Apache-2.0</p></footer>
+<script src="js/app.js"></script>
+</body>
+</html>
