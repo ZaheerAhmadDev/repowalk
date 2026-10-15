@@ -1,6 +1,12 @@
 //! Derived repo metrics: LOC, languages, entrypoints, top files, fan-in,
 //! SCC cycles, god-files, unresolved-edge % (plan §7.4), flow reachability.
-//! OWNER: RSK-2.
+//! OWNER: RSK-2 (v1); v2 aggregates (F6) added by INTEL-5.
+//!
+//! The v1 [`compute`] surface is frozen: existing items and their behaviour
+//! stay byte-identical. Everything under the "v2 aggregates" banner is
+//! additive and reads [`crate::analysis::Analysis`] alongside [`Index`].
+use crate::analysis::{Analysis, ModuleEdgeKind, ModuleKind, UseKind};
+use crate::complexity::Hotspot;
 use crate::model::{Confidence, Index};
 use petgraph::algo::tarjan_scc;
 use petgraph::graph::DiGraph;
@@ -98,15 +104,8 @@ pub fn compute(idx: &Index) -> Metrics {
     cycles.sort();
 
     // God-files: lines > max(500, nearest-rank p99 of file lines).
-    let mut all_lines: Vec<usize> = idx.files.iter().map(|f| f.lines).collect();
-    all_lines.sort_unstable();
-    let p99 = if all_lines.is_empty() {
-        0usize
-    } else {
-        let rank = (all_lines.len() as f64 * 0.99).ceil() as usize;
-        all_lines[rank.max(1) - 1]
-    };
-    let threshold = 500usize.max(p99);
+    let all_lines: Vec<usize> = idx.files.iter().map(|f| f.lines).collect();
+    let threshold = p99_threshold(&all_lines, 500);
     let mut god_files: Vec<(String, usize)> = idx
         .files
         .iter()
@@ -136,6 +135,191 @@ pub fn compute(idx: &Index) -> Metrics {
         cycles,
         god_files,
         unresolved_pct,
+    }
+}
+
+/// Nearest-rank p99 threshold with a floor, shared by the LOC god-file rule
+/// and the v2 fan-out rule (callers compare with a strict `>`).
+///
+/// Empty input yields the floor. For `n` values, rank = `ceil(n * 0.99)` and
+/// the value that many entries in (1-based) is the p99; the result is
+/// `max(floor, p99)`.
+fn p99_threshold(values: &[usize], floor: usize) -> usize {
+    if values.is_empty() {
+        return floor;
+    }
+    let mut sorted = values.to_vec();
+    sorted.sort_unstable();
+    let rank = (sorted.len() as f64 * 0.99).ceil() as usize;
+    floor.max(sorted[rank.max(1) - 1])
+}
+
+// ---------------------------------------------------------------------------
+// v2 aggregates (F6) — additive; the v1 items above are unchanged.
+// ---------------------------------------------------------------------------
+
+/// Complexity rolled up the module tree (F6).
+///
+/// `total`/`max`/`functions` come from [`crate::complexity::per_file`]; a
+/// `Crate`/`Dir`/`Module` node aggregates every descendant file. File-level
+/// detail stays in [`crate::complexity::per_file`]. Sorted by `total` (desc),
+/// then id (asc), so the output is stable for identical inputs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModuleComplexity {
+    /// Module node id from [`crate::modules::build`] (a crate name or repo path).
+    pub id: String,
+    pub kind: ModuleKind,
+    /// Sum of the subtree's function complexities.
+    pub total: u32,
+    /// Most complex single function in the subtree.
+    pub max: u32,
+    /// Number of functions in the subtree.
+    pub functions: usize,
+    /// Number of files with at least one CFG in the subtree.
+    pub files: usize,
+}
+
+/// Roll [`crate::complexity::per_file`] up the [`crate::modules::build`] tree.
+pub fn complexity_by_module(idx: &Index, analysis: &Analysis) -> Vec<ModuleComplexity> {
+    let (nodes, edges) = crate::modules::build(idx);
+
+    // child -> parent from the Submodule tree; each non-root node has one parent.
+    let parent_of: BTreeMap<&str, &str> = edges
+        .iter()
+        .filter(|e| e.kind == ModuleEdgeKind::Submodule)
+        .map(|e| (e.to.as_str(), e.from.as_str()))
+        .collect();
+
+    // module id -> (total, max, functions, files)
+    let per_file = crate::complexity::per_file(analysis);
+    let mut agg: BTreeMap<String, (u32, u32, usize, usize)> = BTreeMap::new();
+    for fc in &per_file {
+        let mut cur = Some(fc.file.as_str());
+        while let Some(id) = cur {
+            let entry = agg.entry(id.to_string()).or_insert((0, 0, 0, 0));
+            entry.0 = entry.0.saturating_add(fc.total);
+            entry.1 = entry.1.max(fc.max);
+            entry.2 += fc.functions;
+            entry.3 += 1;
+            cur = parent_of.get(id).copied();
+        }
+    }
+
+    let mut out: Vec<ModuleComplexity> = nodes
+        .iter()
+        .filter(|n| n.kind != ModuleKind::File)
+        .map(|n| {
+            let (total, max, functions, files) =
+                agg.get(n.id.as_str()).copied().unwrap_or_default();
+            ModuleComplexity {
+                id: n.id.clone(),
+                kind: n.kind,
+                total,
+                max,
+                functions,
+                files,
+            }
+        })
+        .collect();
+    out.sort_by(|a, b| b.total.cmp(&a.total).then_with(|| a.id.cmp(&b.id)));
+    out
+}
+
+/// A file flagged as oversized and/or overly connected (F6).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GodFile {
+    pub path: String,
+    pub loc: usize,
+    /// Distinct callees reached from the file (fan-out).
+    pub fan_out: usize,
+    /// Why it was flagged: `"loc"` and/or `"fan-out"`.
+    pub reasons: Vec<String>,
+}
+
+/// God files by LOC (v1 rule) and/or fan-out, ranked by LOC then path (F6).
+///
+/// LOC reuses the v1 nearest-rank p99 rule with a floor of 500 lines:
+/// `loc > max(500, p99)`. Fan-out applies the same rule with a floor of 20
+/// distinct callees. Fan-out counts distinct callee targets from call edges
+/// ([`Index::edges`]) **and** call-kind use sites ([`Analysis::uses`]), so
+/// unresolved calls still count. A file appears when either rule trips.
+pub fn god_files(idx: &Index, analysis: &Analysis) -> Vec<GodFile> {
+    // Distinct callees per caller file.
+    let mut callees: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for e in &idx.edges {
+        let (file, _) = crate::complexity::parse_symbol_id(&e.caller);
+        callees.entry(file).or_default().insert(e.callee.clone());
+    }
+    for u in &analysis.uses {
+        if u.kind == UseKind::Call {
+            callees
+                .entry(u.file.clone())
+                .or_default()
+                .insert(u.target.clone());
+        }
+    }
+
+    let locs: Vec<usize> = idx.files.iter().map(|f| f.lines).collect();
+    let loc_threshold = p99_threshold(&locs, 500);
+    let fan_outs: Vec<usize> = idx
+        .files
+        .iter()
+        .map(|f| callees.get(&f.path).map_or(0, BTreeSet::len))
+        .collect();
+    let fan_threshold = p99_threshold(&fan_outs, 20);
+
+    let mut out: Vec<GodFile> = Vec::new();
+    for f in &idx.files {
+        let fan_out = callees.get(&f.path).map_or(0, BTreeSet::len);
+        let mut reasons = Vec::new();
+        if f.lines > loc_threshold {
+            reasons.push("loc".to_string());
+        }
+        if fan_out > fan_threshold {
+            reasons.push("fan-out".to_string());
+        }
+        if !reasons.is_empty() {
+            out.push(GodFile {
+                path: f.path.clone(),
+                loc: f.lines,
+                fan_out,
+                reasons,
+            });
+        }
+    }
+    out.sort_by(|a, b| b.loc.cmp(&a.loc).then_with(|| a.path.cmp(&b.path)));
+    out
+}
+
+/// Ranked complexity hotspots — a thin delegate to
+/// [`crate::complexity::hotspots`] so consumers have one metrics entry point
+/// (F6). `top == 0` returns every CFG.
+pub fn hotspots(analysis: &Analysis, top: usize) -> Vec<Hotspot> {
+    crate::complexity::hotspots(analysis, top)
+}
+
+/// Number of variables with no reads — dead-code candidates (F4/F6).
+pub fn unused_variable_count(analysis: &Analysis) -> usize {
+    crate::complexity::unused_variables(analysis).len()
+}
+
+/// The v2 metrics bundle the health-v2 panel, report and CLI read (F6).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MetricsV2 {
+    pub complexity_by_module: Vec<ModuleComplexity>,
+    pub god_files: Vec<GodFile>,
+    /// Ranked hotspots; empty when there are no CFGs.
+    pub hotspots: Vec<Hotspot>,
+    pub unused_variables: usize,
+}
+
+/// Compute every v2 aggregate from a finished `(Index, Analysis)` pair.
+pub fn compute_v2(idx: &Index, analysis: &Analysis) -> MetricsV2 {
+    MetricsV2 {
+        complexity_by_module: complexity_by_module(idx, analysis),
+        god_files: god_files(idx, analysis),
+        hotspots: hotspots(analysis, 0),
+        unused_variables: unused_variable_count(analysis),
     }
 }
 
@@ -432,5 +616,165 @@ mod tests {
                 symbols: 4
             }
         );
+    }
+
+    // ---- v2 aggregates (INTEL-5) -----------------------------------------
+
+    fn cfg(symbol: &str, cyclomatic: u32, max_nesting: u32) -> crate::analysis::FunctionCfg {
+        crate::analysis::FunctionCfg {
+            symbol: symbol.into(),
+            nodes: Vec::new(),
+            edges: Vec::new(),
+            cyclomatic,
+            max_nesting,
+        }
+    }
+
+    fn var(file: &str, line: usize, name: &str, reads: usize) -> crate::analysis::Variable {
+        crate::analysis::Variable {
+            id: format!("{file}:{line}:{name}"),
+            name: name.into(),
+            kind: crate::analysis::VarKind::Local,
+            file: file.into(),
+            decl_line: line,
+            scope_start: line,
+            scope_end: line,
+            type_name: None,
+            reads,
+            writes: 0,
+            first_use: None,
+            last_use: None,
+            enclosing: String::new(),
+        }
+    }
+
+    #[test]
+    fn complexity_by_module_rolls_up_the_module_tree() {
+        let mut idx = Index::new("/repo");
+        idx.files = vec![
+            file("crates/core/src/lib.rs", "rust", 40, false),
+            file("crates/core/src/analyze/rust.rs", "rust", 20, false),
+        ];
+        let mut a = Analysis::new();
+        a.cfgs = vec![
+            cfg("crates/core/src/lib.rs:1", 3, 1),
+            cfg("crates/core/src/lib.rs:9", 4, 1),
+            cfg("crates/core/src/analyze/rust.rs:1", 6, 2),
+        ];
+
+        let mc = complexity_by_module(&idx, &a);
+        let find = |id: &str| mc.iter().find(|m| m.id == id).expect("module node");
+
+        let core = find("core");
+        assert_eq!(core.kind, ModuleKind::Crate);
+        assert_eq!(
+            (core.total, core.max, core.functions, core.files),
+            (13, 6, 3, 2)
+        );
+
+        let src = find("crates/core/src");
+        assert_eq!(
+            (src.total, src.max, src.functions, src.files),
+            (13, 6, 3, 2)
+        );
+
+        let analyze = find("crates/core/src/analyze");
+        assert_eq!(
+            (analyze.total, analyze.max, analyze.functions, analyze.files),
+            (6, 6, 1, 1)
+        );
+
+        // File nodes are the per-file view, not repeated here.
+        assert!(mc.iter().all(|m| m.kind != ModuleKind::File));
+        // Deterministic: identical inputs → identical output.
+        assert_eq!(complexity_by_module(&idx, &a), mc);
+    }
+
+    #[test]
+    fn complexity_by_module_empty_inputs_are_empty() {
+        assert!(complexity_by_module(&Index::new("/repo"), &Analysis::new()).is_empty());
+    }
+
+    #[test]
+    fn god_files_flags_loc_and_fan_out() {
+        let mut idx = Index::new("/repo");
+        idx.files = (0..99)
+            .map(|i| file(&format!("src/f{:02}.rs", i), "rust", 10, false))
+            .collect();
+        idx.files.push(file("src/big.rs", "rust", 501, false));
+        idx.files.push(file("src/fan.rs", "rust", 10, false));
+        // 25 distinct callees out of src/fan.rs.
+        idx.edges = (0..25)
+            .map(|i| edge("src/fan.rs:1", &format!("callee{i}"), Confidence::Exact))
+            .collect();
+
+        let gf = god_files(&idx, &Analysis::new());
+        assert_eq!(
+            gf.iter().map(|g| g.path.as_str()).collect::<Vec<_>>(),
+            vec!["src/big.rs", "src/fan.rs"]
+        );
+        assert_eq!(gf[0].reasons, vec!["loc".to_string()]);
+        assert_eq!(gf[1].reasons, vec!["fan-out".to_string()]);
+        assert_eq!(gf[1].fan_out, 25);
+    }
+
+    #[test]
+    fn god_files_counts_call_use_sites_too() {
+        // 200 files keeps the p99 fan-out at 0, so the 20-callee floor applies.
+        let mut idx = Index::new("/repo");
+        idx.files = (0..200)
+            .map(|i| file(&format!("src/f{:03}.rs", i), "rust", 10, false))
+            .collect();
+        let mut a = Analysis::new();
+        a.uses = (0..21)
+            .map(|i| crate::analysis::UseSite {
+                target: format!("t{i}"),
+                file: "src/f000.rs".into(),
+                line: i + 1,
+                col: 0,
+                kind: UseKind::Call,
+                snippet: String::new(),
+            })
+            .collect();
+
+        let gf = god_files(&idx, &a);
+        assert_eq!(gf.len(), 1);
+        assert_eq!(gf[0].path, "src/f000.rs");
+        assert_eq!(gf[0].reasons, vec!["fan-out".to_string()]);
+    }
+
+    #[test]
+    fn hotspots_and_unused_variable_count_delegate() {
+        let mut a = Analysis::new();
+        a.cfgs = vec![cfg("src/a.rs:1", 5, 2), cfg("src/b.rs:1", 9, 1)];
+        a.variables = vec![
+            var("src/a.rs", 1, "used", 3),
+            var("src/a.rs", 9, "dead", 0),
+            var("src/b.rs", 2, "dead2", 0),
+        ];
+
+        assert_eq!(hotspots(&a, 1), crate::complexity::hotspots(&a, 1));
+        assert_eq!(hotspots(&a, 0).len(), 2);
+        assert_eq!(unused_variable_count(&a), 2);
+        assert_eq!(unused_variable_count(&Analysis::new()), 0);
+    }
+
+    #[test]
+    fn compute_v2_bundles_all_aggregates() {
+        let mut idx = Index::new("/repo");
+        idx.files = (0..100)
+            .map(|i| file(&format!("src/f{:03}.rs", i), "rust", 10, false))
+            .collect();
+        idx.files.push(file("src/big.rs", "rust", 501, false));
+        let mut a = Analysis::new();
+        a.cfgs = vec![cfg("src/big.rs:1", 7, 3)];
+        a.variables = vec![var("src/big.rs", 2, "unused", 0)];
+
+        let m = compute_v2(&idx, &a);
+        assert_eq!(m.hotspots.len(), 1);
+        assert_eq!(m.unused_variables, 1);
+        assert_eq!(m.god_files.len(), 1);
+        assert_eq!(m.god_files[0].path, "src/big.rs");
+        assert!(!m.complexity_by_module.is_empty());
     }
 }
