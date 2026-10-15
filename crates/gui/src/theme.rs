@@ -70,6 +70,33 @@ pub const FONT_BUTTON: f32 = 13.0;
 pub const FONT_HEADING: f32 = 17.0;
 pub const FONT_CODE: f32 = 13.0;
 
+// ── Motion (100ms grid, HCI-derived) ────────────────────────────────────────
+// Animation is never the only carrier of information — static fallbacks stay
+// readable (WCAG 2.3.3): the stage strip, edge labels, and selection states
+// must all remain legible when durations are honored at zero / suppressed by
+// a reduced-motion preference.
+
+/// Hover/selection transitions.
+pub const TRANSITION_MS: u64 = 200;
+/// Edge-pulse loop.
+pub const PULSE_MS: u64 = 600;
+/// Flow stage dwell per step.
+pub const STEP_DWELL_MS: u64 = 800;
+
+/// Smooth 0→1 easing for playhead motion: t in [0,1] -> eased in [0,1].
+/// Clamped smoothstep; panics-free, allocation-free.
+pub fn ease_in_out(t: f32) -> f32 {
+    let t = t.clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+/// Alpha wash for the active flow stage: full at progress 0.5, softer at edges.
+/// Clamped to [0,1]; panics-free, allocation-free.
+pub fn step_alpha(progress: f32) -> f32 {
+    let p = progress.clamp(0.0, 1.0);
+    (0.15 + 0.25 * (1.0 - (p * 2.0 - 1.0).abs())).clamp(0.0, 1.0)
+}
+
 /// Deterministic module → palette color (stable across runs; plan §4.4).
 pub fn module_color(module: &str) -> Color32 {
     let mut h: u64 = 5381;

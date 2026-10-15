@@ -3,13 +3,13 @@
   "title": "Docs: Flow mode in demo script + site feature blurb",
   "phase": "maintenance",
   "skill": "sdlc-maintenance",
-  "status": "todo",
-  "assignee": null,
+  "status": "done",
+  "assignee": "TL-DOC",
   "description": "Document the new Flow mode for humans: add a demo-script section to docs/demo.md (the 60-second story: pick A and B, watch the workflow play step by step, scrub/speed, jump to source; plus the wave view from an entrypoint) and a feature blurb in site/index.html's feature grid (and site/js/app.js only if the feature list is data-driven there). Keep root README.md/CHANGELOG.md untouched - root *.md are main-agent owned per agent.md. Owner: docs/demo.md + site/** only. Verify: grep -n -i 'flow' docs/demo.md site/index.html returns the added entries. Governing skill: skills/sdlc/sdlc-maintenance/SKILL.md.",
   "artifacts": [
     "docs/demo.md",
     "site/index.html"
   ],
   "created": "2026-10-14T14:04:41Z",
-  "updated": "2026-10-14T14:04:41Z"
+  "updated": "2026-10-15T10:27:49Z"
 }

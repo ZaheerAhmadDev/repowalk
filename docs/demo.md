@@ -46,6 +46,24 @@ repowalk ./repowalk
 6. **export ▾**: PNG of the window; Markdown tour + health report — show the
    README-ready artifact.
 
+## Flow mode — 60 seconds
+
+1. Open the repo, pick A and B from search or an explain card — Flow loads the
+   pair and plays the call path: stage strip lights up, playhead advances,
+   active segment pulses.
+2. Scrub the timeline or step forward/back; flip 0.5x / 1x / 2x when someone
+   says "wait, what just happened?".
+3. **Open source** jumps to the exact call line in text mode — same selection,
+   no context lost.
+4. Wave view: pick an entrypoint and the calls fan out in BFS waves, layer by
+   layer.
+
+Honest notes:
+
+- Unreachable pair? Flow says "no path" — same honesty number as Graph's trace.
+- Pause and the stage strip stays a plain, readable list of steps — the story
+  holds with animation switched off.
+
 ## Minute 5 — determinism close
 
 > "Same repo, same result — every time. Run `repowalk map` twice: identical

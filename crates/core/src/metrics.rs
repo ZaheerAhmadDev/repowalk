@@ -1,5 +1,5 @@
 //! Derived repo metrics: LOC, languages, entrypoints, top files, fan-in,
-//! SCC cycles, god-files, unresolved-edge % (plan §7.4).
+//! SCC cycles, god-files, unresolved-edge % (plan §7.4), flow reachability.
 //! OWNER: RSK-2.
 use crate::model::{Confidence, Index};
 use petgraph::algo::tarjan_scc;
@@ -139,10 +139,50 @@ pub fn compute(idx: &Index) -> Metrics {
     }
 }
 
+/// Reachability of the call graph from one source symbol (flow sources).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReachStats {
+    pub reachable: usize, // unique symbols across BFS layers
+    pub max_depth: usize, // depth of the last non-empty layer
+    pub symbols: usize,   // total symbols in the index
+}
+
+/// BFS-reachability from `source` capped at `max_depth`; honest zeros on
+/// unknown source.
+///
+/// Layers come from [`crate::flow::waves`]: layer `k` holds the symbols first
+/// reached at depth `k`, so `max_depth` is the depth of the last non-empty
+/// layer (`0` when only the source layer exists) and `reachable` counts unique
+/// symbols across all layers. `symbols` is `idx.symbols.len()`. An empty or
+/// unknown `source` (no `waves` layers) yields all zeros.
+pub fn reachability(idx: &Index, source: &str, max_depth: usize) -> ReachStats {
+    let layers = crate::flow::waves(idx, source, max_depth);
+    if layers.is_empty() {
+        return ReachStats {
+            reachable: 0,
+            max_depth: 0,
+            symbols: 0,
+        };
+    }
+    let mut seen: BTreeSet<&str> = BTreeSet::new();
+    let mut depth = 0usize;
+    for (k, layer) in layers.iter().enumerate() {
+        if !layer.is_empty() {
+            depth = k;
+            seen.extend(layer.iter().map(String::as_str));
+        }
+    }
+    ReachStats {
+        reachable: seen.len(),
+        max_depth: depth,
+        symbols: idx.symbols.len(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Edge, EdgeKind, FileEntry};
+    use crate::model::{Edge, EdgeKind, FileEntry, Symbol, SymbolKind};
 
     fn file(path: &str, lang: &str, lines: usize, entrypoint: bool) -> FileEntry {
         FileEntry {
@@ -168,6 +208,20 @@ mod tests {
         (0..n)
             .map(|i| file(&format!("src/f{}.rs", i), "rust", lines, false))
             .collect()
+    }
+
+    fn symbol(id: &str) -> Symbol {
+        Symbol {
+            id: id.into(),
+            name: id.into(),
+            kind: SymbolKind::Function,
+            signature: String::new(),
+            doc: String::new(),
+            start_line: 1,
+            end_line: 1,
+            container: None,
+            file: "src/lib.rs".into(),
+        }
     }
 
     #[test]
@@ -291,5 +345,92 @@ mod tests {
 
         let empty = Index::new("/repo");
         assert_eq!(compute(&empty).unresolved_pct, 0.0);
+    }
+
+    #[test]
+    fn reachability_walks_known_chain() {
+        let mut idx = Index::new("/repo");
+        idx.symbols = vec![symbol("a"), symbol("b"), symbol("c"), symbol("d")];
+        idx.edges = vec![
+            edge("a", "b", Confidence::Exact),
+            edge("b", "c", Confidence::Exact),
+        ];
+
+        // a (0) → b (1) → c (2); `d` has no edge so is never reached.
+        let r = reachability(&idx, "a", 10);
+        assert_eq!(
+            r,
+            ReachStats {
+                reachable: 3,
+                max_depth: 2,
+                symbols: 4
+            }
+        );
+        // `c` is only a callee: still a known source, alone at depth 0.
+        let r = reachability(&idx, "c", 10);
+        assert_eq!(
+            r,
+            ReachStats {
+                reachable: 1,
+                max_depth: 0,
+                symbols: 4
+            }
+        );
+    }
+
+    #[test]
+    fn reachability_unknown_source_is_all_zeros() {
+        let mut idx = Index::new("/repo");
+        idx.symbols = vec![symbol("a"), symbol("b")];
+        idx.edges = vec![edge("a", "b", Confidence::Exact)];
+
+        assert_eq!(
+            reachability(&idx, "ghost", 5),
+            ReachStats {
+                reachable: 0,
+                max_depth: 0,
+                symbols: 0
+            }
+        );
+        assert_eq!(
+            reachability(&idx, "", 5),
+            ReachStats {
+                reachable: 0,
+                max_depth: 0,
+                symbols: 0
+            }
+        );
+    }
+
+    #[test]
+    fn reachability_respects_depth_cap() {
+        let mut idx = Index::new("/repo");
+        idx.symbols = vec![symbol("a"), symbol("b"), symbol("c"), symbol("d")];
+        idx.edges = vec![
+            edge("a", "b", Confidence::Exact),
+            edge("b", "c", Confidence::Exact),
+            edge("c", "d", Confidence::Exact),
+        ];
+
+        // cap 1 → a (depth 0) + b (depth 1); c/d are past the cap.
+        let r = reachability(&idx, "a", 1);
+        assert_eq!(
+            r,
+            ReachStats {
+                reachable: 2,
+                max_depth: 1,
+                symbols: 4
+            }
+        );
+        // cap 0 → source layer only.
+        let r = reachability(&idx, "a", 0);
+        assert_eq!(
+            r,
+            ReachStats {
+                reachable: 1,
+                max_depth: 0,
+                symbols: 4
+            }
+        );
     }
 }
