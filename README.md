@@ -20,7 +20,7 @@ Repositories now grow faster than people can read them, and AI summaries of code
 | ----------------------------- | -------------------------------------------------------------- |
 | "Where do I even start?"      | **Tour** (reading order) and **Map** (orientation)             |
 | "What does this do, and why?" | **Explain cards** and an editable, highlighted **Text mode**   |
-| "How does it connect?"        | **Graph mode** and **A→B flow trace**                          |
+| "How does it connect?"        | **Graph mode**, **A→B flow trace**, and dynamic **Flow playback**  |
 | "What parts matter?"          | **Legend encoding** (size = fan-in) and the **Health report**  |
 
 repowalk is a complement to AI: the verification layer you can check AI-generated claims against.
@@ -43,6 +43,7 @@ repowalk is a complement to AI: the verification layer you can check AI-generate
 - **Graph mode**: an interactive call/import graph with pan, zoom, and drag. Hover for a signature preview, click to highlight a node's neighborhood and dim the rest, double-click to jump to source.
 - **Legend**: node size = fan-in, color = module, entrypoints marked.
 - **A→B flow trace**: pick two nodes and the shortest call path lights up. If there is no path, it says so.
+- **Flow mode**: watch the workflow play in dynamic form — animated A→B stage playback (playhead, play/pause, step, 0.5×–2× speed, scrub) with per-step detail and jump-to-source, or an entrypoint wave view fanning out layer by layer. Motion follows the design system's tokens and never is the only carrier of information. CLI twin: `repowalk flow <A> <B>` / `--from <symbol> [--depth N]` / `--md`.
 - **Honest edges**: unresolved or ambiguous edges are drawn **dashed with a `?`**. repowalk shows uncertainty instead of faking precision.
 
 ### Health

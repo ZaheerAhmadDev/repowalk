@@ -6,7 +6,7 @@ use eframe::egui;
 use repowalk_core::model::{Confidence, Index, SymbolKind};
 
 use crate::app::App;
-use crate::flow::{FlowState, playback};
+use crate::flow::{playback, FlowState};
 use crate::theme;
 
 /// Stage-card geometry (px). Fixed so the strip reads as a storyboard.
@@ -223,11 +223,8 @@ fn link(ui: &mut egui::Ui, segment: usize, step: usize, pulse: f32) {
         // Soft halo + trail so the dot reads as motion, not a bead.
         ui.painter()
             .hline(px..=x1, y, egui::Stroke::new(1.0, theme::accent_subtle(90)));
-        ui.painter().circle_filled(
-            egui::pos2(px, y),
-            4.5,
-            theme::with_alpha(theme::ACCENT, 60),
-        );
+        ui.painter()
+            .circle_filled(egui::pos2(px, y), 4.5, theme::with_alpha(theme::ACCENT, 60));
         ui.painter()
             .circle_filled(egui::pos2(px, y), 2.5, theme::ACCENT);
     }
@@ -313,14 +310,7 @@ fn chip(
     ui.painter().rect_stroke(
         rect,
         corner,
-        egui::Stroke::new(
-            1.0,
-            if active {
-                color
-            } else {
-                theme::BORDER_SUBTLE
-            },
-        ),
+        egui::Stroke::new(1.0, if active { color } else { theme::BORDER_SUBTLE }),
         egui::StrokeKind::Middle,
     );
     ui.painter().circle_filled(
@@ -329,10 +319,7 @@ fn chip(
         if revealed { color } else { theme::DIM },
     );
     ui.painter().galley(
-        egui::pos2(
-            rect.left() + 15.0,
-            rect.center().y - galley.size().y / 2.0,
-        ),
+        egui::pos2(rect.left() + 15.0, rect.center().y - galley.size().y / 2.0),
         galley,
         theme::TEXT_PRIMARY,
     );
@@ -376,11 +363,7 @@ pub fn step_detail(
                     4.0,
                     color,
                 );
-                ui.label(
-                    egui::RichText::new(name)
-                        .size(theme::FONT_HEADING)
-                        .strong(),
-                );
+                ui.label(egui::RichText::new(name).size(theme::FONT_HEADING).strong());
                 if let Some(k) = sym.map(|s| s.kind) {
                     ui.weak(kind_label(k));
                 }

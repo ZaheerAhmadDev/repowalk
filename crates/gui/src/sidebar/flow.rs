@@ -39,10 +39,7 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
             "▶"
         };
         let play = ui
-            .add_enabled(
-                steps > 0,
-                egui::Button::new(glyph).frame(false).small(),
-            )
+            .add_enabled(steps > 0, egui::Button::new(glyph).frame(false).small())
             .on_hover_text("Play / pause the flow");
         if play.clicked() {
             app.flow.playback.toggle_play(steps);
