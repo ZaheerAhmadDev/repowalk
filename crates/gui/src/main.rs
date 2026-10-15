@@ -7,6 +7,7 @@ mod export;
 mod graph;
 mod sidebar;
 mod text;
+mod theme;
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {

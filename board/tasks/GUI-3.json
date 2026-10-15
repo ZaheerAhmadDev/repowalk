@@ -1,0 +1,24 @@
+{
+  "id": "GUI-3",
+  "title": "Restyle GUI panels (sidebar, text mode, explain card, graph) on tokens",
+  "phase": "implementation",
+  "skill": "sdlc-implement",
+  "status": "done",
+  "assignee": "gui-redesign-agent",
+  "description": "Restyle all panels to consume the theme token system (no scattered hex). Sidebar: uppercase section headers, full-width hover/selection list rows, right-aligned metadata, semantic health colors. Text mode: consistent file-tree rows with entrypoint markers and line-count badges; editor header shows path + dirty state + save. Explain card reworked as an inspector panel. Graph: nodes are surface-filled with module-colored borders, selected/hovered accent halos, dimmed neighborhoods, muted edges, a proper legend strip, and a persistent A-to-B trace banner. Remove dead code (unused App::module_color wrapper, unused theme constants, let-_ placeholder statements). Verify: cargo test -p repowalk-gui (11 tests) passes, cargo clippy clean, cargo fmt --check clean. Governing skill: skills/sdlc/sdlc-implement/SKILL.md + skills/meta/karpathy-guidelines/SKILL.md.",
+  "artifacts": [
+    "crates/gui/src/sidebar/mod.rs",
+    "crates/gui/src/sidebar/map.rs",
+    "crates/gui/src/sidebar/search.rs",
+    "crates/gui/src/sidebar/tour.rs",
+    "crates/gui/src/text/mod.rs",
+    "crates/gui/src/text/tree.rs",
+    "crates/gui/src/text/editor.rs",
+    "crates/gui/src/explain.rs",
+    "crates/gui/src/graph/mod.rs",
+    "crates/gui/src/graph/render.rs",
+    "crates/gui/src/graph/interaction.rs"
+  ],
+  "created": "2026-10-14T00:00:00Z",
+  "updated": "2026-10-14T00:00:00Z"
+}

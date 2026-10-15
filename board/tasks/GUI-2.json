@@ -1,0 +1,12 @@
+{
+  "id": "GUI-2",
+  "title": "Redesign the GUI app shell (toolbar, sidebar, status bar, palette)",
+  "phase": "implementation",
+  "skill": "sdlc-implement",
+  "status": "done",
+  "assignee": "gui-redesign-agent",
+  "description": "Rework crates/gui/src/app.rs around the theme token system. Add a top toolbar (segmented Text/Graph control with an active accent top-border, Open... button, Ctrl+K command palette trigger, Export menu, right-aligned metrics strip) and a bottom status bar with a dismissable error line and a shortcuts affordance. Replace the ad-hoc open-repo row with a popup dialog. Add a Ctrl+K command palette with fuzzy command filtering and shortcut hints, a two-column keyboard-shortcut overlay (?), and a spinner-based indexing progress overlay. Keep Selection driving every pane and preserve all public App fields/methods used by the panels. Verify: cargo build -p repowalk-gui warning-free; cargo test -p repowalk-gui passes; app launches on a real repo without panicking. Governing skill: skills/sdlc/sdlc-implement/SKILL.md + skills/meta/karpathy-guidelines/SKILL.md.",
+  "artifacts": ["crates/gui/src/app.rs", "crates/gui/src/main.rs"],
+  "created": "2026-10-14T00:00:00Z",
+  "updated": "2026-10-14T00:00:00Z"
+}

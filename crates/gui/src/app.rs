@@ -1,10 +1,12 @@
-//! AppState, layout, mode toggle, keyboard, selection sync (plan §4.2-4.3).
-//! OWNER: RSK-14. Types below are the shared contract for all panels.
+//! AppState, layout shell, mode toggle, keyboard, selection sync (plan §4.2-4.3).
+//! Redesigned around the `theme` token system: toolbar (segmented control +
+//! export menu), sidebar, central pane, status bar. OWNER: RSK-14.
 use eframe::egui;
 use repowalk_core::model::Index;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+use crate::theme;
 use crate::{graph, sidebar, text};
 
 /// (edges, symbols, edge_calls, edge_imports) signature guarding graph rebuilds.
@@ -18,8 +20,8 @@ pub enum Mode {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Selection {
-    Symbol(String), // symbol id
-    File(String),   // repo-relative path
+    Symbol(String),
+    File(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,7 +55,7 @@ pub struct App {
     pub index: Option<Arc<Index>>,
     pub mode: Mode,
     pub selection: Option<Selection>,
-    pub trace: Option<(String, String)>, // (A, B) flow trace
+    pub trace: Option<(String, String)>,
     pub trace_pick: TracePick,
     pub pending_trace_a: Option<String>,
     pub query: String,
@@ -61,6 +63,9 @@ pub struct App {
     pub edge_calls: bool,
     pub edge_imports: bool,
     pub show_shortcuts: bool,
+    pub show_command_palette: bool,
+    pub palette_query: String,
+    pub show_open_popup: bool,
     pub search_focus: bool,
     pub list_cursor: usize,
     pub open_file: Option<String>,
@@ -79,7 +84,7 @@ static APP_CTX: std::sync::OnceLock<egui::Context> = std::sync::OnceLock::new();
 
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        cc.egui_ctx.set_theme(egui::Theme::Dark);
+        theme::apply(&cc.egui_ctx);
         let _ = APP_CTX.set(cc.egui_ctx.clone());
 
         let repo = std::env::args().nth(1).map(PathBuf::from);
@@ -100,6 +105,9 @@ impl App {
             edge_calls: true,
             edge_imports: true,
             show_shortcuts: false,
+            show_command_palette: false,
+            palette_query: String::new(),
+            show_open_popup: false,
             search_focus: false,
             list_cursor: 0,
             open_file: None,
@@ -118,7 +126,7 @@ impl App {
         app
     }
 
-    /// Kick off a background indexing run (plan §3.1: progress overlay with file counts).
+    /// Kick off a background indexing run (plan §3.1: progress overlay).
     pub fn start_indexing(&mut self, repo: PathBuf) {
         let progress = Arc::new(Mutex::new(IndexProgress::default()));
         let shared = Arc::clone(&progress);
@@ -241,25 +249,6 @@ impl App {
         self.jump_line = None;
     }
 
-    /// Deterministic module → color assignment from a fixed 8-color palette (plan §4.4).
-    pub fn module_color(module: &str) -> egui::Color32 {
-        const PALETTE: [egui::Color32; 8] = [
-            egui::Color32::from_rgb(97, 175, 239),  // blue
-            egui::Color32::from_rgb(152, 195, 121), // green
-            egui::Color32::from_rgb(229, 192, 123), // yellow
-            egui::Color32::from_rgb(224, 108, 117), // red
-            egui::Color32::from_rgb(198, 120, 221), // purple
-            egui::Color32::from_rgb(86, 182, 194),  // cyan
-            egui::Color32::from_rgb(209, 154, 102), // orange
-            egui::Color32::from_rgb(171, 178, 191), // gray
-        ];
-        let mut h: u64 = 5381;
-        for b in module.bytes() {
-            h = h.wrapping_mul(33).wrapping_add(b as u64);
-        }
-        PALETTE[(h % PALETTE.len() as u64) as usize]
-    }
-
     pub fn module_of(path: &str) -> String {
         path.rsplit_once('/')
             .map(|(d, _)| d.to_string())
@@ -267,7 +256,7 @@ impl App {
     }
 
     fn handle_keyboard(&mut self, ctx: &egui::Context) {
-        let (tab, slash, esc, question, g, enter, j, k, ctrl_s) = ctx.input(|i| {
+        let (tab, slash, esc, question, g, enter, j, k, ctrl_s, ctrl_k) = ctx.input(|i| {
             (
                 i.key_pressed(egui::Key::Tab),
                 i.key_pressed(egui::Key::Slash) && i.modifiers.is_none(),
@@ -278,8 +267,22 @@ impl App {
                 i.key_pressed(egui::Key::J) && i.modifiers.is_none(),
                 i.key_pressed(egui::Key::K) && i.modifiers.is_none(),
                 i.key_pressed(egui::Key::S) && i.modifiers.ctrl && !i.modifiers.shift,
+                i.key_pressed(egui::Key::K) && i.modifiers.ctrl,
             )
         });
+        if self.show_command_palette {
+            // While the palette is open, only Esc / Ctrl+K apply globally.
+            if esc || ctrl_k {
+                self.show_command_palette = false;
+                self.palette_query.clear();
+            }
+            return;
+        }
+        if ctrl_k {
+            self.show_command_palette = true;
+            self.palette_query.clear();
+            return;
+        }
         if tab {
             self.mode = match self.mode {
                 Mode::Text => Mode::Graph,
@@ -292,6 +295,7 @@ impl App {
         if esc {
             self.clear_transient();
             self.show_shortcuts = false;
+            self.show_open_popup = false;
         }
         if question {
             self.show_shortcuts = !self.show_shortcuts;
@@ -404,6 +408,244 @@ impl App {
             Err(e) => self.error = Some(format!("markdown export failed: {e}")),
         }
     }
+
+    // ── Shell chrome ────────────────────────────────────────────────────────
+
+    /// Top toolbar: segmented mode control, open-repo button, export menu,
+    /// metrics strip. Recognition-over-recall: shortcuts shown in tooltips.
+    fn toolbar(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = theme::SPACE_3;
+
+            // Segmented mode control (Fitts: two adjacent large targets).
+            let text_active = self.mode == Mode::Text;
+            let graph_active = self.mode == Mode::Graph;
+            if mode_segment(ui, "Text", "Tab", text_active).clicked() {
+                self.mode = Mode::Text;
+            }
+            if mode_segment(ui, "Graph", "Tab", graph_active).clicked() {
+                self.mode = Mode::Graph;
+            }
+
+            ui.separator();
+
+            if toolbar_button(ui, "Open…", "Open a repository folder").clicked() {
+                self.show_open_popup = true;
+            }
+            if toolbar_button(ui, "⌘K", "Command palette (Ctrl+K)").clicked() {
+                self.show_command_palette = true;
+                self.palette_query.clear();
+            }
+
+            ui.separator();
+
+            ui.menu_button("Export ▾", |ui| {
+                if ui.button("Window → PNG").clicked() {
+                    self.export_png(ui.ctx());
+                    ui.close();
+                }
+                if ui.button("Tour + health → Markdown").clicked() {
+                    self.export_markdown();
+                    ui.close();
+                }
+            });
+
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.weak(repowalk_core::VERSION);
+                if let Some(idx) = &self.index {
+                    let m = repowalk_core::metrics::compute(idx);
+                    ui.weak(format!(
+                        "{} files · {} LOC · {} cycles",
+                        idx.files.len(),
+                        m.total_loc,
+                        m.cycles.len()
+                    ));
+                }
+            });
+        });
+    }
+
+    /// Bottom status bar: transient status / errors, always-visible feedback.
+    fn status_bar(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = theme::SPACE_3;
+            if let Some(err) = &self.error {
+                ui.colored_label(theme::DANGER, format!("✕ {err}"));
+                if ui.small_button("dismiss").clicked() {
+                    self.error = None;
+                }
+            } else if !self.status.is_empty() {
+                ui.colored_label(theme::TEXT_SECONDARY, &self.status);
+            } else {
+                ui.colored_label(theme::TEXT_MUTED, "ready");
+            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui
+                    .colored_label(theme::TEXT_MUTED, "? shortcuts")
+                    .on_hover_text("Toggle the keyboard-shortcut overlay")
+                    .clicked()
+                {
+                    self.show_shortcuts = !self.show_shortcuts;
+                }
+            });
+        });
+    }
+
+    /// Modal-ish open-repo popup (progressive disclosure: path + Index button).
+    fn open_popup(&mut self, ctx: &egui::Context) {
+        if !self.show_open_popup {
+            return;
+        }
+        let mut open = true;
+        egui::Window::new("Open repository")
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ctx, |ui| {
+                ui.label(egui::RichText::new("Path to a codebase:").color(theme::TEXT_SECONDARY));
+                ui.add_space(theme::SPACE_2);
+                let resp = ui.text_edit_singleline(&mut self.repo_input);
+                let go = (resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)))
+                    || ui.button("Index").clicked();
+                if go {
+                    let path = PathBuf::from(self.repo_input.trim());
+                    if !path.as_os_str().is_empty() {
+                        self.start_indexing(path);
+                        self.show_open_popup = false;
+                    }
+                }
+            });
+        self.show_open_popup = open;
+    }
+
+    /// Ctrl+K command palette (Hick's-law overflow valve; recognition over recall).
+    fn command_palette(&mut self, ctx: &egui::Context) {
+        if !self.show_command_palette {
+            return;
+        }
+        let mut open = true;
+        let mut run: Option<PaletteAction> = None;
+        egui::Window::new("Command palette")
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .default_width(380.0)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, -60.0])
+            .show(ctx, |ui| {
+                egui::TextEdit::singleline(&mut self.palette_query)
+                    .hint_text("type a command…")
+                    .show(ui);
+                ui.add_space(theme::SPACE_2);
+                let q = self.palette_query.to_lowercase();
+                let actions = palette_actions(self);
+                let mut shown = 0usize;
+                for action in actions {
+                    if !q.is_empty()
+                        && !action.label.to_lowercase().contains(&q)
+                        && !action.hint.to_lowercase().contains(&q)
+                    {
+                        continue;
+                    }
+                    shown += 1;
+                    let selected = shown == 1;
+                    let text = if action.hint.is_empty() {
+                        action.label.to_string()
+                    } else {
+                        format!("{}    ({})", action.label, action.hint)
+                    };
+                    if ui.selectable_label(selected, text).clicked() {
+                        run = Some(action);
+                    }
+                }
+                if shown == 0 {
+                    ui.weak("no matching commands");
+                }
+                ui.add_space(theme::SPACE_1);
+                ui.colored_label(theme::TEXT_MUTED, "↑↓ navigate · ↵ run · esc close");
+                if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                    run = palette_actions(self).into_iter().find(|a| {
+                        let qq = self.palette_query.to_lowercase();
+                        qq.is_empty()
+                            || a.label.to_lowercase().contains(&qq)
+                            || a.hint.to_lowercase().contains(&qq)
+                    });
+                }
+            });
+        self.show_command_palette = open;
+        if let Some(action) = run {
+            self.show_command_palette = false;
+            self.palette_query.clear();
+            match action.kind {
+                PaletteKind::ModeText => self.mode = Mode::Text,
+                PaletteKind::ModeGraph => self.mode = Mode::Graph,
+                PaletteKind::FocusSearch => self.search_focus = true,
+                PaletteKind::OpenRepo => self.show_open_popup = true,
+                PaletteKind::ExportPng => self.export_png(ctx),
+                PaletteKind::ExportMd => self.export_markdown(),
+                PaletteKind::Shortcuts => self.show_shortcuts = !self.show_shortcuts,
+                PaletteKind::ClearSelection => self.clear_transient(),
+            }
+        }
+    }
+
+    /// Keyboard-shortcut overlay (`?`) — laid out as a two-column grid.
+    fn shortcuts_window(&mut self, ctx: &egui::Context) {
+        if !self.show_shortcuts {
+            return;
+        }
+        let mut open = true;
+        egui::Window::new("Keyboard shortcuts")
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .show(ctx, |ui| {
+                egui::Grid::new("shortcut-grid")
+                    .num_columns(2)
+                    .spacing([theme::SPACE_6, theme::SPACE_1])
+                    .show(ui, |ui| {
+                        for (keys, desc) in [
+                            ("Tab", "Toggle Text ⇄ Graph"),
+                            ("Ctrl+K", "Command palette"),
+                            ("/", "Focus search"),
+                            ("j / k", "Move through sidebar lists"),
+                            ("Enter", "Jump to / select"),
+                            ("g", "Focus graph"),
+                            ("Esc", "Clear selection / trace / dialogs"),
+                            ("Ctrl+S", "Save the edited file"),
+                            ("?", "Show this overlay"),
+                        ] {
+                            ui.monospace(egui::RichText::new(keys).color(theme::ACCENT));
+                            ui.label(egui::RichText::new(desc).color(theme::TEXT_SECONDARY));
+                            ui.end_row();
+                        }
+                    });
+            });
+        self.show_shortcuts = open;
+    }
+
+    /// Centered progress overlay while indexing (feedback principle).
+    fn progress_overlay(&mut self, ui: &egui::Ui) {
+        if self.index.is_some() || self.error.is_some() {
+            return;
+        }
+        let done = self.progress.lock().unwrap().done;
+        egui::Area::new(egui::Id::new("progress-overlay"))
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ui.ctx(), |ui| {
+                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    ui.set_min_width(200.0);
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        ui.label(if done > 0 {
+                            format!("indexing {done} files…")
+                        } else {
+                            "indexing…".to_string()
+                        });
+                    });
+                });
+            });
+    }
 }
 
 impl eframe::App for App {
@@ -413,102 +655,159 @@ impl eframe::App for App {
         self.handle_keyboard(&ctx);
         self.consume_screenshot_event(&ctx);
 
+        // Top toolbar strip.
+        egui::Frame::new()
+            .fill(theme::SURFACE_E0)
+            .inner_margin(egui::Margin::symmetric(
+                theme::SPACE_3 as i8,
+                theme::SPACE_2 as i8,
+            ))
+            .show(ui, |ui| {
+                ui.set_min_height(theme::TOOLBAR_HEIGHT - theme::SPACE_4);
+                self.toolbar(ui);
+            });
+        ui.separator();
+
+        // Left sidebar.
         egui::Panel::left("sidebar")
             .resizable(true)
-            .default_size(260.0)
+            .default_size(theme::SIDEBAR_DEFAULT)
+            .min_size(theme::SIDEBAR_MIN)
+            .max_size(theme::SIDEBAR_MAX)
             .show(ui, |ui| {
+                ui.add_space(theme::SPACE_1);
                 sidebar::ui(ui, self);
             });
 
-        egui::Panel::top("tabs").show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.selectable_value(&mut self.mode, Mode::Text, "Text");
-                ui.selectable_value(&mut self.mode, Mode::Graph, "Graph");
-                ui.separator();
-                ui.menu_button("export ▾", |ui| {
-                    if ui.button("window → PNG").clicked() {
-                        self.export_png(ui.ctx());
-                        ui.close();
-                    }
-                    if ui.button("tour + health → Markdown").clicked() {
-                        self.export_markdown();
-                        ui.close();
-                    }
-                });
-                ui.separator();
-                if let Some(idx) = &self.index {
-                    let m = repowalk_core::metrics::compute(idx);
-                    ui.label(format!(
-                        "{} files · {} LOC · {} cycles",
-                        idx.files.len(),
-                        m.total_loc,
-                        m.cycles.len()
-                    ));
-                    ui.separator();
-                    ui.weak(repowalk_core::VERSION);
-                }
-                if !self.status.is_empty() {
-                    ui.separator();
-                    ui.weak(&self.status);
-                }
-            });
-        });
-
-        if let Some(err) = self.error.clone() {
-            egui::Panel::bottom("errors").show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.colored_label(egui::Color32::from_rgb(224, 108, 117), err);
-                    if ui.button("dismiss").clicked() {
-                        self.error = None;
-                    }
-                });
-            });
-        }
-
+        // Central pane: Text | Graph.
         match self.mode {
             Mode::Text => {
-                egui::CentralPanel::default_margins().show(ui, |ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    ui.add_space(theme::SPACE_1);
                     text::ui(ui, self);
                 });
             }
             Mode::Graph => {
-                egui::CentralPanel::default_margins().show(ui, |ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    ui.add_space(theme::SPACE_1);
                     graph::ui(ui, self);
                 });
             }
         }
 
-        if self.show_shortcuts {
-            egui::Window::new("Keyboard shortcuts").show(ui.ctx(), |ui| {
-                ui.monospace(
-                    "Tab    toggle Text ⇄ Graph\n\
-                     /      focus search\n\
-                     j/k    move through sidebar lists\n\
-                     Enter  jump to / select\n\
-                     g      focus graph\n\
-                     Esc    clear selection / trace\n\
-                     Ctrl+S save the edited file\n\
-                     ?      show this overlay",
-                );
+        // Bottom status bar.
+        ui.separator();
+        egui::Frame::new()
+            .fill(theme::SURFACE_E0)
+            .inner_margin(egui::Margin::symmetric(
+                theme::SPACE_3 as i8,
+                theme::SPACE_1 as i8,
+            ))
+            .show(ui, |ui| {
+                ui.set_min_height(theme::STATUS_BAR_HEIGHT - theme::SPACE_2);
+                self.status_bar(ui);
             });
-        }
 
-        if self.index.is_none() && self.error.is_none() {
-            let done = self.progress.lock().unwrap().done;
-            egui::Area::new(egui::Id::new("progress-overlay"))
-                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-                .show(ui.ctx(), |ui| {
-                    egui::Frame::popup(ui.style()).show(ui, |ui| {
-                        ui.label(format!(
-                            "indexing {} files…",
-                            if done > 0 {
-                                done.to_string()
-                            } else {
-                                "…".to_string()
-                            }
-                        ));
-                    });
-                });
-        }
+        // Overlays.
+        self.open_popup(&ctx);
+        self.command_palette(&ctx);
+        self.shortcuts_window(&ctx);
+        self.progress_overlay(ui);
     }
+}
+
+// ── Toolbar helpers ─────────────────────────────────────────────────────────
+
+/// Segmented-control segment for Text/Graph mode (active = accent top-border).
+fn mode_segment(ui: &mut egui::Ui, label: &str, shortcut: &str, active: bool) -> egui::Response {
+    let text = if active {
+        egui::RichText::new(label)
+            .color(theme::TEXT_PRIMARY)
+            .strong()
+    } else {
+        egui::RichText::new(label).color(theme::TEXT_SECONDARY)
+    };
+    let resp = ui.add(egui::Button::new(text).frame(false));
+    let resp = resp.on_hover_text(format!("{label} mode ({shortcut})"));
+    if active {
+        let rect = resp.rect;
+        ui.painter().rect_filled(
+            egui::Rect::from_min_max(egui::pos2(rect.min.x, rect.max.y - 2.0), rect.max),
+            egui::CornerRadius::ZERO,
+            theme::ACCENT,
+        );
+    }
+    resp
+}
+
+/// Plain toolbar button with optional hover tooltip.
+fn toolbar_button(ui: &mut egui::Ui, label: &str, tooltip: &str) -> egui::Response {
+    ui.add(egui::Button::new(
+        egui::RichText::new(label).color(theme::TEXT_SECONDARY),
+    ))
+    .on_hover_text(tooltip)
+}
+
+// ── Command palette model ───────────────────────────────────────────────────
+
+enum PaletteKind {
+    ModeText,
+    ModeGraph,
+    FocusSearch,
+    OpenRepo,
+    ExportPng,
+    ExportMd,
+    Shortcuts,
+    ClearSelection,
+}
+
+struct PaletteAction {
+    label: &'static str,
+    hint: &'static str,
+    kind: PaletteKind,
+}
+
+fn palette_actions(_app: &App) -> Vec<PaletteAction> {
+    vec![
+        PaletteAction {
+            label: "Switch to Text mode",
+            hint: "Tab",
+            kind: PaletteKind::ModeText,
+        },
+        PaletteAction {
+            label: "Switch to Graph mode",
+            hint: "Tab / g",
+            kind: PaletteKind::ModeGraph,
+        },
+        PaletteAction {
+            label: "Focus search",
+            hint: "/",
+            kind: PaletteKind::FocusSearch,
+        },
+        PaletteAction {
+            label: "Open repository…",
+            hint: "",
+            kind: PaletteKind::OpenRepo,
+        },
+        PaletteAction {
+            label: "Export window → PNG",
+            hint: "",
+            kind: PaletteKind::ExportPng,
+        },
+        PaletteAction {
+            label: "Export tour+health → Markdown",
+            hint: "",
+            kind: PaletteKind::ExportMd,
+        },
+        PaletteAction {
+            label: "Toggle keyboard shortcuts",
+            hint: "?",
+            kind: PaletteKind::Shortcuts,
+        },
+        PaletteAction {
+            label: "Clear selection / trace",
+            hint: "Esc",
+            kind: PaletteKind::ClearSelection,
+        },
+    ]
 }
