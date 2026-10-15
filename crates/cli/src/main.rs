@@ -1,6 +1,8 @@
 //! repowalk CLI — thin renderer over repowalk-core (plan §3.3).
 //! OWNER: RSK-11 (main dispatch + render.rs helpers).
 use clap::{Parser, Subcommand};
+use commands::complexity::ComplexityBy;
+use commands::graph::{GraphFormat, GraphScope};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -38,9 +40,69 @@ pub enum Cmd {
         /// Repository path to index (trace mode)
         path: Option<PathBuf>,
     },
+    /// Architecture report (Markdown by default; --json for the underlying data)
+    Report {
+        /// Markdown output (the default; explicit for scripts)
+        #[arg(long)]
+        md: bool,
+        /// Emit the underlying data as JSON instead of Markdown
+        #[arg(long)]
+        json: bool,
+        /// Repository path to index
+        path: PathBuf,
+    },
+    /// Render one diagram to stdout (Mermaid/DOT/SVG)
+    Graph {
+        /// Diagram backend
+        #[arg(long, value_enum, default_value = "mermaid")]
+        format: GraphFormat,
+        /// Which diagram to draw
+        #[arg(long, value_enum, default_value = "call")]
+        scope: GraphScope,
+        /// Symbol id/name (required by --scope cfg; rejected elsewhere)
+        #[arg(long)]
+        symbol: Option<String>,
+        /// Repository path to index
+        path: PathBuf,
+    },
+    /// Per-file variable table: name, kind, type, reads/writes/uses, decl line
+    Variables {
+        /// File to inspect (repo-relative path, or a unique suffix)
+        file: String,
+        /// Emit JSON instead of a table
+        #[arg(long)]
+        json: bool,
+        /// Repository path to index
+        path: PathBuf,
+    },
+    /// Sorted complexity: hotspots per function, or a per-file roll-up
+    Complexity {
+        /// Rank by function or by file
+        #[arg(long, value_enum, default_value = "function")]
+        by: ComplexityBy,
+        /// Cap the result (0 = all); applies to both views
+        #[arg(long, default_value_t = 20)]
+        top: usize,
+        /// Emit JSON instead of a table
+        #[arg(long)]
+        json: bool,
+        /// Repository path to index
+        path: PathBuf,
+    },
+    /// All use sites of a symbol or variable id: file:line + snippet
+    Refs {
+        /// Symbol id/name or variable id/name
+        target: String,
+        /// Emit JSON instead of a table
+        #[arg(long)]
+        json: bool,
+        /// Repository path to index
+        path: PathBuf,
+    },
 }
 
 mod commands;
+mod json;
 mod render;
 
 fn main() -> anyhow::Result<()> {
@@ -57,5 +119,20 @@ fn main() -> anyhow::Result<()> {
             md,
             path,
         } => commands::flow::run(a, b, from, depth, md, path),
+        Cmd::Report { md, json, path } => commands::report::run(md, json, &path),
+        Cmd::Graph {
+            format,
+            scope,
+            symbol,
+            path,
+        } => commands::graph::run(format, scope, symbol.as_deref(), &path),
+        Cmd::Variables { file, json, path } => commands::variables::run(&file, json, &path),
+        Cmd::Complexity {
+            by,
+            top,
+            json,
+            path,
+        } => commands::complexity::run(by, top, json, &path),
+        Cmd::Refs { target, json, path } => commands::refs::run(&target, json, &path),
     }
 }
