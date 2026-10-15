@@ -20,4 +20,4 @@ jobs:
             !vendor/**
             !target/**
             !andrej-karpathy-skills-main/**
-          config: .markdown-lint.yml
+          config: .markdownlint.json
