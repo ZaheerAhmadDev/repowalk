@@ -9,6 +9,10 @@ pub mod mermaid;
 pub mod report;
 pub mod svg;
 
+/// Internal, backend-neutral graph model + helpers shared by the emitters.
+/// Private: the public surface of this module stays the four `render` fns.
+mod util;
+
 use crate::analysis::Analysis;
 use crate::model::Index;
 
