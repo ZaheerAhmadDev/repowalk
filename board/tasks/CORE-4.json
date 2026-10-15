@@ -3,13 +3,13 @@
   "title": "core: complexity aggregates + module DAG (complexity.rs, modules.rs)",
   "phase": "implementation",
   "skill": "sdlc-implement",
-  "status": "todo",
-  "assignee": null,
-  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W2]\nSeats: CORE-03, CORE-04\ncrates/core/src/complexity.rs: aggregates over Analysis::cfgs — per-function complexity sorted, per-file sum/max, nesting extremes, hotspot ranking, unused-variable list, most-used variables, shadowed names (F6 surface). crates/core/src/modules.rs: build ModuleNode/ModuleEdge (Crate/Dir/Module/File + Import/Submodule with counts) from the index's FileEntry tree + import edges; deterministic ids, cycle-friendly. Both consume the frozen analysis.rs contract. Owner: crates/core/src/{complexity,modules}.rs + lib.rs lines. Verify: cargo test -p repowalk-core (inline tests: complexity ranking on fixtures, module tree of fixtures/sample has expected nodes/edges).",
+  "status": "done",
+  "assignee": "TL-CORE",
+  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W2]\nSeats: CORE-03, CORE-04\ncrates/core/src/complexity.rs: aggregates over Analysis::cfgs — per-function complexity sorted, per-file sum/max, nesting extremes, hotspot ranking, unused-variable list, most-used variables, shadowed names (F6 surface). crates/core/src/modules.rs: build ModuleNode/ModuleEdge (Crate/Dir/Module/File + Import/Submodule with counts) from the index's FileEntry tree + import edges; deterministic ids, cycle-friendly. Both consume the frozen analysis.rs contract. Owner: crates/core/src/{complexity,modules}.rs + lib.rs lines. Verify: cargo test -p repowalk-core (inline tests: complexity ranking on fixtures, module tree of fixtures/sample has expected nodes/edges).\n\nEVIDENCE:\nFiles: crates/core/src/complexity.rs (hotspots/nested/per_file/unused_variables + parse_symbol_id, 6 tests); crates/core/src/modules.rs (build/cycles + helpers, 6 tests). No other file touched.\ncargo fmt --all -- --check -> exit 0.\ncargo clippy -p repowalk-core --all-targets -- -D warnings -> exit 0, no warnings.\ncargo test -p repowalk-core -> lib 115 passed/0 failed; integration 27 passed (export_emitters 10, contract 6, grammar_abi 4, analysis_golden 3, walk_metrics 2, golden 1, zz_scratch 1); 0 doctests. complexity+modules contribute 12 green tests.\nRepo example (pipeline::build_index on this repo) -> modules::build: 390 nodes, 468 edges. crate \"core\": NODE Crate core loc=13274 syms=662; NODE Module crates/core/src loc=11880 syms=605; NODE Module crates/core/src/analyze loc=4768 syms=215; NODE Dir crates/core/tests loc=1375 syms=57; one File node per source file. Import edges file->file, e.g. crates/core/src/analyze/mod.rs -> crates/core/src/model.rs Import x2; crates/core/src/analyze/rust.rs -> crates/core/src/analysis.rs Import x2. cycles(nodes,edges) on the repo = [[fixtures/sample/a.rs, fixtures/sample/b.rs]].\nDeterminism: nodes sorted (Crate,Dir,Module,File then id), edges sorted by (from,to,kind); empty index -> empty vectors; self-imports/cycles/files without dirs handled without panic.\nNote: the core lib was transiently unbuildable due to crates/core/src/export/mermaid.rs:68 (PROD-2 mid-edit); PROD-2 landed its fix and every gate above passed afterward.\n",
   "artifacts": [
     "crates/core/src/complexity.rs",
     "crates/core/src/modules.rs"
   ],
   "created": "2026-10-15T14:11:51Z",
-  "updated": "2026-10-15T14:11:51Z"
+  "updated": "2026-10-15T14:44:53Z"
 }
