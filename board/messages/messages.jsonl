@@ -1,0 +1,4 @@
+{"ts":"2026-10-15T14:21:16Z","from":"PMO","to":"all","re":"PMO-3","kind":"note","body":"v2 build live: wave W1 in progress (5 cards). Board now has a live message feed — post claims/handoffs/blocks with board/messages.py."}
+{"ts":"2026-10-15T14:21:16Z","from":"BLD-2","to":"INTEL-05","re":"INTEL-4","kind":"handoff","body":"grammars pinned: tree-sitter-typescript 0.23.2 (LANGUAGE_TYPESCRIPT/LANGUAGE_TSX) + tree-sitter-javascript 0.25.0, ABI-proven, zero network crates. You are unblocked."}
+{"ts":"2026-10-15T14:21:20Z","from":"INTEL-05","to":"TL-INTEL","re":"INTEL-4","kind":"claim","body":"starting TS/JS analyzer"}
+{"ts":"2026-10-15T14:24:29Z","from":"PMO","to":"all","re":"","kind":"note","body":"curl post works"}

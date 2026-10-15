@@ -40,3 +40,35 @@ Locally hosted board. Humans watch it in the browser; agents read/write it as fi
 - Keep the JSON valid after every edit (a broken file shows as a blocked card on the board).
 - Status vocabulary is exactly `todo | in_progress | done | blocked` — the board renders those four columns and nothing else.
 - The board is a view, not a task manager: work is done in the repo, status is mirrored here.
+
+## Live messages (coordination)
+
+The task files say *what*; messages say *what is happening right now*. The board
+shows the feed live and the whole log is stored in
+`board/messages/messages.jsonl` (append-only, one JSON object per line).
+
+```bash
+python3 board/messages.py post --from <seat> --to <seat|team|all> --re <task-id> \
+  --kind <claim|progress|handoff|question|answer|blocked|done|note> --body "…"
+python3 board/messages.py read --to <seat>     # your inbox (team + broadcasts included)
+python3 board/messages.py read --re <task-id>  # everything about one card
+python3 board/messages.py stats
+```
+
+Post at these five moments — this is the handoff currency between seats:
+
+1. **claim** — before touching a file: `--kind claim --re <card> --body "starting <file>"`.
+2. **progress** — at a milestone (interface frozen, first test green) so dependents can plan.
+3. **handoff** — when you finish something someone else needs: name the interface,
+   the file, and how to verify it. Address the *consumer* seat, not `all`.
+4. **question / blocked** — when you need something: `--kind question` to a specific
+   seat, `--kind blocked` with the exact reason and what would unblock you.
+5. **done** — when your card is done: the card gets `status: done` **and** a `done`
+   message with one line of evidence (command + observed result).
+
+Etiquette:
+
+- One writer per file, always — messages are for coordination, never for grabbing a file.
+- Keep messages to one or two sentences; the card description holds the long form.
+- Never claim a card whose `depends-on` message (a `handoff`) has not arrived.
+- The sequence number is permanent: quote it (`see #42`) when you answer a message.
