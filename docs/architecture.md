@@ -365,3 +365,28 @@ VER; a batch closes only when all five are green on the committed tree):
   producer hands off.
 - Board tasks (`board/tasks/*.json`) are the execution record; every task
   carries its verify command.
+
+## Analyzer output semantics (as delivered, batch B1)
+
+Notes the diagram/refs/report consumers must code against — recorded by the
+integrator from the analyzer handoffs, not inferred:
+
+- **`UseSite.target` is not always an id.** Resolved calls/type-refs/fields carry a
+  canonical symbol id (`file:line`); unresolved ones fall back to the **raw name**.
+  Consumers must test membership against the symbol-id set and render unresolved
+  uses as unresolved (the dashed `?` honesty rule, risk R-20) instead of pretending.
+- **`TypeEdgeKind::Impl` mixes two real id namespaces**: `from` is the impl block's
+  symbol id (`file:line`), `to` is the type id (`file:name`). Both exist; do not
+  normalize either.
+- **Compound assignment counts double but emits once**: `x += 1` increments
+  `reads` *and* `writes` but emits a single `VarWrite` use site, so
+  `uses < reads + writes` is normal for variables with compound writes.
+- **Pattern bindings are not variables (yet)**: `for`/`match`/`if let` bindings are
+  not modeled as `Variable`s, so they never appear in the variables table. A
+  recorded limitation, not a bug — it is why the Rust golden excludes `i`.
+- **`Variable.type_name` is annotation-only**: no inference. `None` means "the source
+  did not state a type", never "unknown type".
+- **Silent-language-drop guard (risk R-27)**: `pipeline::build_index` dispatched only
+  rust/python at B1, so TS/JS indexed as 0 symbols while reporting the language as
+  valid. Fixed under card CORE-8; until that lands, trust `learn`, not `build_index`,
+  for language coverage.
