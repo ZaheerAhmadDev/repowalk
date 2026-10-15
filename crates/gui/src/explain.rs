@@ -2,7 +2,7 @@
 //! nested items — every link drives the shared `Selection`. OWNER: RSK-21.
 use eframe::egui;
 
-use crate::app::{App, Selection};
+use crate::app::{App, Mode, Selection, TracePick};
 use crate::theme;
 use repowalk_core::model::{EdgeKind, Index, SymbolKind};
 
@@ -103,6 +103,52 @@ pub fn card(ui: &mut egui::Ui, app: &mut App) {
                         .size(theme::FONT_SMALL)
                         .color(theme::TEXT_MUTED),
                 );
+            });
+
+            ui.add_space(theme::SPACE_2);
+            ui.horizontal(|ui| {
+                if ui
+                    .small_button("Trace from here")
+                    .on_hover_text(
+                        "Set A to this symbol and open Flow mode — \
+                         then pick B to play the workflow.",
+                    )
+                    .clicked()
+                {
+                    let b = app
+                        .trace
+                        .as_ref()
+                        .map(|(_, b)| b.clone())
+                        .unwrap_or_default();
+                    app.trace = Some((sym.id.clone(), b.clone()));
+                    app.flow.pick = if b.is_empty() {
+                        TracePick::PickB
+                    } else {
+                        TracePick::None
+                    };
+                    app.mode = Mode::Flow;
+                }
+                if ui
+                    .small_button("Trace to here")
+                    .on_hover_text(
+                        "Set B to this symbol and open Flow mode — \
+                         then pick A to play the workflow.",
+                    )
+                    .clicked()
+                {
+                    let a = app
+                        .trace
+                        .as_ref()
+                        .map(|(a, _)| a.clone())
+                        .unwrap_or_default();
+                    app.trace = Some((a.clone(), sym.id.clone()));
+                    app.flow.pick = if a.is_empty() {
+                        TracePick::PickA
+                    } else {
+                        TracePick::None
+                    };
+                    app.mode = Mode::Flow;
+                }
             });
 
             section(ui, "called by", |ui| callers(ui, app, &idx, &sym.id));
