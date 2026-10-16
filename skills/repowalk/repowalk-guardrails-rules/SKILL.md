@@ -13,10 +13,9 @@ evaluates them against the index + analysis and emits deterministic **findings**
 > findings, ordered `(severity, file, line, rule, message)`, and every `Error`
 > makes `report` exit `1`.** Source of truth: `crates/core/src/rules.rs`.
 
-Read `skills/repowalk/repowalk-metrics/SKILL.md` for the numbers the rules consume
-(they are *not* re-derived here); read
-`skills/repowalk/repowalk-no-network-guardrails/SKILL.md` for the zero-network
-invariant — a rules.json can fence imports but can never prove "no sockets".
+Read `repowalk-metrics` for the numbers rules consume (not re-derived here) and
+`repowalk-no-network-guardrails` for the zero-network invariant — a `rules.json`
+fences imports but can never prove "no sockets".
 
 ## Schema — `rules.json` (all fields optional)
 
@@ -44,16 +43,15 @@ This repo's committed sample (`rules.json` at the repo root):
 
 ## What a violation is — `Finding`
 
-`struct Finding { rule, severity, file, line, message }` (`Severity ∈ {Error, Warning}`).
-`Severity` derives `Ord` with `Error` declared first, so **`Error` sorts before
-`Warning`**. Both variants serialize as plain strings (`"Error"`/`"Warning"`).
+`struct Finding { rule, severity, file, line, message }`. `Severity` derives `Ord`
+with `Error` first, so **`Error` sorts before `Warning`**; both serialize as `"Error"`/`"Warning"`.
 
 | field | type | meaning |
 |---|---|---|
 | `rule` | string | stable id — see below |
 | `severity` | `"Error"` \| `"Warning"` | `Error` fails the build; `Warning` is advisory |
 | `file` | string | repo-relative file path; for `no_cycles` it is the first module-node id |
-| `line` | number | 1-based; **`0` when the rule has no line** |
+| `line` | number | 1-based; **`0` when the rule has no line** (`Import` has no line field, so imports/cycles/LOC are `0`) |
 | `message` | string | human-readable explanation, includes the symbol/edge |
 
 | rule | id shape | line |
@@ -62,8 +60,6 @@ This repo's committed sample (`rules.json` at the repo root):
 | `max_cyclomatic` | `max_cyclomatic` | the function's line (`complexity::parse_symbol_id`) |
 | `max_file_loc` | `max_file_loc` | always `0` |
 | `no_cycles` | `no_cycles {glob}` | always `0` |
-
-`Import` has no line field, which is why import and cycle findings carry `line: 0`.
 
 ## Severity effect (the exit-code contract)
 
@@ -89,10 +85,9 @@ Patterns are matched against **labels**, not bare paths, with `rules::glob_match
 | importing file (`from`) | repo-relative path, every ancestor dir, crate dir name (`crates/core/…` → `core`), repo dir name |
 | imported target (`to`) | raw target, brace-stripped head (`a::{b}` → `a`), separator-normalised slash form (`crate::a::b` → `a/b`), its first segment, a crate-directory alias (`repowalk_gui` → `gui`), and — when the target resolves to a known file — the same path/ancestor/crate labels |
 
-A `forbid_imports` pair matches when **any** from-label matches `from_glob` **and**
-**any** to-label matches `to_glob`. `no_cycles` matches each `ModuleNode.id`
-directly (crate node ids are names like `core`; file/dir ids are paths). A set of
-fewer than two selected nodes is skipped.
+A pair matches when **any** from-label matches `from_glob` **and** any to-label
+matches `to_glob`. `no_cycles` matches each `ModuleNode.id` (crate ids are names
+like `core`; file/dir ids are paths); a set with fewer than two nodes is skipped.
 
 ## Engine — entry points, pipeline, cache, errors
 
@@ -118,9 +113,9 @@ Public surface (`crates/core/src/rules.rs`, re-exported via `pub mod rules`):
 - **Ordering (determinism):** `check` sorts by
   `(severity, file, line, rule, message)`. Consumers must **not** re-sort. Guarded
   by `rules::tests::findings_are_deterministic_regardless_of_input_order`.
-- **Malformed config:** `read()` does `.ok()` → `None` → `Rules::default()`. A
-  missing, unreadable, or corrupt file **never panics** and yields an empty rule
-  set. A corrupt `.repowalk/rules.json` does **not** fall back to the root sample
+- **Malformed config:** `read()` does `.ok()` → `None` → `Rules::default()`; a
+  missing/unreadable/corrupt file **never panics** but yields an empty rule set, and
+  a corrupt `.repowalk/rules.json` does **not** fall back to the root sample
   (`rules::tests::corrupt_rules_file_yields_empty_rules_and_does_not_panic`).
 
 ## How CI consumes it
@@ -170,13 +165,11 @@ expressible in the current schema:
 }
 ```
 
-Partially expressible: "no `std::process::Command` in `core`" is
-`["core","std::process::Command"]` — it fires on a `use std::process::Command;`
-line (the raw target label matches literally) but **not** on a fully-qualified
-inline call, because only `use_declaration`s become `Import` edges. Not
-expressible at all: bans on `unsafe`, `unwrap()`, raw URL strings, parameter
-counts, or feature flags — the schema has no content/regex rule; those stay with
-the zero-network grep gates.
+Partially expressible: `["core","std::process::Command"]` fires on a
+`use std::process::Command;` line (raw target label) but **not** on a
+fully-qualified inline call — only `use_declaration`s become `Import` edges. Not
+expressible at all: `unsafe`, `unwrap()`, raw URLs, parameter counts, feature
+flags; the schema has no content/regex rule, so those stay with the grep gates.
 
 ## Recipe — add a rule kind (checklist)
 
@@ -210,10 +203,9 @@ the zero-network grep gates.
 - **`*` ≠ `**`.** `crates/*/src` is one segment; deep trees need `crates/**/src`.
   No `[]`, `{}`, or escaping exists.
 - **Rules that depend on absent analysis.** `max_cyclomatic` reads `Analysis.cfgs`;
-  a file whose language has no analyzer (R-27: only rust/python/ts/js) yields no
-  CFG and can never trip it. `report` bails early with `no analysis yet` when
-  analyzers produced nothing, so guardrails only run when artifacts exist. The GUI
-  degrades to index-only guardrails and says so.
+  a file whose language has no analyzer (R-27: only rust/python/ts/js) yields no CFG
+  and can never trip it. `report` bails early with `no analysis yet` when analyzers
+  produced nothing; the GUI degrades to index-only guardrails and says so.
 - **Non-deterministic order breaks the contract.** Iterate `BTree*`/sorted inputs
   and never re-sort a returned `Vec<Finding>`; the inline determinism test is the
   regression guard.
@@ -231,11 +223,10 @@ the zero-network grep gates.
 ## Verify
 
 ```bash
-cargo test -p repowalk-core --lib rules                 # engine + loading + globs
-cargo test -p repowalk-cli --test cli_v2_e2e report      # the nonzero-exit contract
+cargo test -p repowalk-core --lib rules                  # engine, loading, globs
+cargo test -p repowalk-cli --test cli_v2_e2e report      # nonzero-exit contract
 cargo run -p repowalk-cli -- report --json . | grep guardrails
-# self-rule over this repo (heavy; cold-learns the tree):
-cargo test -p repowalk-core rules::tests::self_rule -- --ignored --nocapture
+cargo test -p repowalk-core rules::tests::self_rule -- --ignored   # heavy self-rule
 ```
 
 ## Sources
