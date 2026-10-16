@@ -60,6 +60,8 @@ stay **dashed with a `?`** — honesty over fake precision.
 - **working:** v1 graph — force layout, fan-in sizing, module colour, entrypoint
   ring, dashed `?` for non-`Exact` edges — plus the `graph --scope call` CLI for
   all three backends.
-- **in progress (card GRAPH-4):** always-readable real names (LOD), clustering by
-  module, the force/hierarchical/radial layout switch, the filter bar, and
-  call-site edge labels.
+- **shipped (card GRAPH-4):** always-readable real names with zoom level-of-detail
+  (full name at zoom ≥1.15, a short leaf name down to 0.55, ids only in the
+  tooltip), module clustering, an `exact only` confidence filter,
+  search-to-highlight, and a 400-node cap that says what it hid instead of
+  drawing a blank canvas.
