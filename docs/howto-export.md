@@ -87,18 +87,18 @@ PNG export stays.
   Ten tests pass, including `report_has_every_section_and_four_mermaid_blocks`,
   `svg_is_standalone_and_balanced` and `emitters_are_byte_stable`.
 
-- **GUI today (working):** the **Export ▾** menu writes a **PNG** of the window
-  and a **tour + health Markdown** file next to the repo
-  (`crates/gui/src/export/{png,markdown}.rs`).
+- **GUI (working):** the **Export ▾** menu writes a **PNG** of the window, a
+  **tour + health Markdown** file, the **v2 architecture report**
+  (`repowalk-architecture.md`), and the **call graph / types / modules diagrams**
+  as Mermaid (`.mmd`), Graphviz DOT (`.dot`) or SVG — one item per scope, all
+  rendered by the same core emitters the CLI uses, so the file and the terminal
+  output cannot drift. The command palette carries the same entries.
 
-- **In progress:** the GUI export menu entries for the new formats (Mermaid /
-  DOT / SVG / the v2 report) are still to be wired; the CLI exposes all of them
-  today.
-
-## Status at this commit (`ff7f795`, 2026-10-16)
+## Status at this commit (`9171d3a`, 2026-10-16)
 
 - **working:** the Mermaid / DOT / SVG emitters and the Markdown report builder in
-  core, PNG and tour+health Markdown export in the GUI, and the `report` /
-  `graph` CLI commands (Markdown report + all three diagram backends, `--json`).
-- **in progress:** the GUI export menu entries for the new formats. The emitters
-  and the CLI invocation are done (PROD-3).
+  core; the GUI's PNG, tour+health Markdown, architecture report and diagram
+  exports; and the `report` / `graph` CLI commands (Markdown report + all three
+  diagram backends, `--json`, nonzero exit on an `Error` guardrail).
+- **unchanged from v1:** the CLI remains the scripting surface; the GUI writes
+  files next to the repository it has open.
