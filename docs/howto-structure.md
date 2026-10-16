@@ -61,7 +61,7 @@ diagrams:
 - **Product surface (shipped):** **Diagrams → Types** and **Diagrams →
   Modules**, card **GRAPH-3** (`crates/gui/src/diagrams/{types,modules}.rs`).
 
-## Status at this commit (`ff7f795`, 2026-10-16)
+## Status at this release (v2.0.0, 2026-10-16)
 
 - **working:** `types.rs` and `modules.rs` (type graph, module DAG, cycle
   detection), their Mermaid/DOT/SVG emitters, and the `graph --scope

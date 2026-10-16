@@ -81,7 +81,7 @@ for a use the analyzer could not resolve. `references_ex` returns a `RefSet` tha
 splits the two into `resolved` and `by_name`, so the panel and the CLI render
 name-only hits as unresolved (the dashed `?` rule) instead of pretending.
 
-## Status at this commit (`15e22ba`, 2026-10-16)
+## Status at this release (v2.0.0, 2026-10-16)
 
 - **working:** the core lookups in `refs.rs` (10 green tests), the `refs` CLI
   command (table and `--json`), and the linking of a symbol id to its name-only

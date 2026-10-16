@@ -64,7 +64,7 @@ labelled `normal | true | false | back`, and a **cyclomatic complexity** and
   picker from search / an explain card / the variables table. Card **GRAPH-2**
   (`crates/gui/src/diagrams/control.rs`).
 
-## Status at this commit (`ff7f795`, 2026-10-16)
+## Status at this release (v2.0.0, 2026-10-16)
 
 - **working:** CFG extraction for Rust, Python and TS; the golden assertions
   (branch nodes, back edges for loops, cyclomatic and nesting values) pass, and
