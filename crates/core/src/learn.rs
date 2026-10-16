@@ -26,6 +26,16 @@
 //! drop out. [`reanalyzed`] reports how many files the last `learn` re-analyzed
 //! (F10's "observable in logs/UI").
 //!
+//! # Producer revision
+//!
+//! Per-file stamps only catch *input* staleness. When `learn()` itself begins
+//! producing more or different output, every pre-existing cache would still
+//! look like a hit. [`LEARN_REVISION`] is therefore stored at the top level of
+//! the sidecar and must match for any per-file hit; a missing, unparsable, or
+//! different revision re-analyzes everything and rewrites the sidecar. This is
+//! a cache key, not a schema change: `ANALYSIS_VERSION` and `analysis.json`
+//! are untouched.
+//!
 //! # Repo-level module graph
 //!
 //! After the per-file analyze stage this driver runs the repo-level module
@@ -43,6 +53,21 @@ use std::path::{Path, PathBuf};
 
 /// Current on-disk stamp-cache schema (independent of `ANALYSIS_VERSION`).
 const STAMP_VERSION: u32 = 1;
+
+/// Producer revision of the [`learn`] pipeline's output.
+///
+/// **Bump this whenever `learn()`'s output shape or content changes** — a new
+/// artifact field it starts filling, a changed analyzer, a different module
+/// graph. It is a **cache key**, not a schema version: it is persisted only in
+/// the pipeline-internal `.repowalk/analysis-stamps.json` sidecar and never in
+/// `analysis.json`, whose `ANALYSIS_VERSION` stays 1 (that artifact is frozen).
+///
+/// A sidecar written by a different (or pre-revision) pipeline is treated as a
+/// full cache miss, so a stale artifact can never be served silently. Revision
+/// 2 is the first to carry the module graph ([`Analysis::modules`] /
+/// [`Analysis::module_edges`]) that `learn` began building in CORE-9; every
+/// revision-1 cache (which stored an empty graph) must be re-analyzed once.
+pub const LEARN_REVISION: u32 = 2;
 
 /// Progress event for the UI (F1). `done`/`total` are per-phase: `done` starts
 /// at 0 and ends at `total` for every phase. The four counts are running
@@ -69,6 +94,11 @@ struct Stamp {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct StampFile {
     version: u32,
+    /// Producer revision ([`LEARN_REVISION`]) that wrote this sidecar. Pre-revision
+    /// sidecars lack the field ⇒ serde default `0`, which never matches the
+    /// current revision and so forces a full re-analysis.
+    #[serde(default)]
+    revision: u32,
     /// Number of files (re)analyzed by the most recent [`learn`] call.
     reanalyzed: usize,
     /// `repo-relative path -> (mtime, lines)` for every file at that call.
@@ -81,7 +111,8 @@ pub fn stamps_path(root: &Path) -> PathBuf {
 }
 
 /// Number of files the most recent [`learn`] re-analyzed (F10 observable).
-/// `0` when no learn has run yet (or the stamp cache is unreadable).
+/// `0` when no learn has run yet or the sidecar is unreadable/stale (a
+/// revision-mismatched sidecar does not count as a cache hit).
 pub fn reanalyzed(root: &Path) -> usize {
     load_stamps(root).map(|s| s.reanalyzed).unwrap_or(0)
 }
@@ -214,6 +245,7 @@ pub fn learn(root: &Path, progress: &dyn Fn(LearnProgress)) -> anyhow::Result<(I
         root,
         &StampFile {
             version: STAMP_VERSION,
+            revision: LEARN_REVISION,
             reanalyzed: total,
             stamps: current,
         },
@@ -252,7 +284,11 @@ fn symbol_file(id: &str) -> String {
 fn load_stamps(root: &Path) -> Option<StampFile> {
     let bytes = std::fs::read(stamps_path(root)).ok()?;
     let stamps: StampFile = serde_json::from_slice(&bytes).ok()?;
-    (stamps.version == STAMP_VERSION).then_some(stamps)
+    // A sidecar is only usable when both its schema version and its producer
+    // revision match. Anything else — missing, unparsable, or written by an
+    // older pipeline — is a full cache miss: `learn` re-analyzes every file and
+    // rewrites the sidecar at the current revision.
+    (stamps.version == STAMP_VERSION && stamps.revision == LEARN_REVISION).then_some(stamps)
 }
 
 fn save_stamps(root: &Path, stamps: &StampFile) -> anyhow::Result<()> {
@@ -307,6 +343,40 @@ mod tests {
             .map(|p| p.done)
             .max()
             .unwrap_or(0)
+    }
+
+    /// Rewrite the raw stamp sidecar in place. Used to simulate a cache written
+    /// by an older pipeline (force/remove the `revision` field) or to corrupt it.
+    fn rewrite_sidecar(root: &Path, mutate: impl FnOnce(&mut serde_json::Value)) {
+        let path = stamps_path(root);
+        let mut value: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        mutate(&mut value);
+        std::fs::write(&path, serde_json::to_vec(&value).unwrap()).unwrap();
+    }
+
+    /// A throwaway copy of the real `fixtures/sample` repo (files only, so the
+    /// shared `.repowalk` cache is never copied). Lets a test learn the real
+    /// fixture without racing `learns_sample_and_populates_modules`.
+    fn copy_sample_fixture(tag: &str) -> PathBuf {
+        let src = sample_root();
+        let dst = temp_root(tag);
+        for entry in std::fs::read_dir(&src).unwrap() {
+            let entry = entry.unwrap();
+            if entry.file_type().unwrap().is_file() {
+                std::fs::copy(entry.path(), dst.join(entry.file_name())).unwrap();
+            }
+        }
+        dst
+    }
+
+    /// Analyzable files in an index — exactly what `reanalyzed` counts on a full
+    /// (revision-mismatched) pass.
+    fn analyzable_count(idx: &Index) -> usize {
+        idx.files
+            .iter()
+            .filter(|f| crate::analyze::Lang::from_walk(&f.lang).is_some())
+            .count()
     }
 
     #[test]
@@ -541,6 +611,177 @@ mod tests {
         assert_eq!(
             second.module_edges, first.module_edges,
             "warm module edges identical"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // ---- producer revision (CORE-10) -------------------------------------
+
+    #[test]
+    fn stale_revision_forces_full_reanalysis() {
+        let root = temp_root("rev-stale");
+        write_fixture(&root);
+
+        let (idx, first) = learn(&root, &|_| {}).unwrap();
+        let file_count = analyzable_count(&idx);
+        assert_eq!(file_count, 2, "fixture has two analyzable files");
+        assert_eq!(
+            reanalyzed(&root),
+            file_count,
+            "cold learn analyzes all files"
+        );
+
+        // Simulate a cache written by revision 1 (pre-modules output).
+        rewrite_sidecar(&root, |v| {
+            v["revision"] = serde_json::json!(1);
+        });
+
+        let events = learn_events(&root);
+        assert_eq!(
+            reanalyzed(&root),
+            file_count,
+            "a revision-1 sidecar must force re-analysis of every file"
+        );
+        assert_eq!(analyze_done(&events), file_count);
+        assert_eq!(
+            analysis_for(&root).unwrap(),
+            first,
+            "full re-analysis reproduces the same artifact"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn missing_revision_forces_full_reanalysis() {
+        let root = temp_root("rev-absent");
+        write_fixture(&root);
+
+        let (idx, _) = learn(&root, &|_| {}).unwrap();
+        let file_count = analyzable_count(&idx);
+
+        // A pre-revision sidecar simply lacks the field.
+        rewrite_sidecar(&root, |v| {
+            v.as_object_mut().unwrap().remove("revision");
+        });
+
+        let events = learn_events(&root);
+        assert_eq!(
+            reanalyzed(&root),
+            file_count,
+            "an absent revision must force re-analysis of every file"
+        );
+        assert_eq!(analyze_done(&events), file_count);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn current_revision_preserves_incremental_behaviour() {
+        let root = temp_root("rev-incremental");
+        write_fixture(&root);
+        learn(&root, &|_| {}).unwrap();
+
+        // Warm re-learn at the current revision: nothing to do.
+        let warm = learn_events(&root);
+        assert_eq!(analyze_done(&warm), 0, "warm re-learn analyzes 0");
+        assert_eq!(reanalyzed(&root), 0);
+
+        // Touch exactly one file (extra line ⇒ stamp changes regardless of mtime).
+        std::fs::write(
+            root.join("src/main.rs"),
+            "fn main() {\n    let x = 1;\n    let y = 2;\n    println!(\"{}\", x + y);\n}\n",
+        )
+        .unwrap();
+        let touched = learn_events(&root);
+        assert_eq!(
+            analyze_done(&touched),
+            1,
+            "only the touched file is re-analyzed"
+        );
+        assert_eq!(reanalyzed(&root), 1);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn revision_roundtrips_through_sidecar() {
+        let root = temp_root("rev-roundtrip");
+        write_fixture(&root);
+        learn(&root, &|_| {}).unwrap();
+
+        let raw: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(stamps_path(&root)).unwrap()).unwrap();
+        assert_eq!(
+            raw["revision"],
+            serde_json::json!(LEARN_REVISION),
+            "sidecar persists the current producer revision"
+        );
+
+        let loaded = load_stamps(&root).expect("current-revision sidecar is a valid cache");
+        assert_eq!(loaded.revision, LEARN_REVISION);
+        assert_eq!(loaded.version, STAMP_VERSION);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn corrupt_sidecar_forces_full_reanalysis_without_panic() {
+        let root = temp_root("rev-corrupt");
+        write_fixture(&root);
+
+        let (idx, first) = learn(&root, &|_| {}).unwrap();
+        let file_count = analyzable_count(&idx);
+
+        std::fs::write(stamps_path(&root), b"{ not valid json").unwrap();
+
+        let events = learn_events(&root);
+        assert_eq!(
+            reanalyzed(&root),
+            file_count,
+            "a corrupt sidecar must never be a silent hit"
+        );
+        assert_eq!(analyze_done(&events), file_count);
+        assert_eq!(analysis_for(&root).unwrap(), first);
+        // The rewrite healed the sidecar at the current revision.
+        assert_eq!(load_stamps(&root).unwrap().revision, LEARN_REVISION);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The regression this card exists to prevent: a revision-1 cache served
+    /// `modules: []`. After the bump the real fixture's module tree is back and
+    /// the following warm learn is a hit again (0 re-analyzed).
+    #[test]
+    fn sample_fixture_repopulates_modules_after_revision_bump() {
+        let root = copy_sample_fixture("rev-sample");
+        let (idx, _) = learn(&root, &|_| {}).unwrap();
+        let file_count = analyzable_count(&idx);
+        assert!(file_count > 0, "the real fixture has analyzable sources");
+
+        // Exactly the on-disk state DSN-4 hit: stamps present, revision 1.
+        rewrite_sidecar(&root, |v| {
+            v["revision"] = serde_json::json!(1);
+        });
+
+        let (_, after_bump) = learn(&root, &|_| {}).unwrap();
+        assert_eq!(
+            reanalyzed(&root),
+            file_count,
+            "revision 1 ⇒ full re-analysis on the real fixture"
+        );
+        assert!(
+            !after_bump.modules.is_empty(),
+            "Analysis.modules must be non-empty after the bump"
+        );
+
+        let warm = learn_events(&root);
+        assert_eq!(analyze_done(&warm), 0, "warm re-learn after bump is a hit");
+        assert_eq!(reanalyzed(&root), 0);
+        assert!(
+            !analysis_for(&root).unwrap().modules.is_empty(),
+            "the served artifact still carries the module tree"
         );
 
         let _ = std::fs::remove_dir_all(&root);
