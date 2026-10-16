@@ -1,19 +1,27 @@
 //! `repowalk map <path>` — metrics, module tree, health in one screen.
-//! OWNER: RSK-12. Pipeline: repowalk_core::pipeline::build_index → print (render.rs helpers).
+//! OWNER: RSK-12. Pipeline: repowalk_core::pipeline::build_index_with_report →
+//! print (render.rs helpers). The R-27 unsupported-language count is surfaced
+//! in the health line (PROD-5) rather than silently shown as `0 symbols`.
 use repowalk_core::metrics::{self, Metrics};
 use repowalk_core::model::Index;
 use repowalk_core::pipeline;
 use std::path::Path;
 
 pub fn run(path: &Path) -> anyhow::Result<()> {
-    let idx = pipeline::build_index(path, &|_done| {})?;
-    print!("{}", render_map(&idx, &metrics::compute(&idx)));
+    let report = pipeline::build_index_with_report(path, &|_done| {})?;
+    let unsupported = report.unsupported_summary();
+    let m = metrics::compute(&report.index);
+    print!("{}", render_map(&report.index, &m, unsupported.as_deref()));
     Ok(())
 }
 
 /// One-screen orientation: languages, LOC, entrypoints, module tree,
 /// top files, hottest symbols, health line. Deterministic.
-pub fn render_map(idx: &Index, m: &Metrics) -> String {
+///
+/// `unsupported` is the R-27 summary (`"N files not analyzed (lang)"`) from
+/// [`pipeline::IndexReport::unsupported_summary`]; it is appended to the health
+/// line only when non-empty, so a fully-analyzable repo renders byte-identically.
+pub fn render_map(idx: &Index, m: &Metrics, unsupported: Option<&str>) -> String {
     use crate::render::{dim, head, warn};
     let mut out = String::new();
     out.push_str(&head(&format!("repowalk map — {}", idx.repo_root)));
@@ -55,19 +63,26 @@ pub fn render_map(idx: &Index, m: &Metrics) -> String {
         out.push_str(&format!("  {sym} {} {n} callers\n", dim("·")));
     }
 
-    out.push_str(&warn(&health_line(m)));
+    out.push_str(&warn(&health_line(m, unsupported)));
     out.push('\n');
     out
 }
 
 /// One-line health summary: cycles, god-files, unresolved edge %.
-pub fn health_line(m: &Metrics) -> String {
-    format!(
+///
+/// The optional `unsupported` summary (R-27) is appended so a language with no
+/// analyzer is named instead of silently contributing `0 symbols`.
+pub fn health_line(m: &Metrics, unsupported: Option<&str>) -> String {
+    let mut line = format!(
         "● {} cycles · {} god-files · {:.0}% edges unresolved",
         m.cycles.len(),
         m.god_files.len(),
         m.unresolved_pct * 100.0
-    )
+    );
+    if let Some(summary) = unsupported {
+        line.push_str(&format!(" · {summary}"));
+    }
+    line
 }
 
 /// Deterministic directory tree: every directory that holds indexed files,
@@ -122,7 +137,7 @@ mod tests {
         let root = temp_root("content");
         let idx = sample_index(&root);
         let m = metrics::compute(&idx);
-        let out = render_map(&idx, &m);
+        let out = render_map(&idx, &m, None);
 
         assert!(out.contains("Languages:"));
         assert!(out.contains("rust (1 files)"));
@@ -154,9 +169,24 @@ mod tests {
         let root = temp_root("health");
         let idx = sample_index(&root);
         let m = metrics::compute(&idx);
-        let line = health_line(&m);
+        let line = health_line(&m, None);
         assert!(line.starts_with("● "), "{line}");
         assert!(line.contains("0 cycles"), "{line}");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn health_line_names_unsupported_languages_only_when_present() {
+        let root = temp_root("unsupported");
+        let idx = sample_index(&root);
+        let m = metrics::compute(&idx);
+
+        let clean = health_line(&m, None);
+        assert!(!clean.contains("not analyzed"), "{clean}");
+
+        let with = health_line(&m, Some("1 files not analyzed (rb)"));
+        assert!(with.contains("1 files not analyzed (rb)"), "{with}");
+        assert_eq!(with, format!("{clean} · 1 files not analyzed (rb)"));
         let _ = std::fs::remove_dir_all(&root);
     }
 }
