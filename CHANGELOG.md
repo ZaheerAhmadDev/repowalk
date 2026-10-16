@@ -4,17 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project adheres to Semantic Versioning.
 
-## [2.0.0] - unreleased
+## [2.0.0] - 2026-10-16
 
 The v2 **"complete understanding suite"** — F1–F15 from
 [`docs/v2-plan.md`](docs/v2-plan.md). Open any codebase, **learn** it once, then
 read it five ways: **Text**, **Graph**, **Flow**, **Diagrams**, **Report**. Pure
 static analysis: no AI, no network, no API keys.
 
-> The workspace version bump and the `v2.0.0` tag are applied by the integrator
-> at the release commit; nothing in this branch is tagged yet. Human-facing
-> notes, the measured numbers, known-open items and the release checklist live
-> in [`docs/v2-release-notes.md`](docs/v2-release-notes.md).
+> Human-facing notes, the measured numbers, the one known-open item and the
+> release checklist live in
+> [`docs/v2-release-notes.md`](docs/v2-release-notes.md). The workspace version
+> is `2.0.0` at this commit; the tag is `v2.0.0`.
 
 ### Added
 
