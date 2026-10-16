@@ -19,10 +19,8 @@ A guessed API costs a compile cycle on the critical path; a grep costs seconds.
 
 ## Versions and where each was verified
 
-`egui` **0.36.2** (`~/.cargo/registry/.../egui-0.36.2/src/`), `eframe` **0.36.2** (`.../eframe-0.36.2/src/`),
-`egui-wgpu` **0.36.2** (`.../egui-wgpu-0.36.2/src/`), `egui_graphs` **0.32.0**
-(`.../egui_graphs-0.32.0/src/`), `egui_code_editor` **0.4.2** (`vendor/egui_code_editor-0.4.2/`,
-patched), `petgraph` 0.8. Line references below are into those trees.
+`egui`/`eframe`/`egui-wgpu` **0.36.2** and `egui_graphs` **0.32.0** under `~/.cargo/registry/src/index.crates.io-*/`,
+plus `egui_code_editor` **0.4.2** in `vendor/` (patched) and `petgraph` 0.8; line refs below point into them.
 
 ## Panels: layout and ordering
 
@@ -133,16 +131,11 @@ by **typing a path**: `App::repo_input` + `TextEdit` + `app.start_indexing(PathB
 
 ## Repaint and spinners
 
-```rust
-ctx.request_repaint();               // context.rs:1821 — callable from any thread
-ctx.request_repaint_after(Duration); // 1872 — schedule a later frame
-ui.spinner();                        // ui.rs:1965
-```
-
-The index worker holds a cloned `Context` (via `OnceLock`, `app.rs::APP_CTX`) and calls
-`ctx.request_repaint()` per progress tick, so the spinner overlay animates without busy-looping.
-Flow playback calls `ctx.request_repaint_after(PULSE_MS/4)` **only while playing** and requests
-nothing when idle (`flow/playback.rs`).
+`ctx.request_repaint()` (context.rs:1821, callable from any thread) and
+`ctx.request_repaint_after(Duration)` (1872) schedule frames; `ui.spinner()` (ui.rs:1965) draws one.
+The index worker holds a cloned `Context` (via `OnceLock`, `app.rs::APP_CTX`) and repaints per
+progress tick, so the spinner animates without busy-looping. Flow playback repaints (`PULSE_MS/4`)
+**only while playing** and nothing when idle (`flow/playback.rs`).
 
 ## eframe wiring and the wgpu backend
 
