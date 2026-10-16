@@ -419,11 +419,10 @@ integrator from the analyzer handoffs, not inferred:
   recorded limitation, not a bug — it is why the Rust golden excludes `i`.
 - **`Variable.type_name` is annotation-only**: no inference. `None` means "the source
   did not state a type", never "unknown type".
-- **Silent-language-drop (risk R-27) — still open (card CORE-8, `todo`)**: at the
-  current commit `pipeline::build_index` dispatches only rust/python, so TS/JS
-  (and every other language) index as files with 0 symbols / 0 edges while the UI
-  reports the language as valid. `learn::learn` dispatches through
-  `analyze::Lang::from_walk` and **does** cover TS/JS, so the v2 CLI query
-  commands (`report` / `graph` / `variables` / `complexity` / `refs`) are
-  correct; trust `learn`, not `build_index`, for language coverage until CORE-8
-  lands.
+- **Language coverage (risk R-27) — fixed (CORE-8, commit `62e25e6`)**: `build_index`
+  now dispatches through `analyze::{Lang::from_walk, analyze}` like `learn`, so TS/JS
+  extract on every spine; a TS-only fixture went from 0 symbols / 0 edges to
+  3 symbols / 1 edge. Genuinely unsupported languages are reported
+  (`UnsupportedLanguage`, e.g. `1 files not analyzed (go)`) instead of silently
+  contributing zero symbols. `build_index`'s signature is unchanged;
+  `build_index_with_report` is the additive variant that carries the report.

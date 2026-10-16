@@ -62,8 +62,13 @@ UI. Phases: `walk → parse → resolve → analyze → cache`.
   incremental stamp cache (a warm re-learn re-analyzes 0 files; touching one file
   re-analyzes exactly one), and the repo-level module graph wired into the
   artifact.
-- **in progress (card DSN-4):** the learn-progress UI and the Onboarding report
-  panel.
-- **known gap (card CORE-8, still `todo`):** the v1 `pipeline::build_index` path
-  (used by `repowalk map`) still dispatches only rust/python, so TS/JS files index
-  with 0 symbols there; `learn` covers all four languages.
+- **working:** the learn-progress UI (per-phase counts, then the running variable /
+  control-flow totals) and the Onboarding report panel (DSN-4).
+- **fixed (card CORE-8, commit `62e25e6`):** the v1 `pipeline::build_index` path
+  (used by `repowalk map`) now dispatches through `analyze::Lang::from_walk`, so
+  TS/JS extract there too and an unsupported language is reported rather than
+  silently contributing zero symbols.
+- **fixed (card CORE-11, commit `4c5db5c`):** if `.repowalk/analysis.json` is
+  missing, corrupt or version-mismatched, `learn` now treats that as full
+  staleness and re-analyzes every file, instead of rewriting an empty artifact
+  that the next read would serve as truth.
