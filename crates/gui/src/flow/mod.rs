@@ -2,6 +2,7 @@
 //! A→B call trace and an entrypoint wave that fills in layer by layer.
 //! Composes sub-tabs, transport, canvas, and the step-detail panel over
 //! `repowalk_core::flow::{trace, waves}` (CORE-1). OWNER: TL-GRAPH (GRAPH-1).
+pub mod feature;
 pub mod playback;
 pub mod render;
 
@@ -15,16 +16,18 @@ use playback::Playback;
 
 /// Wave expansion rounds beyond the entrypoint (layer count = this + 1).
 const WAVE_MAX_DEPTH: usize = 3;
+/// Feature slices start three call hops below the entry.
+const FEATURE_DEFAULT_DEPTH: usize = 3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum FlowTab {
     #[default]
     Trace,
     Waves,
+    Feature,
 }
 
 /// Flow-mode state owned by `App`.
-#[derive(Default)]
 pub struct FlowState {
     pub tab: FlowTab,
     /// Trace endpoints — seeded from `app.trace` (the graph trace picker).
@@ -32,6 +35,15 @@ pub struct FlowState {
     pub trace_b: String,
     /// Wave entrypoint — seeded from the current symbol selection.
     pub wave_source: String,
+    /// Feature-tab entrypoint symbol id. Never seeded from the selection:
+    /// clicking a slice step selects a symbol, which must not re-slice the view.
+    pub feature_entry: String,
+    /// Feature call-tree depth cap (hops below the entry).
+    pub feature_depth: usize,
+    /// Fuzzy query for the Feature "any symbol" entry search.
+    pub feature_query: String,
+    /// Feature coverage scope: `true` = whole index, `false` = the current slice.
+    pub feature_scope_all: bool,
     pub playback: Playback,
     /// Which endpoint the sidebar picker is waiting for.
     pub pick: TracePick,
@@ -42,6 +54,27 @@ pub struct FlowState {
     /// Last values adopted from the app, so seeding rewinds only on change.
     seeded_trace: Option<(String, String)>,
     seeded_symbol: Option<String>,
+}
+
+impl Default for FlowState {
+    fn default() -> Self {
+        Self {
+            tab: FlowTab::default(),
+            trace_a: String::new(),
+            trace_b: String::new(),
+            wave_source: String::new(),
+            feature_entry: String::new(),
+            feature_depth: FEATURE_DEFAULT_DEPTH,
+            feature_query: String::new(),
+            feature_scope_all: true,
+            playback: Playback::default(),
+            pick: TracePick::default(),
+            pick_query: String::new(),
+            detail: None,
+            seeded_trace: None,
+            seeded_symbol: None,
+        }
+    }
 }
 
 impl FlowState {
@@ -74,26 +107,36 @@ impl FlowState {
     }
 }
 
-/// The step sequence for the active sub-tab: one step per trace symbol, or
-/// one per wave layer. The empty variants are the honest "why not" states.
+/// The step sequence for the active sub-tab: one step per trace symbol, one per
+/// wave layer, or the ordered core feature slice. The empty variants are the
+/// honest "why not" states.
 pub enum Sequence {
-    /// No A or B picked (or no wave source) yet.
+    /// No A or B picked (or no wave source / feature entry) yet.
     PickEndpoints,
     /// A and B picked but BFS found no call path between them.
     NoPath,
     /// Wave source picked but it is not an endpoint of any call edge.
     UnknownSource,
+    /// Feature entry set but it is not a symbol declared in this index
+    /// (`feature::slice` returns `None` for exactly this case).
+    UnknownFeatureEntry,
     Path(Vec<String>),
     Waves(Vec<Vec<String>>),
+    /// Ordered feature slice (`repowalk_core::feature::slice`).
+    Feature(repowalk_core::feature::FeatureSlice),
 }
 
 impl Sequence {
-    /// Playback length: symbols in a trace, layers in a wave.
+    /// Playback length: symbols in a trace, layers in a wave, steps in a slice.
     pub fn step_count(&self) -> usize {
         match self {
             Sequence::Path(p) => p.len(),
             Sequence::Waves(l) => l.len(),
-            Sequence::PickEndpoints | Sequence::NoPath | Sequence::UnknownSource => 0,
+            Sequence::Feature(s) => s.steps.len(),
+            Sequence::PickEndpoints
+            | Sequence::NoPath
+            | Sequence::UnknownSource
+            | Sequence::UnknownFeatureEntry => 0,
         }
     }
 
@@ -103,13 +146,17 @@ impl Sequence {
             Sequence::Path(p) => p.get(step).cloned(),
             // Waves: the entrypoint is the anchor; chips inspect any member.
             Sequence::Waves(l) => l.first().and_then(|src| src.first()).cloned(),
-            Sequence::PickEndpoints | Sequence::NoPath | Sequence::UnknownSource => None,
+            Sequence::Feature(s) => s.steps.get(step).map(|st| st.symbol.clone()),
+            Sequence::PickEndpoints
+            | Sequence::NoPath
+            | Sequence::UnknownSource
+            | Sequence::UnknownFeatureEntry => None,
         }
     }
 }
 
 /// Resolve the active tab's picks into a playback sequence via the shared
-/// core BFS primitives.
+/// core primitives.
 pub fn sequence(idx: &Index, flow: &FlowState) -> Sequence {
     match flow.tab {
         FlowTab::Trace => {
@@ -132,6 +179,15 @@ pub fn sequence(idx: &Index, flow: &FlowState) -> Sequence {
                 Sequence::Waves(layers)
             }
         }
+        FlowTab::Feature => {
+            if flow.feature_entry.is_empty() {
+                return Sequence::PickEndpoints;
+            }
+            match repowalk_core::feature::slice(idx, &flow.feature_entry, flow.feature_depth) {
+                Some(slice) => Sequence::Feature(slice),
+                None => Sequence::UnknownFeatureEntry,
+            }
+        }
     }
 }
 
@@ -144,6 +200,10 @@ pub fn ui(ctx: &egui::Context, ui: &mut egui::Ui, app: &mut App) {
     app.flow.sync(&app.trace, app.selection.as_ref());
 
     sub_tabs(ui, &mut app.flow);
+    if app.flow.tab == FlowTab::Feature {
+        feature::picker(ui, &mut app.flow, &idx);
+        ui.add_space(theme::SPACE_2);
+    }
 
     let seq = sequence(&idx, &app.flow);
     let steps = seq.step_count();
@@ -175,9 +235,33 @@ pub fn ui(ctx: &egui::Context, ui: &mut egui::Ui, app: &mut App) {
                 app.flow.detail = Some(id);
             }
         }
+        Sequence::Feature(slice) => {
+            if let Some(pick) = feature::ui(
+                ui,
+                &mut app.flow,
+                &idx,
+                slice,
+                app.selection.as_ref(),
+                step,
+                progress,
+            ) {
+                match pick {
+                    feature::FeaturePick::Step(i, id) => {
+                        app.flow.playback.goto_step(i, steps);
+                        app.flow.detail = Some(id.clone());
+                        app.select(Selection::Symbol(id));
+                    }
+                    feature::FeaturePick::Symbol(id) => {
+                        app.flow.detail = Some(id.clone());
+                        app.select(Selection::Symbol(id));
+                    }
+                }
+            }
+        }
         Sequence::PickEndpoints => match app.flow.tab {
             FlowTab::Trace => hint(ui, "pick A and B in the sidebar Flow panel"),
             FlowTab::Waves => hint(ui, "click a symbol in Search to set the entrypoint"),
+            FlowTab::Feature => hint(ui, "pick a feature entrypoint above"),
         },
         Sequence::NoPath => hint(
             ui,
@@ -194,6 +278,13 @@ pub fn ui(ctx: &egui::Context, ui: &mut egui::Ui, app: &mut App) {
                 render::display_name(&idx, &app.flow.wave_source)
             ),
         ),
+        Sequence::UnknownFeatureEntry => hint(
+            ui,
+            format!(
+                "unknown entry — “{}” is not a symbol in this index",
+                render::display_name(&idx, &app.flow.feature_entry)
+            ),
+        ),
     }
 
     // Step-detail panel for the current (or clicked) step.
@@ -207,22 +298,47 @@ pub fn ui(ctx: &egui::Context, ui: &mut egui::Ui, app: &mut App) {
     }
 }
 
-/// Confidence of the edge feeding the current step — the previous trace hop,
-/// or any call from the previous wave layer. `None` on step/layer 0.
+/// Confidence of the edge feeding the current step — the previous trace hop, a
+/// call from the previous wave layer, or a call from the feature step's parent
+/// (the deepest earlier step shallower than it). `None` on step/layer 0.
 fn incoming_edge(
     idx: &Index,
     seq: &Sequence,
     step: usize,
     id: &str,
 ) -> Option<(String, Confidence)> {
-    let prev: &[String] = match seq {
-        Sequence::Path(p) => std::slice::from_ref(p.get(step.checked_sub(1)?)?),
-        Sequence::Waves(l) => l.get(step.checked_sub(1)?)?,
-        Sequence::PickEndpoints | Sequence::NoPath | Sequence::UnknownSource => return None,
-    };
+    match seq {
+        Sequence::Path(p) => {
+            let caller = p.get(step.checked_sub(1)?)?;
+            find_call(idx, id, std::slice::from_ref(caller))
+        }
+        Sequence::Waves(l) => find_call(idx, id, l.get(step.checked_sub(1)?)?),
+        Sequence::Feature(s) => {
+            let cur = s.steps.get(step)?;
+            let parent = s
+                .steps
+                .iter()
+                .take(step)
+                .rev()
+                .find(|st| st.depth < cur.depth)?;
+            find_call(idx, id, std::slice::from_ref(&parent.symbol))
+        }
+        Sequence::PickEndpoints
+        | Sequence::NoPath
+        | Sequence::UnknownSource
+        | Sequence::UnknownFeatureEntry => None,
+    }
+}
+
+/// First `EdgeKind::Call` edge into `callee` from any of `callers`, with the
+/// caller's display name and the edge confidence. A name-only caller key that
+/// does not match a symbol id simply yields `None` — no silent guess.
+fn find_call(idx: &Index, callee: &str, callers: &[String]) -> Option<(String, Confidence)> {
     idx.edges
         .iter()
-        .find(|e| e.kind == EdgeKind::Call && e.callee == id && prev.iter().any(|c| c == &e.caller))
+        .find(|e| {
+            e.kind == EdgeKind::Call && e.callee == callee && callers.iter().any(|c| c == &e.caller)
+        })
         .map(|e| (render::display_name(idx, &e.caller), e.confidence))
 }
 
@@ -235,7 +351,8 @@ fn open_source(app: &mut App, idx: &Index, id: &str) {
     app.open_file_with(file, line);
 }
 
-/// Sub-tab strip: A→B trace / entrypoint waves. Clicking a tab rewinds.
+/// Sub-tab strip: A→B trace / entrypoint waves / feature slice. Clicking a tab
+/// rewinds.
 fn sub_tabs(ui: &mut egui::Ui, flow: &mut FlowState) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = theme::SPACE_2;
@@ -247,6 +364,13 @@ fn sub_tabs(ui: &mut egui::Ui, flow: &mut FlowState) {
         }
         if ui
             .selectable_value(&mut flow.tab, FlowTab::Waves, "Entrypoint waves")
+            .clicked()
+        {
+            flow.playback.playhead = 0.0;
+        }
+        if ui
+            .selectable_value(&mut flow.tab, FlowTab::Feature, "Feature")
+            .on_hover_text("Pick an entrypoint and read what it calls, depth by depth")
             .clicked()
         {
             flow.playback.playhead = 0.0;
