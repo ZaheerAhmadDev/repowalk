@@ -12,12 +12,13 @@ are the map. Goal: minimum tokens, maximum signal.
 | `skills/` | Compartmentalized knowledge → routed by `skills/index.md` | agents add skills; main agent adds index rows |
 | `skills/meta/` | How agents work: karpathy rules, board protocol, lessons | — |
 | `skills/sdlc/` | Six development-cycle phase skills | — |
-| `skills/repowalk/` | Rules for the repowalk app (scope/stack/verify) | — |
+| `skills/repowalk/` | Rules for the repowalk app (scope/stack/verify) **+ the v2 domain contracts**: analysis contracts, language grammars, goldens, metrics, parallel determinism, CLI, GUI (egui 0.36 + HCI), CI gates, no-network | — |
 | `skills/board/` | Skills about the agent board itself | board agents |
 | `board/tasks/*.json` | Task board source of truth (view: http://localhost:8765) | one writer per task file |
 | `board/docs`, `board/tests` | Board artifacts (requirements, design, tests, retro) | task owner |
 | `docs/agent-team/` | Org scheme: LEADERSHIP (operating model), HIERARCHY (100-agent roster + team ownership), VERIFICATION | main agent; VERIFICATION → VER lead |
-| `repowalk/` | The app: Rust workspace (`crates/core`, `crates/gui`, `crates/cli`) | repowalk agents |
+| `Cargo.toml`, `crates/` | The app: Rust workspace (`crates/core`, `crates/gui`, `crates/cli`) | repowalk agents |
+| `docs/` | User docs + how-tos (`docs/howto-*.md`), architecture map, v2 plan/execution plan/release notes | main agent, doc seats |
 | `*.md` at root | Plan docs (source of truth: repowalk plan) | main agent |
 
 ## The loop: BUILD → LEARN → REFINE
