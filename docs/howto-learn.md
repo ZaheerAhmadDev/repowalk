@@ -56,7 +56,7 @@ per-file analyzers, builds the module graph, and writes a versioned cache.
 `LearnProgress { phase, done, total, variables, cfgs, types, uses }` drives the
 UI. Phases: `walk → parse → resolve → analyze → cache`.
 
-## Status at this commit (`ff7f795`, 2026-10-16)
+## Status at this release (v2.0.0, 2026-10-16)
 
 - **working:** `learn.rs` phase driver, `.repowalk/analysis.json` cache, the
   incremental stamp cache (a warm re-learn re-analyzes 0 files; touching one file

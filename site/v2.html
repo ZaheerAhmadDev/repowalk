@@ -21,7 +21,7 @@
   <section class="hero">
     <h2>Open any codebase. Understand all of it.</h2>
     <p>v2 is the <strong>complete understanding suite</strong>: repowalk learns the repo once, then answers the whole set of questions in seven moves — <strong>learn &rarr; inventory &rarr; control flow &rarr; connections &rarr; structure &rarr; usage &rarr; export</strong>. Still pure static analysis: no AI, no network, no keys.</p>
-    <p>This page is honest about what runs today. Each group below carries a status line; nothing is advertised that you cannot point at in the code at this commit (<code>ff7f795</code>, 2026-10-16).</p>
+    <p>This page is honest about what runs today. Each group below carries a status line; nothing is advertised that you cannot point at in the code at this release (<code>v2.0.0</code>, 2026-10-16).</p>
   </section>
 
   <section class="tutorial">
@@ -84,8 +84,10 @@
   </section>
 
   <section class="tutorial">
-    <h2>What is still on the way</h2>
-    <p>Everything above is either running today or has an owner card in the build. The <em>panels and modes</em> still being wired are: the Diagrams mode bodies (Control flow / Types / Modules), the v2 Graph (real names, clusters, filters), the Flow <em>Feature</em> tab, the variables / refs / health-v2 / notes panels, the onboarding report, and the GUI export menu for the new formats. The F14 CLI commands are already live (<code>report</code>, <code>graph</code>, <code>variables</code>, <code>complexity</code>, <code>refs</code>). The feature list is <a href="../docs/v2-plan.md">F1&ndash;F15</a>; the batch/ownership map is in the <a href="../docs/v2-execution-plan.md">execution plan</a>. The full v2 walkthrough is in the <a href="../docs/demo.md">demo runbook</a>.</p>
+    <h2>Deliberately not in v2, and the honest limits</h2>
+    <p><strong>Non-goals</strong> (from <a href="../docs/v2-plan.md">docs/v2-plan.md</a>): no AI or LLM summaries, no refactoring or automatic edits, no git-diff / watch mode, no Tauri or web port, and no network use at all &mdash; the binary contains no HTTP client and no telemetry.</p>
+    <p><strong>Known limits:</strong> an edge the analyzer cannot resolve is drawn dashed with a <code>?</code>, and a cross-file reference is listed as <em>name-only</em> rather than presented as confirmed; a graph stops at 400 nodes and says what it hid instead of drawing a blank canvas; and the idle-UI cost is the one budget not independently measured headlessly &mdash; see <a href="../board/docs/verification-v2.md">the verification report</a> for the measurement a human with a display should run.</p>
+    <p>The feature list is <a href="../docs/v2-plan.md">F1&ndash;F15</a>; the batch/ownership map is in the <a href="../docs/v2-execution-plan.md">execution plan</a>; the full walkthrough is in the <a href="../docs/demo.md">demo runbook</a>.</p>
   </section>
 </main>
 <footer><p>&copy; 2026 repowalk contributors &mdash; Apache-2.0</p></footer>

@@ -91,7 +91,7 @@ same way:
 So a CI job is simply `repowalk report . > ARCHITECTURE.md` — it writes the
 report and fails the build when an architecture rule is broken.
 
-## Status at this commit (`ff7f795`, 2026-10-16)
+## Status at this release (v2.0.0, 2026-10-16)
 
 - **working:** `rules.rs` (load + `check`) and the `## Guardrails` section in both
   the Markdown and `--json` report, with the nonzero exit on `Error`. This repo's

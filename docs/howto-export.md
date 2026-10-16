@@ -94,7 +94,7 @@ PNG export stays.
   rendered by the same core emitters the CLI uses, so the file and the terminal
   output cannot drift. The command palette carries the same entries.
 
-## Status at this commit (`9171d3a`, 2026-10-16)
+## Status at this release (v2.0.0, 2026-10-16)
 
 - **working:** the Mermaid / DOT / SVG emitters and the Markdown report builder in
   core; the GUI's PNG, tour+health Markdown, architecture report and diagram
