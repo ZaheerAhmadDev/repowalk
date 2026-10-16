@@ -60,14 +60,14 @@ labelled `normal | true | false | back`, and a **cyclomatic complexity** and
   Measured: **Rust 3 CFGs / Python 3 CFGs / TS 6 CFGs** on the fixtures. The
   deepest is the TS fixture's `classify` (9 nodes, cyclomatic 3, nesting 2).
 
-- **Product surface (in progress):** **Diagrams → Control flow**, with a function
-  picker from search / an explain card / the variables table. Owner card
-  **GRAPH-2** (`crates/gui/src/diagrams/control.rs`, landing).
+- **Product surface (shipped):** **Diagrams → Control flow**, with a function
+  picker from search / an explain card / the variables table. Card **GRAPH-2**
+  (`crates/gui/src/diagrams/control.rs`).
 
 ## Status at this commit (`ff7f795`, 2026-10-16)
 
 - **working:** CFG extraction for Rust, Python and TS; the golden assertions
   (branch nodes, back edges for loops, cyclomatic and nesting values) pass, and
   the `graph --scope cfg` / `complexity` CLI commands render them.
-- **in progress (card GRAPH-2):** the Diagrams mode Control-flow canvas.
-  `Mode::Diagrams` is wired in `app.rs`; the panel body is landing.
+- **shipped (card GRAPH-2):** the Diagrams mode Control-flow canvas, with the
+  function picker, node kinds and the cyclomatic / nesting badges.

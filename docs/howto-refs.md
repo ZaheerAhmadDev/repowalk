@@ -56,8 +56,8 @@ jump-to-each.
   Eight tests pass, covering resolved-vs-name-only splitting, duplicate
   non-deduping, counts, and grouping by file.
 
-- **Product surface (in progress):** the **refs panel** and Ctrl+click from text /
-  explain, owner card **TEXT-3** (`crates/gui/src/usage/refs.rs`, landing).
+- **Product surface (shipped):** the **refs panel** and jump-to-source from text /
+  explain, card **TEXT-3** (`crates/gui/src/usage/refs.rs`).
 
 ## Honesty rule baked into the API
 
@@ -71,4 +71,5 @@ name-only hits as unresolved (the dashed `?` rule) instead of pretending.
 - **working:** the core lookups in `refs.rs` (8 green tests) and the `refs` CLI
   command (table and `--json`). Use-site data is already produced by the
   analyzers — **Rust 19, Python 21, TS 26 use sites** on the fixtures.
-- **in progress (card TEXT-3):** the refs *panel* and Ctrl+click navigation.
+- **shipped (card TEXT-3):** the refs *panel*, grouped by file, with each site
+  clickable into the text pane.
