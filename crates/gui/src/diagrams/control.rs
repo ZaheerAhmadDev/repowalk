@@ -46,12 +46,7 @@ const CHAR_W: f32 = 6.6;
 
 pub fn ui(ui: &mut egui::Ui, app: &mut App) {
     if app.analysis.is_none() {
-        ui_kit::not_ready(
-            ui,
-            "Control-flow diagrams",
-            "GRAPH-2",
-            "no analysis yet — press Learn (or run `repowalk learn`) first",
-        );
+        ui_kit::empty_state(ui, "Control-flow diagrams", ui_kit::NO_ANALYSIS_HINT);
         return;
     }
 
