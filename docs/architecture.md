@@ -7,24 +7,29 @@ post-implementation summary. For the v2 surface the source of truth is
 (batches, ownership, gates); this file is the *as-built* map of the code at the
 current commit.
 
-Status legend: ☑ exists · ▶ in flight (skeleton or stub on `prerelease-v2`) ·
-☐ planned. Under a concurrent build many core/gui modules land as signature
-stubs first; those are marked ▶ with their owner card from
-[`v2-execution-plan.md`](v2-execution-plan.md) §3.
+Status legend: ☑ exists · ▶ in flight (view/panel still being filled on
+`prerelease-v2`) · ☐ planned. As of this commit every `crates/core` v2 module has
+landed (each is marked ☑ with its owner card in the module map below); what is
+still ▶ is the **GUI surface** — the diagram/usage/health/notes/onboarding cards
+that are being filled in parallel while this file is written. Those carry their
+owner card from [`v2-execution-plan.md`](v2-execution-plan.md) §3.
 
 ## Workspace
 
 ```
 crates/core   — model, walk, tree-sitter extraction (parse_rust / parse_py,
                 v2 analyze/), edge resolution, store, tour, metrics, search,
-                flow, pipeline. v2 aggregates: complexity, modules, types,
-                feature, refs, export. No GUI/CLI deps, no network.
+                flow, pipeline, learn (v2 phase driver + incremental cache).
+                v2 aggregates: complexity, modules, types, feature, refs, rules
+                (guardrails), export, parallel. No GUI/CLI deps, no network.
 crates/gui    — eframe app: sidebar (map/health/tour/search), text mode
                 (file tree + editable editor + explain card), graph mode
                 (egui_graphs, A→B flow trace), flow mode (trace + waves),
+                Diagrams mode (control flow / types / modules — landing),
                 exports (PNG/Markdown).
-crates/cli    — clap subcommands (map/tour/explain/find/flow) as thin renderers
-                over core, colored ANSI output.
+crates/cli    — clap subcommands (v1: map/tour/explain/find/flow; v2 query:
+                report/graph/variables/complexity/refs, `--json` where useful)
+                as thin renderers over core, colored ANSI output.
 vendor/       — vendored egui_code_editor 0.4.2 (one serde derive patch; see
                 vendor/README.md), wired via [patch.crates-io].
 fixtures/     — sample repo + golden index.json (`fixtures/golden`) for the
@@ -49,19 +54,20 @@ repo ──walk(ignore, skip .git/.repowalk/target/node_modules/.venv)──►
      └─► cli (clap + colored)
 ```
 
-`core::pipeline::build_index(root, progress)` is the single entry point both
-front ends call: cache-valid → load; else walk → parse → resolve → timestamp
-→ save. Indexing runs on a background thread in the GUI with a progress
-overlay; the CLI reports to stdout.
+`core::pipeline::build_index(root, progress)` remains the v1 entry point
+(cache-valid → load; else walk → parse → resolve → timestamp → save); the v2
+`core::learn::learn(root, progress)` supersedes it for the analysis surface and
+is what every v2 CLI query command calls. Indexing runs on a background thread in
+the GUI with a progress overlay; the CLI reports to stdout.
 
 ## Learn pipeline (v2, F1)
 
-> Status: **▶ in flight (CORE-7)**. The v2 phase driver does not exist as a
-> separate file at this commit — `crates/core/src/learn.rs` is not on disk and
-> `crates/core/src/pipeline.rs` still exposes only `build_index`. The phases
-> below are the agreed contract; `analysis::save`/`analysis::load` exist, but
-> nothing writes `.repowalk/analysis.json` yet. Documented here so consumers can
-> be written against the frozen signature.
+> Status: **☑ landed (CORE-7; module wiring CORE-9)**. `crates/core/src/learn.rs`
+> is the v2 phase driver: `learn::learn(root, progress)` runs the five phases
+> below, writes `<root>/.repowalk/analysis.json` (version-checked, atomic), writes
+> the per-file incremental stamps, and populates `Analysis.modules` /
+> `module_edges` via `modules::build`. `pipeline.rs` still owns the frozen
+> `index.json` spine; the two caches are independent.
 
 The learn run is a single entry point over five phases; each phase reports
 counts so the GUI progress view can show per-phase progress.
@@ -74,15 +80,19 @@ counts so the GUI progress view can show per-phase progress.
 | **analyze** | `analyze::analyze(file, lang, src, symbols, &mut Analysis)` appends variables, CFG, types, use-sites | `Analysis` |
 | **cache** | atomic write of the versioned artifact | `.repowalk/analysis.json` |
 
-- `pipeline::build_index` is today's spine: **walk → parse → resolve → timestamp
-  → save** (`index.json`). The v2 learn phase inserts **analyze** between resolve
-  and cache, and caches a *second* file (below).
-- Progress type: `LearnProgress { phase, done, total, counts }` (planned, CORE-7);
-  today the GUI drives per-file progress through
+- `pipeline::build_index` remains the v1 spine: **walk → parse → resolve →
+  timestamp → save** (`index.json`). The v2 learn run inserts **analyze**
+  between resolve and cache and caches a *second* file (below).
+- Progress type: `LearnProgress { phase, done, total, variables, cfgs, types,
+  uses }` is emitted by `learn::learn` at every phase boundary and once per file.
+  The GUI additionally drives the v1 window through
   `IndexProgress { done, total, finished, error, index }`
-  (`crates/gui/src/app.rs`) and `build_index`'s `progress(files_done)` callback.
+  (`crates/gui/src/app.rs`).
 - Callers: the GUI worker in `App::start_indexing` calls
-  `repowalk_core::pipeline::build_index`; the CLI commands call core directly.
+  `repowalk_core::pipeline::build_index`; every v2 CLI query command
+  (`report` / `graph` / `variables` / `complexity` / `refs`) loads through
+  `commands::artifacts::load`, which reuses the cached `analysis.json` or runs
+  `learn::learn` once; the v1 CLI commands call core directly.
 
 ### Cache files
 
@@ -206,20 +216,20 @@ disk).
 |---|---|---|---|
 | `analysis.rs` | `Analysis` aggregate + analysis.json (load/save/version) | frozen (PMO) | ☑ |
 | `analyze/mod.rs` | `Lang` dispatch + shared walk helpers (`enclosing_symbol`, `snippet`) | INTEL-2 (interface) | ☑ |
-| `analyze/rust.rs` | Rust variables / CFG / types / use-sites | INTEL-2 | ▶ (goldens `#[ignore]`d) |
-| `analyze/python.rs` | Python variables / CFG / types / use-sites | INTEL-3 | ▶ (goldens `#[ignore]`d) |
-| `analyze/ts.rs` | TypeScript/JavaScript extraction | INTEL-4 | ▶ (goldens `#[ignore]`d) |
-| `complexity.rs` | cyclomatic + nesting aggregates, hotspots | CORE-4 | ▶ stub |
-| `modules.rs` | crate/dir/module DAG from imports + tree | CORE-4 | ▶ stub |
-| `types.rs` | type-graph assembly (`TypeGraph`) | CORE-5 | ▶ stub |
-| `feature.rs` | feature slice = entrypoint + depth → ordered call tree | CORE-5 | ▶ stub |
-| `refs.rs` | reference index: target → `[UseSite]` | TEXT-3 | ▶ stub |
-| `export/mod.rs` (+`dot`,`mermaid`,`svg`,`report`) | pure emitters shared by GUI + CLI | PROD-2 | ▶ stubs |
-| `pipeline.rs` | walk → parse → resolve → cache driver (`build_index`) | CORE-7 | ☑ |
+| `analyze/rust.rs` | Rust variables / CFG / types / use-sites | INTEL-2 | ☑ (goldens active) |
+| `analyze/python.rs` | Python variables / CFG / types / use-sites | INTEL-3 | ☑ (goldens active) |
+| `analyze/ts.rs` | TypeScript/JavaScript extraction | INTEL-4 | ☑ (goldens active) |
+| `complexity.rs` | cyclomatic + nesting aggregates, hotspots, per-file roll-up | CORE-4 | ☑ |
+| `modules.rs` | crate/dir/module DAG from imports + tree, cycle detection | CORE-4 | ☑ |
+| `types.rs` | type-graph assembly (`TypeGraph`) | CORE-5 | ☑ |
+| `feature.rs` | feature slice = entrypoint + depth → ordered call tree | CORE-5 | ☑ |
+| `refs.rs` | reference index: target → `[UseSite]` (`RefSet`) | TEXT-3 | ☑ |
+| `export/mod.rs` (+`dot`,`mermaid`,`svg`,`report`) | pure emitters shared by GUI + CLI | PROD-2 | ☑ |
+| `pipeline.rs` | walk → parse → resolve → cache driver (`build_index`, v1 spine) | CORE-7 | ☑ |
 | `store.rs` | `.repowalk/index.json` cache + mtime invalidation | CORE-7 | ☑ |
-| `learn.rs` | v2 learn phase driver + `LearnProgress` | CORE-7 | ☐ not on disk |
-| `metrics.rs` | cycles / god-files / unresolved% health | INTEL-5 | ☑ |
-| `rules.rs` (+`.repowalk/rules.json`) | F15 architecture guardrails | CORE-6 | ☐ |
+| `learn.rs` | v2 learn phase driver + `LearnProgress` + incremental stamps | CORE-7 (modules wiring CORE-9) | ☑ |
+| `metrics.rs` | cycles / god-files / unresolved% health, `compute_v2`, `complexity_by_module`, `reachability` | INTEL-5 | ☑ |
+| `rules.rs` (+`.repowalk/rules.json`) | F15 architecture guardrails | CORE-6 | ☑ |
 | `model.rs` | frozen `Index` / `Symbol` / `Edge` contract | frozen (PMO) | ☑ |
 | `walk.rs` | file enumeration + `lang_of` | RSK | ☑ |
 | `parse_rust.rs` / `parse_py.rs` | v1 symbol/call/import extraction | RSK | ☑ |
@@ -227,7 +237,7 @@ disk).
 | `tour.rs` | reading order from import DAG | RSK | ☑ |
 | `search.rs` | deterministic fzf-style search | RSK | ☑ |
 | `flow.rs` | `trace` (A→B BFS) + `waves` (entrypoint layers) | RSK | ☑ |
-| `parallel.rs` | scoped-thread parallel parse (F10) | INTEL-5 | ☐ |
+| `parallel.rs` | scoped-thread deterministic parallel parse (F10) | INTEL-5 | ☑ |
 
 ## Algorithms
 
@@ -275,38 +285,45 @@ fails with a clean adapter error). Linux keeps the stock behavior.
 
 `crates/gui/src/app.rs` is the wiring point: `App::mode: Mode` selects the
 central pane, `Tab` and the command palette switch it, and the toolbar renders
-a segmented control per mode. `App::ui` dispatches `Mode → {text, graph, flow}::ui`.
+a segmented control per mode. `App::ui` dispatches `Mode → {text, graph, flow,
+diagrams}::ui`.
 
 | Mode | Question | Wiring | Status |
 |---|---|---|---|
-| **Text** | what does this exact code say? | `text::ui` (`text/{mod,tree,editor}.rs`) | ☑ (variables/refs panels ☐) |
-| **Graph** | how is everything connected? | `graph::ui` (`graph/{mod,render,interaction}.rs`) | ☑ (v2 LOD/clusters/filters ☐) |
-| **Flow** | what happens when this runs? | `flow::ui` (`flow/{mod,render,playback}.rs`), sub-tabs `FlowTab::{Trace, Waves}` | ☑ (Feature tab ☐) |
-| **Diagrams** | control flow / types / modules | `Mode::Diagrams` + `diagrams::ui` | ☐ (GRAPH-2/3) |
+| **Text** | what does this exact code say? | `text::ui` (`text/{mod,tree,editor}.rs`) | ☑ (variables/refs panels ▶ TEXT-2/TEXT-3) |
+| **Graph** | how is everything connected? | `graph::ui` (`graph/{mod,render,interaction}.rs`) | ☑ v1 (v2 LOD/clusters/filters ▶ GRAPH-4) |
+| **Flow** | what happens when this runs? | `flow::ui` (`flow/{mod,render,playback}.rs`), sub-tabs `FlowTab::{Trace, Waves}` | ☑ (Feature tab ▶ GRAPH-5) |
+| **Diagrams** | control flow / types / modules | `Mode::Diagrams` + `diagrams::ui` (`diagrams/{mod,control,types,modules}.rs`) | ▶ wired; panels landing (GRAPH-2 / GRAPH-3) |
 
-Intended v2 wiring (planned; not in `Mode` or `app.rs` at this commit):
+`Mode::Diagrams` is wired in `app.rs` (Tab cycle Text → Graph → Flow → Diagrams,
+plus the palette and the toolbar segment) and `diagrams/mod.rs` owns the
+sub-tab strip. The panel *bodies* are being filled in parallel; **▶** below means
+the file exists and compiles but the view is not finished:
 
-- **Diagrams** mode sub-tabs: **Control flow** (per function) · **Types** ·
-  **Modules** — `diagrams/{mod,common,control}.rs` (GRAPH-2),
-  `diagrams/{types,modules}.rs` (GRAPH-3).
+- **Diagrams** sub-tabs: **Control flow** (`diagrams/control.rs`, GRAPH-2) ·
+  **Types** (`diagrams/types.rs`, GRAPH-3) · **Modules**
+  (`diagrams/modules.rs`, GRAPH-3).
 - **Flow** gains a **Feature** sub-tab (`flow/feature.rs`, GRAPH-5).
 - Panels: `variables` (`usage/variables.rs`, TEXT-2), `refs`
   (`usage/refs.rs`, TEXT-3), `health-v2` (`health/mod.rs`, DSN-3), `notes`
-  (`notes.rs`, TEXT-4); learn progress + **Onboarding report** (`onboard.rs`,
-  no owner assigned in §3 — see below).
+  (`notes.rs`, TEXT-4); learn progress + **Onboarding report**
+  (`onboard.rs`, DSN-4).
 - Graph v2 changes (real names, LOD, clustering, layout, filters) live in the
   existing `graph/**` (GRAPH-4). Theme additions in `theme.rs` (DSN-2).
 
-Existing sidebar panes: `sidebar/{map,search,tour,flow}.rs`. Exports today:
-`export/{markdown,png}.rs`; the v2 GUI exporters (`export/{mermaid,dot,svg,report}.rs`,
-PROD-2) mirror `crates/core/src/export/**`, which is shared with the CLI.
+Existing sidebar panes: `sidebar/{map,search,tour,flow}.rs`. Exports today in the
+GUI: `export/{markdown,png}.rs` (PNG of the window, tour+health Markdown). The
+new Mermaid/DOT/SVG/report formats are rendered by the shared core emitters
+(`crates/core/src/export/**`, PROD-2) and are exposed through the **CLI** today
+(`report` / `graph`); the GUI export menu for them is still in progress.
 
 ## CLI surface
 
 `crates/cli/src/main.rs` defines the `Cmd` enum; `crates/cli/src/commands/`
-holds one renderer per command (owner of `crates/cli/**`: PROD-3).
+holds one renderer per command (owner of `crates/cli/**`: PROD-3). Every command
+is a thin renderer over core — no rendering logic lives in the CLI.
 
-**Exists** (thin renderers over core, colored ANSI):
+**v1 orientation** (colored ANSI):
 
 | Command | Purpose |
 |---|---|
@@ -316,17 +333,30 @@ holds one renderer per command (owner of `crates/cli/**`: PROD-3).
 | `find <query> <path>` | ranked fuzzy hits: `path:line name score` |
 | `flow [a] [b] [--from S] [--depth N] [--md] [path]` | A→B trace, or wave report with `--from` |
 
-**Planned** (v2, F14 — not registered in `Cmd` yet, no `--json` flags today;
-`grep -rn json crates/cli/src` is empty):
+**v2 query surface** (F14, landed under PROD-3). Each command loads the
+artifacts through `commands::artifacts::load`, which reuses the cached
+`.repowalk/analysis.json` or runs `learn::learn` once. `--json` emits the same
+data as a single machine-readable object on stdout (no ANSI escapes).
 
-| Command | Purpose |
-|---|---|
-| `report [--md\|--json]` | generated architecture report (`core::export::markdown_report`) |
-| `graph --format mermaid\|dot\|svg` | diagram export (`core::export::{mermaid,dot,svg}`) |
-| `variables <file>` | per-file variable table (F4) |
-| `complexity [--by file\|symbol]` | hotspot/complexity tables (F6) |
-| `refs <symbol>` | all references (F7) |
-| `--json` throughout | machine-readable output; honest exit codes |
+| Command | Purpose | Key flags |
+|---|---|---|
+| `report [path]` | architecture report from `core::export::markdown_report` + a `## Guardrails` section | `--md` (explicit default), `--json` (underlying data) |
+| `graph [path]` | render one diagram to stdout | `--format mermaid\|dot\|svg` (default `mermaid`), `--scope call\|cfg\|types\|modules` (default `call`), `--symbol <id>` (only with `--scope cfg`) |
+| `variables <file> [path]` | per-file variable table (`name kind type reads/writes/uses line`) | `--json` |
+| `complexity [path]` | hotspot ranking (`--by function`) or per-file roll-up (`--by file`) | `--by function\|file` (default `function`), `--top N` (0 = all), `--json` |
+| `refs <target> [path]` | every use site of a symbol/variable, split resolved vs name-only | `--json` |
+
+**Honest exit codes.** A bad argument or a missing artifact is a nonzero exit
+with a message on stderr (never partial or bogus output):
+
+- `graph --scope cfg` without `--symbol` → `Error: --scope cfg requires --symbol <id>` (exit 1).
+- `--symbol` passed to any scope other than `cfg` → rejected (`--symbol "x" is only valid with --scope cfg`), exit 1.
+- unknown / ambiguous `--symbol`, `refs` target, or `variables` file → exit 1
+  (e.g. `Error: unknown symbol: nosuch`, `Error: no such file in index: nope.rs`).
+- any query command on a non-directory path → `Error: repo path not found or not a directory: …` (exit 1).
+- `report` (Markdown **or** `--json`) exits **1** when `.repowalk/rules.json`
+  (falling back to `<root>/rules.json`) produces any `Severity::Error` finding;
+  the findings are still printed first. See [`howto-guardrails.md`](howto-guardrails.md).
 
 ## Verification
 
@@ -337,7 +367,7 @@ Tests live inline (`#[cfg(test)]`) and as integration suites in
 |---|---|
 | `contract.rs` | the **frozen** data model, asserted through the serde wire form (model derives no `PartialEq`) |
 | `golden.rs` | full `index.json` for `fixtures/sample`; canonicalized (mtimes zeroed, `indexed_at` cleared) so it is machine-stable; regenerate with `UPDATE_GOLDEN=1` |
-| `analysis_golden.rs` | v2: **SCHEMA** (always on — `Analysis` round-trips, `version == ANALYSIS_VERSION`) plus per-language **GOLDEN** tests parked `#[ignore = "awaiting INTEL-x"]` until the analyzers land |
+| `analysis_golden.rs` | v2: **SCHEMA** (`Analysis` round-trips, `version == ANALYSIS_VERSION`) plus the per-language **GOLDEN** tests (Rust/Python/TS variables, CFG, types) — all active and passing |
 | `grammar_abi.rs` | each tree-sitter grammar (Rust/Python/TS/JS) loads and parses under the pinned runtime (BLD-2) |
 | `walk_metrics.rs` | walk + metrics on temp fixtures |
 
@@ -386,7 +416,11 @@ integrator from the analyzer handoffs, not inferred:
   recorded limitation, not a bug — it is why the Rust golden excludes `i`.
 - **`Variable.type_name` is annotation-only**: no inference. `None` means "the source
   did not state a type", never "unknown type".
-- **Silent-language-drop guard (risk R-27)**: `pipeline::build_index` dispatched only
-  rust/python at B1, so TS/JS indexed as 0 symbols while reporting the language as
-  valid. Fixed under card CORE-8; until that lands, trust `learn`, not `build_index`,
-  for language coverage.
+- **Silent-language-drop (risk R-27) — still open (card CORE-8, `todo`)**: at the
+  current commit `pipeline::build_index` dispatches only rust/python, so TS/JS
+  (and every other language) index as files with 0 symbols / 0 edges while the UI
+  reports the language as valid. `learn::learn` dispatches through
+  `analyze::Lang::from_walk` and **does** cover TS/JS, so the v2 CLI query
+  commands (`report` / `graph` / `variables` / `complexity` / `refs`) are
+  correct; trust `learn`, not `build_index`, for language coverage until CORE-8
+  lands.

@@ -8,6 +8,66 @@ PNG export stays.
 
 ## How to open it
 
+- **CLI (works today, F14):** the v2 commands wrap the core emitters. All take a
+  repo path; `--json` is available where the underlying data is useful.
+
+  ```bash
+  # architecture report (Markdown is the default; --md makes it explicit)
+  repowalk report ./some-repo > ARCHITECTURE.md
+
+  # every diagram backend
+  repowalk graph --format mermaid --scope call    ./some-repo
+  repowalk graph --format dot     --scope types   ./some-repo
+  repowalk graph --format svg     --scope modules ./some-repo
+  ```
+
+  Captured on a copy of `fixtures/sample` (`repowalk report`):
+
+  ```
+  # repowalk architecture report — e2e
+
+  ## Overview
+
+  | metric | value |
+  |---|---|
+  | files | 6 |
+  | lines of code | 75 |
+  | symbols | 14 |
+  | call edges | 10 |
+  | modules | 7 |
+  | types | 1 |
+  | variables | 5 |
+  | language mix | rust (5 files), python (1 file) |
+
+  ## Module map
+
+  | module | kind | loc | symbols |
+  |---|---|---|---|
+  | `a.rs` | File | 8 | 1 |
+  | `b.rs` | File | 8 | 1 |
+  | `e2e` | Crate | 75 | 14 |
+  | `main.rs` | File | 10 | 3 |
+  | `model.rs` | File | 18 | 4 |
+  | `tool.py` | File | 20 | 3 |
+  | `util.rs` | File | 11 | 2 |
+  ```
+
+  `repowalk report --json` emits the same aggregates as one machine-readable
+  object (`repo`, `overview`, `complexity`, `unused_variables`, `types`,
+  `top_references`, `guardrails`):
+
+  ```bash
+  repowalk report --json ./some-repo
+  ```
+  ```
+  {"repo":"/tmp/opencode/e2e","overview":{"files":6,"lines":75,"symbols":14,"call_edges":10,"modules":7,"types":1,"variables":5,"languages":{"rust":5,"python":1}},"complexity":{...},"guardrails":{"errors":0,"warnings":0,"findings":[]}}
+  ```
+
+  **Exit codes.** `report` (Markdown or `--json`) exits **1** when
+  `.repowalk/rules.json` (or `<root>/rules.json`) yields a `Severity::Error`
+  finding; the findings are still printed. See
+  [`howto-guardrails.md`](howto-guardrails.md).
+
 - **Engine (works today):** the emitters live in `crates/core/src/export/`
   (shared by GUI and CLI, pure text output, byte-stable):
 
@@ -27,19 +87,18 @@ PNG export stays.
   Ten tests pass, including `report_has_every_section_and_four_mermaid_blocks`,
   `svg_is_standalone_and_balanced` and `emitters_are_byte_stable`.
 
-- **GUI today (working):** the **export ▾** menu writes a **PNG** of the window
+- **GUI today (working):** the **Export ▾** menu writes a **PNG** of the window
   and a **tour + health Markdown** file next to the repo
-  (`crates/gui/src/export/{png,markdown}.rs`). It does not yet write
-  Mermaid/DOT/SVG or the v2 report.
+  (`crates/gui/src/export/{png,markdown}.rs`).
 
-- **Planned wiring:** the GUI export of the new formats and the CLI commands
-  `report [--md|--json]`, `graph --format mermaid|dot|svg`, `variables`,
-  `complexity` and `refs` are card **PROD-3** (F14 / F8). None are registered in
-  `crates/cli/src/main.rs` yet (`grep -rn json crates/cli/src` is empty).
+- **In progress:** the GUI export menu entries for the new formats (Mermaid /
+  DOT / SVG / the v2 report) are still to be wired; the CLI exposes all of them
+  today.
 
-## Status at this commit (`ef11b9d`, 2026-10-15)
+## Status at this commit (`ff7f795`, 2026-10-16)
 
-- **working:** the Mermaid / DOT / SVG emitters and the Markdown report builder
-  in core, plus PNG and tour+health Markdown export in the GUI.
-- **in progress (card PROD-3):** the CLI commands and the GUI menu entries that
-  expose the new formats. The emitters are ready; the invocation is not.
+- **working:** the Mermaid / DOT / SVG emitters and the Markdown report builder in
+  core, PNG and tour+health Markdown export in the GUI, and the `report` /
+  `graph` CLI commands (Markdown report + all three diagram backends, `--json`).
+- **in progress:** the GUI export menu entries for the new formats. The emitters
+  and the CLI invocation are done (PROD-3).
