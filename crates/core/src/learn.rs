@@ -10,10 +10,12 @@
 //!
 //! # Incremental cache (F10)
 //!
-//! Each file gets a cheap stamp of `(mtime, line count)` — exactly the two
-//! fields [`crate::model::FileEntry`] already carries — persisted next to the
-//! analysis in `<root>/.repowalk/analysis-stamps.json`. It lives in a **sibling
-//! file** rather than inside `analysis.json` because:
+//! Each file gets a cheap stamp of `(mtime in nanoseconds, byte size)` —
+//! persisted next to the analysis in `<root>/.repowalk/analysis-stamps.json`.
+//! Nanosecond mtime catches two edits inside one whole second, and byte size
+//! catches a `git checkout` / `touch -r` that preserved the mtime (R-14); the
+//! old `(seconds, line count)` stamp let both through as a false hit. It lives
+//! in a **sibling file** rather than inside `analysis.json` because:
 //!   * `analysis.json` is a shared, version-checked consumer contract
 //!     ([`crate::analysis`]); stamps are pipeline-internal bookkeeping, and
 //!     widening [`Analysis`] would force every reader/test to change;
@@ -52,7 +54,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 /// Current on-disk stamp-cache schema (independent of `ANALYSIS_VERSION`).
-const STAMP_VERSION: u32 = 1;
+///
+/// Version 2 replaced the `(seconds mtime, line count)` stamp with
+/// `(nanosecond mtime, byte size)` so a same-second edit or a preserved-mtime
+/// size change is a miss (R-14); a version-1 sidecar is rejected outright.
+const STAMP_VERSION: u32 = 2;
 
 /// Producer revision of the [`learn`] pipeline's output.
 ///
@@ -83,11 +89,15 @@ pub struct LearnProgress {
     pub uses: usize,
 }
 
-/// One file's incremental stamp: mtime (seconds) + line count.
+/// One file's incremental stamp: nanosecond mtime + byte size (R-14).
+///
+/// Nanoseconds catch two edits inside one whole second; size catches an edit
+/// that preserved the mtime (`git checkout` / `touch -r`). Neither can be
+/// confused by the old whole-second `(mtime, lines)` stamp.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct Stamp {
-    mtime: u64,
-    lines: usize,
+    mtime_nanos: u64,
+    size: u64,
 }
 
 /// The `.repowalk/analysis-stamps.json` payload.
@@ -101,7 +111,7 @@ struct StampFile {
     revision: u32,
     /// Number of files (re)analyzed by the most recent [`learn`] call.
     reanalyzed: usize,
-    /// `repo-relative path -> (mtime, lines)` for every file at that call.
+    /// `repo-relative path -> (mtime_nanos, size)` for every file at that call.
     stamps: BTreeMap<String, Stamp>,
 }
 
@@ -139,15 +149,18 @@ pub fn learn(root: &Path, progress: &dyn Fn(LearnProgress)) -> anyhow::Result<(I
     emit(progress, "walk", files.len(), files.len(), &empty);
 
     // Fresh stamps. We keep our own `files` for this: `index.json` may be a
-    // cache hit carrying stale line counts.
+    // cache hit carrying stale line counts. The stamp is stat'ed fresh from
+    // disk (nanosecond mtime + size) rather than taken from the walked
+    // `FileEntry`, whose `mtime` is whole seconds (R-14).
     let current: BTreeMap<String, Stamp> = files
         .iter()
         .map(|f| {
+            let full = root.join(f.path.as_str());
             (
                 f.path.clone(),
                 Stamp {
-                    mtime: f.mtime,
-                    lines: f.lines,
+                    mtime_nanos: crate::walk::mtime_nanos(&full),
+                    size: crate::walk::file_size(&full),
                 },
             )
         })
@@ -160,8 +173,25 @@ pub fn learn(root: &Path, progress: &dyn Fn(LearnProgress)) -> anyhow::Result<(I
         })?;
 
     // ---- analyze (incremental) -------------------------------------------
-    let old_stamps: BTreeMap<String, Stamp> =
-        load_stamps(root).map(|s| s.stamps).unwrap_or_default();
+    // The cached artifact is the other half of the cache key, so load it before
+    // consulting the per-file stamps. `analysis::load` returns `None` for an
+    // absent, unreadable, corrupt, or version-mismatched artifact (it is the
+    // authority on that check — no hand-rolled version test here). When the
+    // artifact did not load, a matching stamp sidecar is *not* a safe hit:
+    // seeding would keep nothing and `save` would persist a version-current but
+    // **empty** artifact that the next read serves silently (R-21) and that a
+    // torn/absent write (R-24) never heals. So an unloadable artifact is treated
+    // as full staleness — every analyzable file is forced into re-analysis and
+    // the sidecar is rewritten at the end.
+    let cached = crate::analysis::load(root);
+
+    // Stamps are only trusted when the artifact they describe actually loaded.
+    // An empty `old_stamps` makes every comparison below a difference, which is
+    // exactly "re-analyze every analyzable file".
+    let old_stamps: BTreeMap<String, Stamp> = match &cached {
+        Some(_) => load_stamps(root).map(|s| s.stamps).unwrap_or_default(),
+        None => BTreeMap::new(),
+    };
 
     // A file needs re-analysis when it is analyzable and its stamp changed (or
     // it is new). A file is "stale" — its cached entries must be dropped — when
@@ -184,9 +214,13 @@ pub fn learn(root: &Path, progress: &dyn Fn(LearnProgress)) -> anyhow::Result<(I
 
     // Seed from the cached artifact, keeping only entries for files that still
     // exist and did not change. Only the per-file stages are seeded here; the
-    // repo-level module graph is recomputed below (it is not per-file).
+    // repo-level module graph is recomputed below (it is not per-file). When the
+    // artifact did not load there is nothing to seed — `Analysis::new()` carries
+    // the current `ANALYSIS_VERSION`, and every section is filled by the full
+    // re-analysis above, so the persisted artifact can never be a partially
+    // filled one.
     let mut analysis = Analysis::new();
-    if let Some(old) = crate::analysis::load(root) {
+    if let Some(old) = cached {
         let keep = |file: &str| current.contains_key(file) && !stale.contains(file);
         analysis.variables = old
             .variables
@@ -473,8 +507,8 @@ mod tests {
         learn(&root, &|_| {}).unwrap();
         let before = analysis_for(&root).unwrap();
 
-        // Rewrite main.rs with a different line count so the stamp differs even
-        // if the (second-resolution) mtime is unchanged.
+        // Rewrite main.rs with a different byte size so the stamp differs even
+        // if the mtime happens to land in the same (nano)second.
         std::fs::write(
             root.join("src/main.rs"),
             "fn main() {\n    let x = 1;\n    let y = 2;\n    println!(\"{}\", x + y);\n}\n",
@@ -688,7 +722,8 @@ mod tests {
         assert_eq!(analyze_done(&warm), 0, "warm re-learn analyzes 0");
         assert_eq!(reanalyzed(&root), 0);
 
-        // Touch exactly one file (extra line ⇒ stamp changes regardless of mtime).
+        // Touch exactly one file (larger byte size ⇒ stamp changes regardless
+        // of whether the mtime lands in the same nanosecond-or-second window).
         std::fs::write(
             root.join("src/main.rs"),
             "fn main() {\n    let x = 1;\n    let y = 2;\n    println!(\"{}\", x + y);\n}\n",
@@ -785,5 +820,113 @@ mod tests {
         );
 
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // ---- unloadable analysis.json forces full staleness (CORE-11) ---------
+
+    /// Learn once, prove it is complete, then poison `analysis.json` and learn
+    /// again. The rewrite must be a complete artifact (real variables/types),
+    /// never the version-current-but-empty artifact the defect produced, and
+    /// the learn after it must be a warm hit that still serves the real values.
+    fn assert_unloadable_artifact_forces_complete_reanalysis(
+        tag: &str,
+        poison: impl FnOnce(&Path),
+    ) {
+        // The real fixture: it has the card's observable values (variables=5,
+        // types=1), so "complete" is judged against a genuinely non-empty
+        // artifact, not a synthetic one.
+        let root = copy_sample_fixture(tag);
+
+        // Cold learn: the real per-file payload, with types present.
+        let (idx, first) = learn(&root, &|_| {}).unwrap();
+        let file_count = analyzable_count(&idx);
+        assert!(file_count > 0, "the fixture has analyzable files");
+        assert!(
+            !first.variables.is_empty() && !first.types.is_empty(),
+            "cold learn must be complete: variables={} types={}",
+            first.variables.len(),
+            first.types.len()
+        );
+        let warm = learn_events(&root);
+        assert!(!warm.is_empty(), "warm learn ran");
+        assert_eq!(analyze_done(&warm), 0, "baseline is warm");
+
+        // Poison the cached artifact, leaving the stamp sidecar current.
+        poison(&root);
+        assert!(
+            analysis_for(&root).is_none(),
+            "the poisoned artifact must not load"
+        );
+
+        // The unloadable artifact is full staleness: every analyzable file is
+        // re-analyzed and the rewrite is complete, not empty.
+        let events = learn_events(&root);
+        assert_eq!(
+            reanalyzed(&root),
+            file_count,
+            "{tag}: an unloadable analysis.json must force a full re-analysis"
+        );
+        assert_eq!(analyze_done(&events), file_count);
+        let healed = analysis_for(&root).expect("a complete artifact was written back");
+        assert_eq!(
+            (
+                healed.variables.len(),
+                healed.cfgs.len(),
+                healed.types.len(),
+                healed.uses.len()
+            ),
+            (
+                first.variables.len(),
+                first.cfgs.len(),
+                first.types.len(),
+                first.uses.len()
+            ),
+            "{tag}: the rewritten artifact must be complete, not empty"
+        );
+        assert!(!healed.variables.is_empty() && !healed.types.is_empty());
+
+        // A second learn immediately after is a warm hit that keeps the values.
+        assert_eq!(
+            analyze_done(&learn_events(&root)),
+            0,
+            "{tag}: the learn after the heal must be warm"
+        );
+        assert_eq!(reanalyzed(&root), 0);
+        assert_eq!(
+            analysis_for(&root).unwrap(),
+            first,
+            "{tag}: warm re-learn still serves the complete artifact"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// (a) The artifact is simply gone while the sidecar is current.
+    #[test]
+    fn missing_analysis_artifact_forces_complete_reanalysis() {
+        assert_unloadable_artifact_forces_complete_reanalysis("poison-absent", |root| {
+            std::fs::remove_file(crate::analysis::analysis_path(root)).unwrap();
+        });
+    }
+
+    /// (b) The artifact body is garbage that does not even parse.
+    #[test]
+    fn corrupt_analysis_artifact_forces_complete_reanalysis() {
+        assert_unloadable_artifact_forces_complete_reanalysis("poison-corrupt", |root| {
+            std::fs::write(crate::analysis::analysis_path(root), b"{ broken").unwrap();
+        });
+    }
+
+    /// (c) The artifact parses but carries an unknown version, which
+    /// `analysis::load` refuses.
+    #[test]
+    fn unknown_version_analysis_artifact_forces_complete_reanalysis() {
+        assert_unloadable_artifact_forces_complete_reanalysis("poison-version", |root| {
+            let path = crate::analysis::analysis_path(root);
+            let mut v: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+            v["version"] = serde_json::json!(crate::analysis::ANALYSIS_VERSION + 1);
+            std::fs::write(&path, serde_json::to_vec(&v).unwrap()).unwrap();
+        });
     }
 }
