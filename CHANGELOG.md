@@ -187,9 +187,10 @@ planned, **not** stubbed, **not** coming with this release:
   v1; that is not a refactoring feature.)
 - **No git-churn overlay and no diff/watch mode.**
 - **No Tauri / web port** — the GUI stays a native eframe/egui desktop app.
-- (Also still open, tracked as known defects rather than features — see
-  [`docs/v2-release-notes.md`](docs/v2-release-notes.md): R-27 v1 `build_index`
-  language dispatch and R-14 whole-second cache staleness, card `CORE-8`.)
+- (R-27 language dispatch and R-14 whole-second cache staleness landed as fixes in
+  this cycle — see [`docs/v2-release-notes.md`](docs/v2-release-notes.md). The one
+  defect open at release time is CORE-11, an unloadable `analysis.json` not
+  forcing a re-analyze.)
 
 ## [0.1.0] - 2026-10-13
 ### Added
