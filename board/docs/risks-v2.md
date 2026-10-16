@@ -88,3 +88,179 @@ as "not yet proved".
 owning cards), the measured budget numbers (captured by VER-3, re-checked by
 RISK-03), and the v1 flow-mode risks already tracked in
 [`risks-flow.md`](risks-flow.md) R-01 … R-11.
+
+---
+
+# Final pass (RISK-3, 2026-10-16)
+
+Independent, evidence-based sweep of the whole `prerelease-v2` tree (branch head
+`66c2c11`). Every claim below is a command I ran on this checkout; where a number
+is not proven I say **UNMEASURED** rather than restating a target. This section
+does not edit or soften R-12 … R-27 — status changes are restated with evidence
+in §5.
+
+## 1. No-network proof (v2-added dependencies)
+
+What v2 *added* (from `git diff redesign..prerelease-v2 -- crates/core/Cargo.toml`):
+`regex = "1"`, `tree-sitter-javascript = "0.25.0"`, `tree-sitter-typescript = "0.23.2"`.
+The lock diff adds exactly two new `[[package]]` blocks — the two grammars
+(`regex` was already a transitive dep). Each added crate and its full transitive
+set, resolved-source greped for `TcpStream|UdpSocket|TcpListener|reqwest|hyper|
+ureq|native_tls|std::net|socket2|curl`:
+
+| added crate | version | new transitive adds | network-capable? |
+|---|---|---|---|
+| `regex` | 1.13.1 | aho-corasick, memchr, regex-automata, regex-syntax | **no** (0 hits) |
+| `tree-sitter-javascript` | 0.25.0 | tree-sitter-language, `cc` (build) | **no** (0 hits) |
+| `tree-sitter-typescript` | 0.23.2 | tree-sitter-language, `cc` (build) | **no** (0 hits) |
+
+The only non-zero resolved-source hits were false positives, quoted:
+`regex/…/bytes.rs:776` "curly braces", `regex-automata/…/lib.rs:18` "hyperlinked",
+`regex-automata/…/range_trie.rs:597` "hyperfine", `cc/…/generated.rs:28`
+`aarch64-unknown-hyperlight` (a target triple). No socket/HTTP code anywhere.
+
+Graph-level gate over the whole workspace:
+`cargo tree -p repowalk-core -p repowalk-gui -p repowalk-cli --locked | grep -cE 'reqwest|tokio|hyper|ureq|native-tls'` → **0**;
+`cargo tree --workspace --locked | grep -cE 'reqwest|tokio|hyper|ureq|native-tls'` → **0**;
+`cargo tree --workspace --locked | grep -c tokio` → **0**.
+
+First-party source (`crates/**`, no `vendor/`):
+- `grep -rnE 'std::net|TcpStream|UdpSocket|TcpListener' crates/ --include='*.rs'` → **0 hits**.
+- `grep -rnE 'Command::new|std::process::Command' crates/ --include='*.rs'` → hits **only** in
+  `crates/cli/tests/cli_e2e.rs:7,43,128` and `crates/cli/tests/cli_v2_e2e.rs:7,42,53,88`
+  — the test harness spawning the built `repowalk` binary. **No production process exec.**
+- `grep -rnE 'reqwest|hyper|ureq|curl|http::' crates/ --include='*.rs'` → only
+  `crates/gui/src/theme.rs:352  v.hyperlink_color = p.accent;` (an egui field, false positive).
+- `grep -rnE 'https?://' crates/ --include='*.rs'` → only
+  `crates/core/src/export/svg.rs:128` `http://www.w3.org/2000/svg` — an XML **namespace
+  identifier** emitted as a literal, never fetched. No URL is ever handed to a client.
+
+Offline resolution: `cargo metadata --offline --locked` → **exit 0**;
+`git status --porcelain Cargo.lock` → **clean** (lock unchanged).
+
+Lockfile caveat (now R-31): `Cargo.lock` *does* contain `tokio`, `wasm-bindgen`,
+`web-sys`, `js-sys` and `wasm-bindgen-futures` (`→ tokio`) — but every one is
+`eframe`'s `[target.'cfg(target_arch = "wasm32")'.dependencies]`, absent from the
+native graph (`cargo tree` count 0). A naive `grep tokio Cargo.lock` misleads; the
+`cargo tree` gate is the correct one.
+
+## 2. Code-level network / urgency greps
+
+| grep | hits | verdict |
+|---|---|---|
+| network syscalls in `crates/**` | 0 | pass |
+| `Command::new` in non-test source | 0 | pass |
+| runtime-fetched URL | 0 | pass |
+| `grep -rn 'request_repaint' crates/gui/src` | `flow/mod.rs:212`, `flow/playback.rs:104,106`, `app.rs:189,222` | all legitimate (below) |
+| `grep -rnE 'std::thread::spawn' crates/gui/src` | `app.rs:174` (one) | one worker per Open/Learn, terminates |
+| `grep -rn 'Instant::now' crates/gui/src` | 0 | uses the egui frame clock (`playback.rs:80`), not a wall clock |
+| `thread::sleep` in `crates/gui/src` | 0 | no polling/sleep thread |
+| `while` in `crates/gui/src` | all bounded queue/graph traversal | no spin loop |
+
+Repaint sites, classified:
+- `app.rs:189` — inside the `learn` progress `notify` closure → **progress notify**, fires only while learning.
+- `app.rs:222` — after the worker finishes → **one-shot completion**, not periodic.
+- `flow/playback.rs:106` — `ctx.request_repaint_after(...)` guarded by `if self.playing && steps > 0`
+  → **active animation only** (150 ms cadence, `PULSE_MS=600`), nothing when parked.
+
+So the code-level precondition for the idle budget holds: **no `request_repaint` in a
+loop, no polling thread, no `Instant::now`, no sleep**. The budget itself is still
+**UNMEASURED** because idle CPU/repaint counts cannot be taken headless — see §3.
+
+## 3. Perf budget audit (VER-3 owns fresh numbers)
+
+`board/docs/verification-v2.md` **did not exist** at the time of this pass, so no
+VER-3 measurements are available to cite. Rows below are not invented.
+
+| budget | target | verdict | citation |
+|---|---|---|---|
+| Cold learn, ~10k-LOC external repo | < 5 s | **UNMEASURED — VER-3 in flight** | no `verification-v2.md`; no timing run performed by RISK-3 (deliberately not duplicated) |
+| Incremental re-learn after 1 of N | 1 re-parsed | **MET (functional)** | `cargo test -p repowalk-core --locked` green: `learn::tests::current_revision_preserves_incremental_behaviour` asserts `reanalyzed == 1`; the wall-clock *budget* is **UNMEASURED** |
+| Idle UI CPU / repaints | ~0 %, 0 repaints | **UNMEASURED (headless)** | not measurable headless. Precondition proven in §2 (no loop repaint / no polling thread / no `Instant::now` / no sleep); a GUI session must still confirm 0 frames |
+| Memory, 100k-LOC repo | < 1.5 GB RSS | **UNMEASURED — VER-3 in flight** | no measurement |
+
+"Only VER-3 can close these": for the idle row, **0 repaints while static and
+unfocused** must be observed in a live window (an egui frame counter over 60 s),
+which no headless command can produce.
+
+## 4. Scope freeze
+
+`docs/v2-plan.md` defines **F1, F2, F3, F4, F6, F7, F8, F9, F10, F11, F12, F13,
+F14, F15** — 14 specs. **There is no F5** anywhere in the plan or board (now R-31;
+a numbering gap, not a missing deliverable). Non-goals (`grep -c 'Non-goals' docs/v2-plan.md` → 1):
+AI/LLM summaries, network calls, refactoring/editing, git-churn, diff/watch, Tauri/web.
+
+Leak checks:
+- **LLM/embedding:** `grep -rniE 'openai|anthropic|llm|embedding|onnx|tract' crates/` →
+  only comments that say there is none (e.g. `notes.rs:6` "no network, no LLM"). **No leak.**
+- **Watcher/notify crate:** `grep -rniE 'notify|inotify|watchexec' Cargo.toml crates/*/Cargo.toml Cargo.lock` → **0.**
+- **Tauri/web:** no `tauri`/`wry`/`webkit`/`axum`/`warp` in any manifest; `web-sys`/
+  `wasm-bindgen`/`js-sys` are wasm-target-gated only (R-31). Native graph clean.
+- **User-source editing by exporters:** every export entry point in `crates/gui/src/app.rs`
+  writes its **own** output next to the repo — `repowalk-graph.png` (467),
+  `repowalk-report.md` (480), `repowalk-architecture.md` (516),
+  `repowalk-{name}.{ext}` (540) via `export/diagram`; `export/png.rs:23`; notes go to
+  `.repowalk/notes.json` (`notes.rs:121`). CLI `report`/`graph` write to stdout; every
+  `fs::write` under `crates/cli/src/commands/` is inside `#[cfg(test)]` temp dirs.
+  **Exception (pre-existing, now R-30):** `app.rs::save_open_file` (302–319) writes the
+  Ctrl+S-edited buffer back to `repo.join(path)` — it *can* modify user source. It is
+  present at the branch point `redesign` (`git show redesign:crates/gui/src/app.rs` line 230)
+  and is **untouched by the v2 diff** (`git diff redesign..prerelease-v2 -- crates/gui/src/app.rs`
+  has no `save_open_file`/`fs::write` hunk). Not a v2 leak; flagged as a release-note item.
+
+## 5. Freeze checks + status changes to existing rows
+
+- **`index.json` shape frozen.** `git diff --quiet redesign..prerelease-v2 -- crates/core/src/model.rs`
+  → **exit 0 (identical)**. The v2 types (`Variable`, `VarKind`, `UseSite`, `CfgNode`,
+  `CfgEdge`, `FunctionCfg`, `TypeNode`, `TypeEdge`, `ModuleNode`, `ModuleEdge`,
+  `Analysis`) all live in the **new** `crates/core/src/analysis.rs`, not `model.rs`.
+  `ANALYSIS_VERSION: u32 = 1` (`analysis.rs:10`) **unchanged**.
+- **Version mismatch = refuse, never misread.** `analysis.rs:242`
+  `(a.version == ANALYSIS_VERSION).then_some(a)` → `load` returns `None` on mismatch
+  (a miss). **But** the only test, `analysis::tests::version_mismatch_is_a_miss`, asserts a
+  serde round-trip inequality and its own comment says the `load` behaviour is "checked at
+  the call site, not here" — **no test calls `load()` on a mismatched file.** So the
+  mechanism is proven by code, the *refusal* is **not test-proven** (new row **R-29**;
+  VER-3 owns the end-to-end). The related CORE-10 producer-revision cache key
+  (`LEARN_REVISION = 2`, `learn.rs:66`) *is* test-proven by
+  `learn::tests::stale_revision_forces_full_reanalysis`.
+- **R-14 — stale mtime cache: FIXED (was MATERIALIZED).** `store.rs` now stamps per file
+  with `Stamp { mtime_nanos, size }` (`store.rs:38–63`) and `cache_valid` is per-file
+  (`store.rs:108`); `walk::mtime_nanos` (nanoseconds) backs it. Regression tests present
+  and green: `store::tests::same_second_edit_invalidates`,
+  `size_change_with_preserved_mtime_invalidates`, `edit_of_non_newest_file_invalidates`.
+  **Hook caveat:** the R-14 hook `grep -n 'as_secs' crates/core/src/walk.rs` → **0** is
+  **NOT met**: it still returns 2 lines (`walk.rs:74` in `mtime_secs`, `walk.rs:81` a doc
+  comment). `mtime_secs` is retained for `FileEntry.mtime` (whole seconds for callers) and
+  is **not** on the cache path — the fix is real, the hook is mis-scoped (R-28).
+- **R-27 — silent language drop: FIXED (was MATERIALIZED).** `pipeline.rs` now routes every
+  file through `Lang::from_walk` (line 139), handles `TypeScript | JavaScript` (142–143),
+  and emits `unsupported_summary()` — "N files not analyzed (lang)" — for anything else
+  (43–53, 150–159). Tests present and green:
+  `pipeline::tests::ts_only_dir_indexes_non_zero_symbols`,
+  `unsupported_language_files_are_reported_explicitly`. The old `parse_ts`/`_ =>` defect
+  string is gone; `pipeline.rs:487` only quotes it inside a regression test message.
+
+## 6. New rows (R-28 … R-31)
+
+| id | risk | likelihood | impact | mitigation | owner | verify hook |
+|---|---|---|---|---|---|---|
+| R-28 | Hook drift: several v2 verify hooks are **mis-scoped** and do not pass as literally written, so a future pass may read "red" for a fixed risk or "green" for a broken one | Med | Med | Re-scope every hook to the code it actually guards; record the raw hit so the next pass does not re-litigate. Known offenders: R-14 (`as_secs` → 2, retained for `FileEntry.mtime`), R-17 (`\-sys\|cc\|ring` → 5, all tree-sitter build-dep `cc`), R-19 (`index.clone()/analysis.clone()` → ~20, all `Arc` clones since `App.index: Option<Arc<Index>>`), R-22 (`never to an engineering director` is line-wrapped) | RISK-06 | `grep -cE '\-sys v\|cc v\|ring v' <(cargo tree -p repowalk-core --locked)` = 5 and every hit is under a `[build-dependencies]` `cc` line; `grep -n 'index: Option<Arc<Index>>' crates/gui/src/app.rs` is the R-19 truth |
+| R-29 | The `analysis.json` version-mismatch **refusal** is not test-proven: `version_mismatch_is_a_miss` checks serde only and never calls `analysis::load`, so a future change that misreads a stale artifact would not fail a test | Low | High | Add a test that writes `{"version": ANALYSIS_VERSION+1,…}` to `.repowalk/analysis.json` and asserts `analysis::load(root)` is `None` (a miss → full re-learn) | CORE-01 + VER-3 | `cargo test -p repowalk-core --locked -- analysis` must gain a case calling `analysis::load` on a mismatched file and asserting `None` |
+| R-30 | Release-note honesty: `app.rs::save_open_file` (Ctrl+S) writes the edited buffer back to user source, which sits in tension with the plan's "refactoring/editing features" non-goal; it predates `prerelease-v2` and was not touched, but a reviewer reading only the non-goals may be surprised | Low | Low | State it explicitly in the release notes / README as a pre-existing v1 capability, not a v2 feature; do not remove it inside the v2 freeze | PMO + DOC-4 | `git show redesign:crates/gui/src/app.rs \| grep -n 'save_open_file'` (line 230) and `git diff redesign..prerelease-v2 -- crates/gui/src/app.rs` shows no change to it |
+| R-31 | Definition-of-scope drift: `docs/v2-plan.md` claims "F1–F15 (everything)" but defines **no F5**, and `Cargo.lock` carries wasm-target-gated `tokio`/`web-sys`/`wasm-bindgen` that a naive lockfile grep reads as a network violation | Low | Low | State the real coverage (F1–F4, F6–F15) in the release checklist; document that the lockfile's async/web crates are `eframe`'s wasm-gated deps and that `cargo tree` (not `grep Cargo.lock`) is the no-network gate | DOC-4 + BLD-01 | `grep -cE '^### F5' docs/v2-plan.md` = 0 while `grep -cE '^### F[0-9]+' docs/v2-plan.md` = 14; `cargo tree --workspace --locked \| grep -c tokio` = 0 although `grep -c 'name = "tokio"' Cargo.lock` > 0 |
+
+## 7. Gates + honest assessment
+
+- `python3 -m unittest board.tests.test_tasks` → **OK (8 tests, 0 failures)**.
+- `cargo test -p repowalk-core --locked` → **green**: 162 lib (2 ignored) + 10 analysis_golden
+  + 6 contract + 10 export_emitters + 1 golden + 4 grammar_abi + 2 walk_metrics + 1 doc-test, 0 failed.
+- `cargo tree --workspace --locked | grep -cE 'reqwest|tokio|hyper|ureq|native-tls'` → **0**;
+  `cargo metadata --offline --locked` → exit 0; `Cargo.lock` clean.
+
+**Release risk: LOW–MODERATE.** Correctness and the no-network rule are *proven* on this
+tree (native graph has zero network/async crates; `index.json` is byte-frozen; the two
+materialized defects R-14/R-27 are fixed with green regression tests; scope has no LLM/
+watcher/Tauri leak). The residual is that **all four performance budgets and the GUI idle-
+repaint claim are UNMEASURED** (VER-3 in flight, headless limits), plus the R-29 test gap on
+the artifact-refusal path. Do not call F1/F10 "done" on a number nobody has taken.
