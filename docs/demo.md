@@ -25,6 +25,14 @@ repowalk explain build_index ./repowalk   # signature, docs, callers, callees
 repowalk find "index json" ./repowalk     # ranked fuzzy hits
 ```
 
+The v2 query surface (each command learns on first use, then reads the cache):
+
+```bash
+repowalk report ./repowalk                 # architecture report + guardrails
+repowalk refs build_index ./repowalk       # every use site, resolved vs name-only
+repowalk complexity --by file ./repowalk   # per-file complexity roll-up
+```
+
 Point out the health line: `● 2 cycles · 1 god-files · 12% edges unresolved`
 — the honesty number.
 
@@ -66,75 +74,77 @@ Honest notes:
 
 ## v2 flows — learn → inventory → variables → CFG → refs → export report
 
-The complete understanding suite. **Live** steps run today; **planned (card X)**
-steps have an owner card and are not wired into the GUI/CLI yet. Never show a
-planned step as if it works.
+The complete understanding suite. The **CLI** steps below run today (F14); the GUI
+panels marked **in progress (card X)** have an owner card and are still being
+filled. Never show an in-progress panel as if it works.
+
+Setup (once):
+
+```bash
+cargo build -p repowalk-cli
+cp -r fixtures/sample /tmp/e2e        # the repo every command below uses
+```
 
 1. **Learn** — walk → parse → resolve → analyze → cache, written to
-   `.repowalk/analysis.json` (plus the per-file stamp cache for incremental
-   re-learn).
+   `.repowalk/analysis.json` plus the per-file incremental stamp cache. Every v2
+   query command below learns on first use (or reuses the cache).
 
    ```bash
-   # LIVE (engine): learn() runs and caches; a warm re-learn re-analyzes 0 files
-   cargo test -p repowalk-core --lib learn -- --nocapture
-   # LIVE: print the analyzer counts the learn stage produces
-   cargo test -p repowalk-core --test analysis_golden pending_analyzers_are_reported -- --nocapture
+   repowalk report /tmp/e2e            # learns + caches, prints the report
    ```
 
-   Planned (card DSN-4): the learn-progress view and the **Onboarding report**
-   panel.
+   In progress (card DSN-4): the learn-progress view and the **Onboarding
+   report** panel.
 
 2. **Inventory** — LOC, languages, entrypoints, complexity, hotspots, god files,
    cycles.
 
    ```bash
-   repowalk map ./some-repo     # LIVE (v1): languages, LOC, entrypoints, health line
+   repowalk map /tmp/e2e                     # languages, LOC, entrypoints, health line
+   repowalk complexity --by function /tmp/e2e   # hotspot ranking
+   repowalk complexity --by file /tmp/e2e       # per-file roll-up
    ```
 
-   Planned (card DSN-3): the `health-v2` panel with sortable complexity/hotspot
-   tables and graph tinting.
+   In progress (card DSN-3): the `health-v2` panel with sortable
+   complexity/hotspot tables and graph tinting.
 
 3. **Variables** — per-file table with **reads / writes / total uses**.
 
    ```bash
-   # LIVE (engine): Rust 7 vars / 19 uses · Python 7 / 21 · TS 13 / 26 (fixtures)
-   cargo test -p repowalk-core --test analysis_golden golden_rust_variable_counts -- --ignored
+   repowalk variables model.rs /tmp/e2e
    ```
 
-   Planned (card TEXT-2): the sortable variables panel and click-to-
+   In progress (card TEXT-2): the sortable variables panel and click-to-
    highlight-all-uses.
 
 4. **Control flow** — a CFG per function with a cyclomatic badge.
 
    ```bash
-   # LIVE (engine): 3 CFGs (Rust) / 3 (Python) / 6 (TS); TS `classify` = 9 nodes, cyclo 3, nesting 2
-   cargo test -p repowalk-core --test analysis_golden golden_rust_cfg -- --ignored
+   repowalk graph --scope cfg --symbol main /tmp/e2e
    ```
 
-   Planned (card GRAPH-2): Diagrams → Control flow.
+   In progress (card GRAPH-2): Diagrams → Control flow.
 
-5. **Refs** — every use site of a symbol.
+5. **Refs** — every use site of a symbol, split resolved vs name-only.
 
    ```bash
-   # LIVE (engine): reference lookups + resolved/name-only split, 8 green tests
-   cargo test -p repowalk-core --lib refs
+   repowalk refs greet /tmp/e2e
    ```
 
-   Planned (card TEXT-3): the refs panel and `refs <symbol>`. The use-site data
-   is collected (`Analysis.uses`) and the core lookups work; only the panel and
-   the CLI command are still to come.
+   In progress (card TEXT-3): the refs panel and Ctrl+click navigation.
 
 6. **Export the report** — Mermaid / DOT / SVG plus a self-contained Markdown
    report.
 
    ```bash
-   # LIVE (engine): 10 green emitter tests, byte-stable
-   cargo test -p repowalk-core --test export_emitters
+   repowalk report /tmp/e2e > ARCHITECTURE.md
+   repowalk graph --format svg --scope modules /tmp/e2e > modules.svg
    ```
 
-   LIVE in the GUI today: **export ▾ → PNG** and **Tour + health → Markdown**.
-   Planned (card PROD-3): the Mermaid/DOT/SVG/report menu entries and the CLI
-   `report`, `graph`, `variables`, `complexity`, `refs` commands.
+   Working in the GUI today: **export ▾ → PNG** and **Tour + health →
+   Markdown**. The GUI menu entries for Mermaid/DOT/SVG/report are in progress;
+   the CLI exposes them now. A nonzero `report` exit means an `Error`-severity
+   rule fired — see `docs/howto-guardrails.md`.
 
 ## Minute 5 — determinism close
 
