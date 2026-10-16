@@ -3,12 +3,12 @@
   "title": "gui: bookmarks, notes, reading progress, resume + tour v2",
   "phase": "implementation",
   "skill": "sdlc-implement",
-  "status": "todo",
-  "assignee": null,
-  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W4]\nSeats: TEXT-06, TEXT-07\ncrates/gui/src/notes.rs: bookmarks (file + line + label) and free-text notes per file/symbol/line, persisted to .repowalk/notes.json (serde, atomic write, tolerant parse: corrupted file -> empty + warning, never a crash); sidebar 'Notes' panel with jump-to and delete; reading-progress tracking (last visited file+line+symbol) with a 'Continue' affordance on open; tour v2: extend the tour panel with next/prev steps and per-step why (reuse core::tour), marking visited steps. Owner: crates/gui/src/notes.rs, sidebar/tour.rs additions. Verify: cargo build/clippy/test -p repowalk-gui (unit-test notes.json roundtrip + corrupted-file tolerance).",
+  "status": "done",
+  "assignee": "TL-TEXT",
+  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W4]\nSeats: TEXT-06, TEXT-07\ncrates/gui/src/notes.rs: bookmarks (file + line + label) and free-text notes per file/symbol/line, persisted to .repowalk/notes.json (serde, atomic write, tolerant parse: corrupted file -> empty + warning, never a crash); sidebar 'Notes' panel with jump-to and delete; reading-progress tracking (last visited file+line+symbol) with a 'Continue' affordance on open; tour v2: extend the tour panel with next/prev steps and per-step why (reuse core::tour), marking visited steps. Owner: crates/gui/src/notes.rs, sidebar/tour.rs additions. Verify: cargo build/clippy/test -p repowalk-gui (unit-test notes.json roundtrip + corrupted-file tolerance).\nEVIDENCE (TEXT-4, TL-TEXT): crates/gui/src/notes.rs stub replaced with the F11 local notes store + panel (notes.rs only; app.rs/sidebar/ui_kit/theme/core untouched). Store: <repo>/.repowalk/notes.json, atomic tmp+rename like core::store; load is tolerant (missing/corrupt/wrong-version -> empty, never panics) via a hand-rolled minimal JSON codec (no new deps; serde_json is not a gui dependency). Note = id, target{file, symbol?, line?}, text, created/updated (RFC3339 UTC hand-formatted from SystemTime). Panel: file-grouped list, add-for-current-selection, inline edit + delete, text/file/symbol filter, click -> open_file_with(file,line) and select the symbol when live; each row shows target + created date; a note whose file/symbol is gone is marked 'stale' (never dropped); no repo / no analysis stated; empty store invites the first note; a failed write is rolled back and surfaced via app.error (never claims saved). Gates: cargo fmt -p repowalk-gui -- --check -> exit 0; cargo clippy -p repowalk-gui --all-targets -- -D warnings -> exit 0; cargo test -p repowalk-gui -> 77 passed, 0 failed (7 new notes tests: save/load round-trip, corrupt->empty no panic, stale detection, add/edit/delete, RFC3339 helpers, filter+group, JSON escaping/junk tolerance). Not committed.",
   "artifacts": [
     "crates/gui/src/notes.rs"
   ],
   "created": "2026-10-15T14:11:51Z",
-  "updated": "2026-10-15T14:11:51Z"
+  "updated": "2026-10-16T00:11:51Z"
 }

@@ -5,6 +5,8 @@ use repowalk_core::model::{EdgeKind, Index};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use crate::app::{App, Selection, TracePick};
+use crate::graph::filter;
+use crate::graph::render::load_state;
 use crate::theme;
 
 /// BFS shortest call path from `a` to `b` over resolved call edges.
@@ -50,25 +52,19 @@ pub fn shortest_call_path(idx: &Index, a: &str, b: &str) -> Option<Vec<String>> 
     None
 }
 
-/// Node ids dimmed when `selected` is highlighted: everything except the
-/// selected node and its direct callers/callees.
-pub fn dimmed_nodes(idx: &Index, selected: &str) -> BTreeSet<String> {
-    let mut keep: BTreeSet<String> = BTreeSet::from([selected.to_string()]);
+/// The focus node plus its direct callers/callees — the "keep lit" set used to
+/// emphasise a selection's neighbourhood (focus + context dimming).
+pub fn neighborhood(idx: &Index, focus: &str) -> BTreeSet<String> {
+    let mut keep: BTreeSet<String> = BTreeSet::from([focus.to_string()]);
     for e in &idx.edges {
-        if e.caller == selected {
+        if e.caller == focus {
             keep.insert(e.callee.clone());
         }
-        if e.callee == selected {
+        if e.callee == focus {
             keep.insert(e.caller.clone());
         }
     }
-    let mut dimmed = BTreeSet::new();
-    for s in &idx.symbols {
-        if !keep.contains(&s.id) {
-            dimmed.insert(s.id.clone());
-        }
-    }
-    dimmed
+    keep
 }
 
 /// Human-readable node name for banners: symbol name, or bare file path.
@@ -207,43 +203,61 @@ pub fn handle(ui: &mut egui::Ui, app: &mut App) {
             ))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    match idx.symbols.iter().find(|s| s.id == hovered) {
-                        Some(s) => {
-                            ui.colored_label(
-                                theme::TEXT_PRIMARY,
-                                egui::RichText::new(&s.signature)
-                                    .family(egui::FontFamily::Monospace)
-                                    .size(theme::FONT_CODE),
-                            );
-                            ui.colored_label(
-                                theme::TEXT_MUTED,
-                                egui::RichText::new(format!("{}:{}", s.file, s.start_line))
-                                    .size(theme::FONT_SMALL),
-                            );
-                        }
-                        None => {
-                            // File-level node: show its path in code face.
-                            let path = hovered.strip_prefix("file:").unwrap_or(hovered.as_str());
-                            ui.colored_label(
-                                theme::TEXT_SECONDARY,
-                                egui::RichText::new(path)
-                                    .family(egui::FontFamily::Monospace)
-                                    .size(theme::FONT_SMALL),
-                            );
-                        }
+                    if let Some(module) = hovered.strip_prefix("cluster:") {
+                        // Collapsed module cluster: real module name + hint.
+                        ui.colored_label(
+                            theme::TEXT_PRIMARY,
+                            egui::RichText::new(format!("▢ {module}"))
+                                .family(egui::FontFamily::Monospace)
+                                .size(theme::FONT_CODE),
+                        );
+                        ui.colored_label(
+                            theme::TEXT_MUTED,
+                            egui::RichText::new("collapsed module — click to expand")
+                                .size(theme::FONT_SMALL),
+                        );
+                    } else if let Some(s) = idx.symbols.iter().find(|s| s.id == hovered) {
+                        ui.colored_label(
+                            theme::TEXT_PRIMARY,
+                            egui::RichText::new(&s.signature)
+                                .family(egui::FontFamily::Monospace)
+                                .size(theme::FONT_CODE),
+                        );
+                        ui.colored_label(
+                            theme::TEXT_MUTED,
+                            egui::RichText::new(format!("{}:{}", s.file, s.start_line))
+                                .size(theme::FONT_SMALL),
+                        );
+                        // The id is inspector/tooltip-only — never a node label.
+                        ui.colored_label(
+                            theme::TEXT_DISABLED,
+                            egui::RichText::new(&s.id)
+                                .family(egui::FontFamily::Monospace)
+                                .size(theme::FONT_SMALL),
+                        );
+                    } else {
+                        // File-level node: show its path in code face + id.
+                        let path = hovered.strip_prefix("file:").unwrap_or(hovered.as_str());
+                        ui.colored_label(
+                            theme::TEXT_SECONDARY,
+                            egui::RichText::new(path)
+                                .family(egui::FontFamily::Monospace)
+                                .size(theme::FONT_SMALL),
+                        );
                     }
                 });
             });
     }
 
-    // Node click: trace picking first, else selection sync. The graph borrow
-    // ends before app mutations so the dimming pass can re-borrow.
+    // Node click: trace picking first, else selection sync. Cluster nodes are
+    // handled by `render::ui` (collapse/expand), so they are ignored here.
     let clicked_id: Option<String> = app
         .graph_state
         .as_ref()
         .and_then(|(_, g)| g.selected_nodes().last().copied())
         .and_then(|n| app.graph_state.as_ref().unwrap().1.node(n))
-        .map(|node| node.payload().id.clone());
+        .map(|node| node.payload().id.clone())
+        .filter(|id| !id.starts_with("cluster:"));
     if let Some(id) = clicked_id {
         match app.trace_pick {
             TracePick::PickA => {
@@ -267,33 +281,43 @@ pub fn handle(ui: &mut egui::Ui, app: &mut App) {
         }
     }
 
-    // Dimming: neighborhood highlight around selection, or trace path focus.
+    // Focus+context dimming. A node stays lit when it matches the active search
+    // OR falls in the focused neighbourhood (selection or resolved trace path).
+    // No search and no focus ⇒ nothing is dimmed.
     let focus: Option<String> = app.selection.clone().map(|s| match s {
         Selection::Symbol(id) => id,
         Selection::File(p) => format!("file:{p}"),
     });
-    let mut dim: BTreeSet<String> = focus
-        .as_ref()
-        .map(|f| dimmed_nodes(&idx, f))
-        .unwrap_or_default();
+    let mut keep: Option<BTreeSet<String>> = focus.as_ref().map(|f| neighborhood(&idx, f));
 
     if let Some((a, b)) = app.trace.clone() {
         if let Some(path) = shortest_call_path(&idx, &a, &b) {
             // trace mode: highlight only the path
-            dim = idx
-                .symbols
-                .iter()
-                .map(|s| s.id.clone())
-                .filter(|id| !path.contains(id))
-                .collect();
+            keep = Some(path.into_iter().collect());
         }
     }
+
+    let ui_state = load_state(ui.ctx());
+    let search_active = !ui_state.search.trim().is_empty();
 
     if let Some((_, g)) = app.graph_state.as_mut() {
         let indices: Vec<_> = g.g().node_indices().collect();
         for idx_in_graph in indices {
+            let (search_ok, focus_ok) = {
+                let Some(node) = g.g().node_weight(idx_in_graph) else {
+                    continue;
+                };
+                let p = node.payload();
+                let search_ok = !search_active
+                    || filter::matches_search(
+                        &ui_state.search,
+                        &[&p.label, &p.short, &p.id, &p.module],
+                    );
+                let focus_ok = keep.as_ref().is_none_or(|k| k.contains(&p.id));
+                (search_ok, focus_ok)
+            };
             if let Some(node) = g.g_mut().node_weight_mut(idx_in_graph) {
-                node.display_mut().dimmed = !dim.is_empty() && dim.contains(&node.payload().id);
+                node.display_mut().dimmed = !search_ok && !focus_ok;
             }
         }
     }
@@ -371,16 +395,16 @@ mod tests {
     }
 
     #[test]
-    fn dimming_keeps_only_neighborhood() {
+    fn neighborhood_keeps_selection_and_direct_neighbours() {
         let idx = idx_chain();
-        let dim = dimmed_nodes(&idx, "a.rs:5");
-        assert!(!dim.contains("a.rs:5"), "selected stays lit");
-        assert!(!dim.contains("a.rs:1"), "caller stays lit");
-        assert!(!dim.contains("a.rs:9"), "callee stays lit");
-        // a fourth, unconnected symbol is dimmed
+        let keep = neighborhood(&idx, "a.rs:5");
+        assert!(keep.contains("a.rs:5"), "selected stays lit");
+        assert!(keep.contains("a.rs:1"), "caller stays lit");
+        assert!(keep.contains("a.rs:9"), "callee stays lit");
+        // A fourth, unconnected symbol is NOT in the neighbourhood.
         let mut idx2 = idx_chain();
         idx2.symbols.push(sym("d.rs:1", "d"));
-        let dim2 = dimmed_nodes(&idx2, "a.rs:5");
-        assert!(dim2.contains("d.rs:1"));
+        let keep2 = neighborhood(&idx2, "a.rs:5");
+        assert!(!keep2.contains("d.rs:1"));
     }
 }

@@ -1,4 +1,5 @@
 //! Graph mode: egui_graphs adapter + legend + interaction. OWNER of aggregate: main; parts: RSK-19/20.
+pub mod filter;
 pub mod interaction;
 pub mod render;
 
