@@ -9,6 +9,12 @@
 # demo/export outputs
 repowalk-graph.png
 repowalk-report.md
+# v2 export menu writes these next to the repo it opened
+/repowalk-architecture.md
+/repowalk-callgraph.*
+/repowalk-cfg.*
+/repowalk-modules.*
+/repowalk-types.*
 
 # editor / OS noise
 .idea/
