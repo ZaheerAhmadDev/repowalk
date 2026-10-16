@@ -112,9 +112,10 @@ writing** — card `CORE-11`, in flight:
   `analysis-stamps.json` still looks current, `learn()` re-analyzed nothing and
   rewrote a **version-current but empty** artifact; the next read then served
   zero variables/types with exit 0. The fix (treat "the cached analysis did not
-  load" as full staleness) is landing with tests for all three poisons. Until it
-  lands, if you hand-edit or delete `.repowalk/analysis.json`, delete
-  `.repowalk/analysis-stamps.json` with it.
+  load" as full staleness) **landed** with tests for all three poisons — card
+  `CORE-11`, commit `4c5db5c`: all three now serve `5 variables / 1 type / 4 uses`
+  and stay warm-stable on a second read. The old workaround (delete
+  `.repowalk/analysis-stamps.json` alongside the artifact) is no longer needed.
 
 Everything else tracked in [`board/docs/risks-v2.md`](../board/docs/risks-v2.md)
 is either mitigated (and test-guarded) or a forward-looking hook that passes only

@@ -25,7 +25,7 @@ crates/core   — model, walk, tree-sitter extraction (parse_rust / parse_py,
 crates/gui    — eframe app: sidebar (map/health/tour/search), text mode
                 (file tree + editable editor + explain card), graph mode
                 (egui_graphs, A→B flow trace), flow mode (trace + waves),
-                Diagrams mode (control flow / types / modules — landing),
+                Diagrams mode (control flow / types / modules),
                 exports (PNG/Markdown).
 crates/cli    — clap subcommands (v1: map/tour/explain/find/flow; v2 query:
                 report/graph/variables/complexity/refs, `--json` where useful)
@@ -291,9 +291,9 @@ diagrams}::ui`.
 | Mode | Question | Wiring | Status |
 |---|---|---|---|
 | **Text** | what does this exact code say? | `text::ui` (`text/{mod,tree,editor}.rs`) | ☑ (variables/refs panels ▶ TEXT-2/TEXT-3) |
-| **Graph** | how is everything connected? | `graph::ui` (`graph/{mod,render,interaction}.rs`) | ☑ v1 (v2 LOD/clusters/filters ▶ GRAPH-4) |
-| **Flow** | what happens when this runs? | `flow::ui` (`flow/{mod,render,playback}.rs`), sub-tabs `FlowTab::{Trace, Waves}` | ☑ (Feature tab ▶ GRAPH-5) |
-| **Diagrams** | control flow / types / modules | `Mode::Diagrams` + `diagrams::ui` (`diagrams/{mod,control,types,modules}.rs`) | ▶ wired; panels landing (GRAPH-2 / GRAPH-3) |
+| **Graph** | how is everything connected? | `graph::ui` (`graph/{mod,render,interaction,filter}.rs`) | ☑ v1 + v2 (real-name LOD, clusters, `exact only`, search-highlight, 400-node cap — GRAPH-4) |
+| **Flow** | what happens when this runs? | `flow::ui` (`flow/{mod,render,playback,feature}.rs`), sub-tabs `FlowTab::{Trace, Waves, Feature}` | ☑ (Feature tab + call coverage — GRAPH-5) |
+| **Diagrams** | control flow / types / modules | `Mode::Diagrams` + `diagrams::ui` (`diagrams/{mod,control,types,modules}.rs`) | ☑ (GRAPH-2 / GRAPH-3) |
 
 `Mode::Diagrams` is wired in `app.rs` (Tab cycle Text → Graph → Flow → Diagrams,
 plus the palette and the toolbar segment) and `diagrams/mod.rs` owns the
