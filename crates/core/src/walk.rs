@@ -75,6 +75,31 @@ fn mtime_secs(path: &Path) -> u64 {
         .unwrap_or(0)
 }
 
+/// Nanosecond mtime since the Unix epoch (`0` when unavailable).
+///
+/// The cache stamp (R-14) uses this instead of [`mtime_secs`] so two edits
+/// inside the same whole second — which truncate to the same `.as_secs()` —
+/// still compare as different. Kept as the narrow, per-path primitive the
+/// cache composes with [`file_size`]; [`mtime_secs`] stays for callers that
+/// only need whole seconds (`FileEntry.mtime`).
+pub(crate) fn mtime_nanos(path: &Path) -> u64 {
+    std::fs::metadata(path)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0)
+}
+
+/// File size in bytes (`0` when unavailable).
+///
+/// Paired with [`mtime_nanos`] in the cache stamp: a same-second rewrite or a
+/// `git checkout` / `touch -r` that preserves mtime still changes the size (or
+/// the nanosecond mtime), so the cache is a miss instead of serving stale data.
+pub(crate) fn file_size(path: &Path) -> u64 {
+    std::fs::metadata(path).map(|m| m.len()).unwrap_or(0)
+}
+
 fn is_entrypoint(rel: &Path, text: &str) -> bool {
     let name = rel.file_name().and_then(OsStr::to_str).unwrap_or("");
     name == "main.rs"

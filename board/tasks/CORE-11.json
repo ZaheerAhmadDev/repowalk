@@ -1,0 +1,14 @@
+{
+  "id": "CORE-11",
+  "title": "core: learn() must re-analyze when the cached analysis.json is unloadable (R-21 interaction)",
+  "phase": "maintenance",
+  "skill": "sdlc-maintenance",
+  "status": "todo",
+  "assignee": null,
+  "description": "[found by VER-3's independent acceptance battery · see board/docs/verification-v2.md]\nSeats: CORE-07 (learn.rs / stamp-sidecar owner)\n\nPROVED DEFECT (R-21 interaction). If the persisted `.repowalk/analysis.json` is missing, corrupt, or version-mismatched, `analysis::load` returns None (refuses — good), but `learn()` decides what to re-analyze purely from the per-file `analysis-stamps.json`. When that sidecar is still current, `needs` is empty, `analysis` is seeded from the refused load (nothing), the module graph is built, and `analysis::save` writes a **version-current but EMPTY** artifact (variables=cfgs=types=uses=0). `artifacts::load` errors once (\"no analysis yet\"), but the empty v1 artifact persists and the very next read serves it silently with exit 0 — a misread, exactly what R-21 claims cannot happen (\"a mismatch is a cache miss (full re-learn), never a misread\").\n\nRepro on a copy of `fixtures/sample` (real output in the verification report):\n1. `repowalk report --json .` (cold) -> `\"variables\":5,\"types\":1`.\n2. Hand-edit `.repowalk/analysis.json` `\"version\":99` (or delete it, or write `{ broken`); leave `analysis-stamps.json` current.\n3. `repowalk report --json .` -> exit 1 `no analysis yet ... index the repo first`; the artifact on disk is rewritten as version 1 with variables=0/cfgs=0/types=0.\n4. `repowalk report --json .` again -> exit 0 and `\"variables\":0,\"types\":0` while the code clearly has them. `repowalk variables main.rs .` -> `(0 declared)`.\nThe same poison occurs for an absent artifact and for a garbage body (all three verified).\n\nDeliverable: `learn()` must treat \"the cached analysis did not load\" as full staleness — force re-analysis of every analyzable file (and rewrite the sidecar) whenever `crate::analysis::load(root)` is None, instead of trusting a matching stamp sidecar. This also protects R-24: a torn/atomic-write-missing artifact must rebuild, never empty.\n\nTests (VER-3 owns the files, do not edit them; make them pass):\n`cargo test -p repowalk-core --test v2_acceptance -- --ignored anti_unloadable_artifact_must_force_full_reanalysis`\n`cargo test -p repowalk-cli  --test v2_acceptance -- --ignored unknown_version_artifact_is_not_misread_as_empty`\n\nVerify: the 4-step repro ends with non-zero variables on the second read; `analysis.json` never has version 1 with an empty per-file payload while analyzable files exist.",
+  "artifacts": [
+    "crates/core/src/learn.rs"
+  ],
+  "created": "2026-10-16T00:24:26Z",
+  "updated": "2026-10-16T00:24:26Z"
+}
