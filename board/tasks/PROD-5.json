@@ -1,0 +1,15 @@
+{
+  "id": "PROD-5",
+  "title": "surface: the R-27 unsupported-language count is computed but never shown (CLI/GUI)",
+  "phase": "maintenance",
+  "skill": "sdlc-maintenance",
+  "status": "todo",
+  "assignee": null,
+  "description": "[found by VER-3's independent acceptance battery · see board/docs/verification-v2.md]\nSeats: PROD-05 (CLI: map/report) + TL-GRAPH/TL-DSN (GUI health/onboard)\n\nR-27 requires that a language with no analyzer is 'either analyze[d] ... or emit an explicit \"unsupported language, not analyzed\" count; never a silent empty extraction.' CORE-8 implemented the core half correctly: `pipeline::build_index_with_report` returns `IndexReport { index, unsupported }` and `IndexReport::unsupported_summary()` renders `\"N files not analyzed (lang)\"`.\n\nGAP: nothing consumes it. `grep -rn 'unsupported_summary\\|\\.unsupported\\b\\|build_index_with_report' crates/cli/src crates/gui/src` -> 0 hits; the only callers are pipeline.rs's own tests and VER-3's acceptance test. Every user-facing command goes through `pipeline::build_index` (which drops the unsupported list) or `artifacts::load`. So a user running `repowalk map` / `report` on a repo containing, say, `.rb`/`.go`/`.java` files sees them in the language mix and as `0 symbols` in the module map, with no indication they were not analyzed.\n\nObserved (binary target/release/repowalk-cli), a dir with `script.rb` (Ruby) + `main.ts` + `util.js` + `lib.rs`:\n  $ repowalk map <dir>\n  Languages: javascript (1 files), rb (1 files), rust (1 files), typescript (1 files)\n  ... module tree lists `script.rb` ...\n  report -> `symbols 3` (rb contributes 0) and `| script.rb | File | 3 | 0 |` in the module map; there is NO 'not analyzed' line and no non-zero exit.\n(The TS/JS half of R-27 IS fixed and visible here: main.ts/util.js extract symbols and a call edge.)\n\nDeliverable: surface the unsupported summary on at least one user-facing path — e.g. `map` prints `unsupported_summary()` in its health line, `report` adds a row/section, and/or the GUI health/onboard panel shows the N-not-analyzed count. Keep it honest (name the language(s) and the count); do not fabricate a warning when every file is analyzable.\nVerify: on a dir with a `.rb` file, one of `map`/`report` names the unsupported language and count; on a fully supported dir it prints nothing extra.",
+  "artifacts": [
+    "crates/cli/src/commands/map.rs",
+    "crates/cli/src/commands/report.rs"
+  ],
+  "created": "2026-10-16T00:45:27Z",
+  "updated": "2026-10-16T00:45:27Z"
+}
