@@ -12,10 +12,11 @@
 //! command **exits nonzero** when any finding is `Severity::Error`.
 use crate::commands::artifacts::{self, Artifacts};
 use crate::json;
+use repowalk_core::analyze;
 use repowalk_core::complexity;
 use repowalk_core::export;
 use repowalk_core::metrics;
-use repowalk_core::model::EdgeKind;
+use repowalk_core::model::{EdgeKind, Index};
 use repowalk_core::rules::{self, Finding, Severity};
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -25,11 +26,15 @@ pub fn run(md: bool, json_out: bool, path: &Path) -> anyhow::Result<()> {
     let _ = md;
     let art = artifacts::load(path)?;
     let findings = rules::check(&art.index, &art.analysis, &rules::load(path));
+    // R-27: index entries whose language has no analyzer are named explicitly
+    // (never silently shown as 0 symbols). Empty on a fully-analyzable repo.
+    let unsupported = unsupported_languages(&art.index);
 
     if json_out {
-        print!("{}", render_json(&art, &findings));
+        print!("{}", render_json(&art, &findings, &unsupported));
     } else {
-        print!("{}", export::markdown_report(&art.index, &art.analysis));
+        let markdown = export::markdown_report(&art.index, &art.analysis);
+        print!("{}", with_unsupported_row(&markdown, &unsupported));
         print!("{}", render_guardrails(&findings));
     }
 
@@ -41,6 +46,49 @@ pub fn run(md: bool, json_out: bool, path: &Path) -> anyhow::Result<()> {
         anyhow::bail!("{errors} Error-severity architecture finding(s) in rules.json");
     }
     Ok(())
+}
+
+/// The languages among `index.files` that have no analyzer (R-27), with their
+/// file counts, sorted by language. Derived from the same `Lang::from_walk`
+/// dispatch the pipeline uses, so it names exactly what `learn` could not
+/// extract; empty when every indexed file is analyzable.
+fn unsupported_languages(index: &Index) -> Vec<(String, usize)> {
+    let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
+    for f in &index.files {
+        if analyze::Lang::from_walk(&f.lang).is_none() {
+            *counts.entry(f.lang.as_str()).or_default() += 1;
+        }
+    }
+    counts
+        .into_iter()
+        .map(|(language, files)| (language.to_string(), files))
+        .collect()
+}
+
+/// Insert an honest `not analyzed` row into the report's Overview table, e.g.
+/// `| not analyzed | rb (1 file) |`. Returns `markdown` **byte-identical** when
+/// nothing was skipped, so a fully-analyzable repo is unchanged.
+fn with_unsupported_row(markdown: &str, unsupported: &[(String, usize)]) -> String {
+    if unsupported.is_empty() {
+        return markdown.to_string();
+    }
+    const LANGUAGE_MIX: &str = "| language mix |";
+    let Some(start) = markdown.find(LANGUAGE_MIX) else {
+        return markdown.to_string();
+    };
+    let line_end = markdown[start..]
+        .find('\n')
+        .map(|i| start + i + 1)
+        .unwrap_or(markdown.len());
+    let langs: Vec<String> = unsupported
+        .iter()
+        .map(|(lang, n)| format!("{lang} ({n} file{})", if *n == 1 { "" } else { "s" }))
+        .collect();
+    let mut out = String::with_capacity(markdown.len() + 48);
+    out.push_str(&markdown[..line_end]);
+    out.push_str(&format!("| not analyzed | {} |\n", langs.join(", ")));
+    out.push_str(&markdown[line_end..]);
+    out
 }
 
 /// `## Guardrails` section appended to the Markdown report.
@@ -62,7 +110,11 @@ pub fn render_guardrails(findings: &[Finding]) -> String {
 
 /// The machine-readable form of the report: the same aggregates the Markdown
 /// body renders, plus the rule findings, as one JSON object.
-pub fn render_json(art: &Artifacts, findings: &[Finding]) -> String {
+pub fn render_json(
+    art: &Artifacts,
+    findings: &[Finding],
+    unsupported: &[(String, usize)],
+) -> String {
     let index = &art.index;
     let analysis = &art.analysis;
     let m = metrics::compute(index);
@@ -179,9 +231,21 @@ pub fn render_json(art: &Artifacts, findings: &[Finding]) -> String {
         json::array(&findings_json)
     );
 
+    // R-27: additive top-level field, present only when a language was skipped,
+    // so a fully-analyzable repo's JSON (and every existing key) is unchanged.
+    let unsupported_field = if unsupported.is_empty() {
+        String::new()
+    } else {
+        let entries: Vec<String> = unsupported
+            .iter()
+            .map(|(lang, n)| format!("{{\"language\":{},\"files\":{n}}}", json::string(lang)))
+            .collect();
+        format!(",\"unsupported\":{}", json::array(&entries))
+    };
+
     format!(
         "{{\"repo\":{},\"overview\":{},\"complexity\":{},\
-         \"unused_variables\":{},\"types\":{},\"top_references\":{},\"guardrails\":{}}}\n",
+         \"unused_variables\":{},\"types\":{},\"top_references\":{},\"guardrails\":{}{unsupported_field}}}\n",
         json::string(&index.repo_root),
         overview,
         complexity_obj,
@@ -249,6 +313,7 @@ mod tests {
         let out = render_json(
             &art(PathBuf::from("/tmp/demo")),
             &[finding(Severity::Error)],
+            &[],
         );
         assert!(
             out.starts_with('{') && out.trim_end().ends_with('}'),
@@ -277,5 +342,80 @@ mod tests {
         let some = render_guardrails(&[finding(Severity::Error)]);
         assert!(some.contains("| severity | rule |"), "{some}");
         assert!(some.contains("| Error | max_cyclomatic |"), "{some}");
+    }
+
+    fn art_with_langs(langs: &[&str]) -> Artifacts {
+        let mut a = art(PathBuf::from("/tmp/demo"));
+        a.index.files.clear();
+        for (i, lang) in langs.iter().enumerate() {
+            a.index.files.push(repowalk_core::model::FileEntry {
+                path: format!("f{i}.{lang}"),
+                lang: (*lang).into(),
+                lines: 1,
+                mtime: 0,
+                is_entrypoint: false,
+            });
+        }
+        a
+    }
+
+    #[test]
+    fn unsupported_languages_groups_sorted_and_ignores_supported() {
+        let a = art_with_langs(&["rust", "rb", "go", "rb", "typescript", "python"]);
+        let list = unsupported_languages(&a.index);
+        assert_eq!(
+            list,
+            vec![("go".to_string(), 1), ("rb".to_string(), 2)],
+            "{list:?}"
+        );
+        assert!(unsupported_languages(&art_with_langs(&["rust", "typescript"]).index).is_empty());
+    }
+
+    #[test]
+    fn overview_gets_a_not_analyzed_row_only_when_needed() {
+        let markdown = "## Overview\n\n| metric | value |\n|---|---|\n| language mix | rust (1 file) |\n\n## Module map\n";
+        assert_eq!(
+            with_unsupported_row(markdown, &[]),
+            markdown,
+            "empty list must be byte-identical"
+        );
+
+        let out = with_unsupported_row(markdown, &[("go".into(), 1), ("rb".into(), 2)]);
+        assert!(
+            out.contains("| not analyzed | go (1 file), rb (2 files) |"),
+            "{out}"
+        );
+        // Still directly under the `language mix` row and before the next section.
+        let overview_row = out.find("| language mix |").unwrap();
+        let not_analyzed = out.find("| not analyzed |").unwrap();
+        assert!(overview_row < not_analyzed && not_analyzed < out.find("## Module map").unwrap());
+    }
+
+    #[test]
+    fn json_unsupported_key_is_additive_and_omitted_when_all_analyzable() {
+        let clean = render_json(&art_with_langs(&["rust", "python"]), &[], &[]);
+        assert!(!clean.contains("\"unsupported\""), "{clean}");
+
+        let out = render_json(
+            &art_with_langs(&["rust", "rb"]),
+            &[],
+            &[("rb".to_string(), 1)],
+        );
+        assert!(
+            out.contains("\"unsupported\":[{\"language\":\"rb\",\"files\":1}]"),
+            "{out}"
+        );
+        // Every pre-existing key is still present.
+        for key in [
+            "\"repo\":",
+            "\"overview\":",
+            "\"complexity\":",
+            "\"unused_variables\":",
+            "\"types\":",
+            "\"top_references\":",
+            "\"guardrails\":",
+        ] {
+            assert!(out.contains(key), "missing {key}: {out}");
+        }
     }
 }
