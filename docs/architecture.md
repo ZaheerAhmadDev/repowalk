@@ -7,12 +7,11 @@ post-implementation summary. For the v2 surface the source of truth is
 (batches, ownership, gates); this file is the *as-built* map of the code at the
 current commit.
 
-Status legend: ☑ exists · ▶ in flight (view/panel still being filled on
-`prerelease-v2`) · ☐ planned. As of this commit every `crates/core` v2 module has
-landed (each is marked ☑ with its owner card in the module map below); what is
-still ▶ is the **GUI surface** — the diagram/usage/health/notes/onboarding cards
-that are being filled in parallel while this file is written. Those carry their
-owner card from [`v2-execution-plan.md`](v2-execution-plan.md) §3.
+Status legend: ☑ exists · ▶ in flight · ☐ planned. **Everything in this map is ☑
+at `v2.0.0`** — every `crates/core` v2 module and every GUI card (the
+diagram / usage / health / notes / onboarding panels) has landed. Each section
+keeps its owner card from [`v2-execution-plan.md`](v2-execution-plan.md) §3 so a
+reader can trace a piece of code back to the card that built it.
 
 ## Workspace
 
@@ -290,15 +289,14 @@ diagrams}::ui`.
 
 | Mode | Question | Wiring | Status |
 |---|---|---|---|
-| **Text** | what does this exact code say? | `text::ui` (`text/{mod,tree,editor}.rs`) | ☑ (variables/refs panels ▶ TEXT-2/TEXT-3) |
+| **Text** | what does this exact code say? | `text::ui` (`text/{mod,tree,editor}.rs`) | ☑ (variables panel — TEXT-2; refs panel + jump-to-source — TEXT-3) |
 | **Graph** | how is everything connected? | `graph::ui` (`graph/{mod,render,interaction,filter}.rs`) | ☑ v1 + v2 (real-name LOD, clusters, `exact only`, search-highlight, 400-node cap — GRAPH-4) |
 | **Flow** | what happens when this runs? | `flow::ui` (`flow/{mod,render,playback,feature}.rs`), sub-tabs `FlowTab::{Trace, Waves, Feature}` | ☑ (Feature tab + call coverage — GRAPH-5) |
 | **Diagrams** | control flow / types / modules | `Mode::Diagrams` + `diagrams::ui` (`diagrams/{mod,control,types,modules}.rs`) | ☑ (GRAPH-2 / GRAPH-3) |
 
 `Mode::Diagrams` is wired in `app.rs` (Tab cycle Text → Graph → Flow → Diagrams,
 plus the palette and the toolbar segment) and `diagrams/mod.rs` owns the
-sub-tab strip. The panel *bodies* are being filled in parallel; **▶** below means
-the file exists and compiles but the view is not finished:
+sub-tab strip. All three bodies render real core data:
 
 - **Diagrams** sub-tabs: **Control flow** (`diagrams/control.rs`, GRAPH-2) ·
   **Types** (`diagrams/types.rs`, GRAPH-3) · **Modules**

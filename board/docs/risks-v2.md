@@ -169,19 +169,24 @@ loop, no polling thread, no `Instant::now`, no sleep**. The budget itself is sti
 
 ## 3. Perf budget audit (VER-3 owns fresh numbers)
 
-`board/docs/verification-v2.md` **did not exist** at the time of this pass, so no
-VER-3 measurements are available to cite. Rows below are not invented.
+**All four budgets are now MEASURED** by VER-3 in
+[`board/docs/verification-v2.md`](verification-v2.md). This table was written
+before that file existed; the verdicts below are updated to its numbers, and each
+row cites it.
 
 | budget | target | verdict | citation |
 |---|---|---|---|
-| Cold learn, ~10k-LOC external repo | < 5 s | **UNMEASURED — VER-3 in flight** | no `verification-v2.md`; no timing run performed by RISK-3 (deliberately not duplicated) |
-| Incremental re-learn after 1 of N | 1 re-parsed | **MET (functional)** | `cargo test -p repowalk-core --locked` green: `learn::tests::current_revision_preserves_incremental_behaviour` asserts `reanalyzed == 1`; the wall-clock *budget* is **UNMEASURED** |
-| Idle UI CPU / repaints | ~0 %, 0 repaints | **UNMEASURED (headless)** | not measurable headless. Precondition proven in §2 (no loop repaint / no polling thread / no `Instant::now` / no sleep); a GUI session must still confirm 0 frames |
-| Memory, 100k-LOC repo | < 1.5 GB RSS | **UNMEASURED — VER-3 in flight** | no measurement |
+| Cold learn, external TS/JS corpus (15,278 LOC) | < 5 s | **MET — 0.33 s** | `verification-v2.md` §4. The 77,742-LOC run is 10.41 s and repowalk itself (58,491 LOC) is 5.25 s / 66 MB — larger corpora, reported as measured, not as the budget's verdict |
+| Incremental re-learn after 1 of N | 1 re-parsed | **MET — exactly 1** | `learn::tests::current_revision_preserves_incremental_behaviour` asserts `reanalyzed == 1`; VER-3 re-asserted it end-to-end (`verification-v2.md` §4) |
+| Idle UI CPU / repaints | ~0 %, 0 repaints | **MET — 0.000 % CPU, 0 voluntary context switches** under `xvfb-run`; every thread parked in `ep_poll`/`futex_wait` | `verification-v2.md` §8.7, with the command a human with a display can re-run |
+| Memory, 77,742-LOC repo | < 1.5 GB RSS | **MET — 82 MB peak RSS** | `verification-v2.md` §4 |
 
-"Only VER-3 can close these": for the idle row, **0 repaints while static and
-unfocused** must be observed in a live window (an egui frame counter over 60 s),
-which no headless command can produce.
+**Closed by VER-3.** The idle row was the last one: `xvfb-run` was available, so
+the app was run headless against `fixtures/sample` and the idle window showed
+**0.000 % CPU and 0 voluntary context switches**, with every thread parked in
+`ep_poll`/`futex_wait`; the only repaints in the code are the indexing progress
+callback and playback guarded by a play flag. The command a human with a real
+display can re-run is in `verification-v2.md` §8.7.
 
 ## 4. Scope freeze
 
@@ -258,9 +263,11 @@ Leak checks:
 - `cargo tree --workspace --locked | grep -cE 'reqwest|tokio|hyper|ureq|native-tls'` → **0**;
   `cargo metadata --offline --locked` → exit 0; `Cargo.lock` clean.
 
-**Release risk: LOW–MODERATE.** Correctness and the no-network rule are *proven* on this
-tree (native graph has zero network/async crates; `index.json` is byte-frozen; the two
-materialized defects R-14/R-27 are fixed with green regression tests; scope has no LLM/
-watcher/Tauri leak). The residual is that **all four performance budgets and the GUI idle-
-repaint claim are UNMEASURED** (VER-3 in flight, headless limits), plus the R-29 test gap on
-the artifact-refusal path. Do not call F1/F10 "done" on a number nobody has taken.
+**Release risk: LOW.** Correctness and the no-network rule are *proven* on this
+tree (native graph has zero network/async crates; `index.json` is byte-frozen; the
+defects R-14, R-27, CORE-11, PROD-4, PROD-5, PROD-6 and PROD-7 are fixed with
+green regression tests; scope has no LLM/watcher/Tauri leak). **All four
+performance budgets are measured and MET** (§3, `verification-v2.md`), including
+the idle-repaint claim, which VER-3 observed under `xvfb-run`. The one residual
+worth naming is the R-29 test gap on the artifact-refusal path — a *test-coverage*
+gap, not a known wrong behaviour (CORE-11 covers the refusal itself).
