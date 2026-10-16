@@ -3,12 +3,12 @@
   "title": "core: analysis.json contract + v2 model aggregation",
   "phase": "implementation",
   "skill": "sdlc-implement",
-  "status": "todo",
-  "assignee": null,
-  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W1]\nSeats: CORE-01, CORE-02, CORE-08\nDONE by integrator as the contract freeze: crates/core/src/analysis.rs holds all v2 types (Variable/VarKind, CfgNode/CfgEdge/CfgKind/FunctionCfg, TypeNode/Field/TypeEdge, ModuleNode/ModuleEdge, UseSite/UseKind, Analysis) with ANALYSIS_VERSION=1, versioned load() and atomic save(). Follow-up owned by this team: keep the contract additive (index.json frozen), add helpers only when a consumer needs them, and update the schema notes for DOC-2. Verify: cargo test -p repowalk-core.",
+  "status": "done",
+  "assignee": "main-agent",
+  "description": "[v2 plan: docs/v2-plan.md \u00b7 WBS: docs/agent-team/V2-WBS.md \u00b7 wave W1]\nSeats: CORE-01, CORE-02, CORE-08\nDONE by integrator as the contract freeze: crates/core/src/analysis.rs holds all v2 types (Variable/VarKind, CfgNode/CfgEdge/CfgKind/FunctionCfg, TypeNode/Field/TypeEdge, ModuleNode/ModuleEdge, UseSite/UseKind, Analysis) with ANALYSIS_VERSION=1, versioned load() and atomic save(). Follow-up owned by this team: keep the contract additive (index.json frozen), add helpers only when a consumer needs them, and update the schema notes for DOC-2. Verify: cargo test -p repowalk-core.\nEVIDENCE (integrator, 2026-10-16, closing the follow-up half): crates/core/src/analysis.rs on disk with ANALYSIS_VERSION=1, versioned load() (version mismatch = cache miss, never a misread) and atomic save(); index.json untouched. Real consumers now depend on the contract: complexity.rs, modules.rs, types.rs, feature.rs, refs.rs, metrics.rs (compute_v2), rules.rs, export/** (Mermaid/DOT/SVG/report), learn() (CORE-7/CORE-9), CLI report|graph|variables|complexity|refs, GUI learn()+panels, and the GUI Export menu (markdown_report + mermaid/dot/svg). Schema notes refreshed by DOC-4 in docs/architecture.md. Gate: cargo fmt -p repowalk-core -- --check OK \u00b7 clippy -p repowalk-core --all-targets -- -D warnings OK \u00b7 cargo test -p repowalk-core OK (155 lib + goldens + 27 integration, 2 ignored).",
   "artifacts": [
     "crates/core/src/analysis.rs"
   ],
   "created": "2026-10-15T14:11:51Z",
-  "updated": "2026-10-15T14:11:51Z"
+  "updated": "2026-10-16T00:08:25Z"
 }
