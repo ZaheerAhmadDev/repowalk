@@ -3,10 +3,39 @@
   "title": "integrate + release prep v2 (README/CHANGELOG/tag plan)",
   "phase": "release",
   "skill": "sdlc-release",
-  "status": "todo",
-  "assignee": null,
-  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W5]\nSeats: main agent + BLD-05, DOC-06\nIntegrator close-out: land README feature updates + CHANGELOG v2 entry (root *.md are main-agent owned), run the final gate on the frozen commit, confirm every card done/blocked-with-reason, and write the tag plan (v2.0.0-pre or v0.2.0 — propose with rationale). Verify: fmt/clippy/test workspace green on the final commit + board suite OK.",
-  "artifacts": [],
+  "status": "done",
+  "assignee": "TL-PMO",
+  "description": "[v2 plan: docs/v2-plan.md · WBS: docs/agent-team/V2-WBS.md · wave W5]\nSeats: main agent + BLD-05, DOC-06\nIntegrator close-out: land README feature updates + CHANGELOG v2 entry (root *.md are main-agent owned), run the final gate on the frozen commit, confirm every card done/blocked-with-reason, and write the tag plan (v2.0.0-pre or v0.2.0 — propose with rationale). Verify: fmt/clippy/test workspace green on the final commit + board suite OK.\nRELEASE ARTIFACTS PREPARED (PMO-3 / TL-PMO, this session): CHANGELOG.md v2 entry + docs/v2-release-notes.md + version/tag plan. README.md and Cargo.toml deliberately NOT touched (integrator applies the version bump at the release commit).",
+  "artifacts": [
+    "CHANGELOG.md",
+    "docs/v2-release-notes.md",
+    "board/tasks/PMO-3.json"
+  ],
+  "evidence": {
+    "files": [
+      "CHANGELOG.md — new [2.0.0] section at top, grouped by capability (learning pipeline / analysis artifact / per-language extraction / aggregates / surfaces / export), plus a 'Not in v2 (deliberate)' block; pre-existing [Unreleased] redesign+Flow bullets folded into the 2.0.0 section.",
+      "docs/v2-release-notes.md — human-facing notes: build/test commands (exec plan gates + batch-log results), measured numbers, known-open items with file:line, upgrade note, version/tag plan, gated release checklist."
+    ],
+    "checklist": [
+      "cargo fmt --all -- --check",
+      "cargo clippy --workspace --all-targets --locked -- -D warnings",
+      "cargo test --workspace --locked",
+      "cargo tree --workspace --locked | grep -cE 'reqwest|tokio|hyper|ureq|native-tls' -> 0 (RISK-3; board/docs/risks-v2.md R-18)",
+      "python3 -m unittest discover -s board/tests",
+      "one cold learn on this repo (rm -rf .repowalk && repowalk report .) writes .repowalk/analysis.json",
+      "CLI smoke: report; graph --format mermaid|dot|svg; variables <file>; complexity; refs (+ --json)",
+      "GUI smoke: one click per mode/tab, Export menu's four outputs (Markdown/Mermaid/DOT/SVG), restart -> Notes persist",
+      "version bump: root Cargo.toml [workspace.package] version 0.1.0 -> 2.0.0 + regenerate Cargo.lock; tag v2.0.0",
+      "push/PR only when the user says so"
+    ],
+    "known_open": [
+      "R-27 silent language drop, crates/core/src/pipeline.rs:40-44 (rust/python-only match, _ => empty) — card CORE-8 (on disk status todo, unassigned). v2 learn path is correct via analyze::Lang::from_walk.",
+      "R-14 whole-second cache staleness, crates/core/src/store.rs:36-38 + crates/core/src/walk.rs:69-74 (.as_secs()) — card CORE-8."
+    ],
+    "version_bump": "current 0.1.0 -> target 2.0.0; single source root Cargo.toml [workspace.package] version (line 6); all crates use version.workspace=true so no per-crate edit; Cargo.lock regenerates (members at lines 2941/2951/2968). Tag v2.0.0.",
+    "gate": "python3 -m unittest board.tests.test_tasks -> Ran 8 tests, OK",
+    "verification_numbers": "board/docs/verification-v2.md does not exist yet -> pending VER-3"
+  },
   "created": "2026-10-15T14:11:51Z",
-  "updated": "2026-10-15T14:11:51Z"
+  "updated": "2026-10-16T00:13:10Z"
 }
