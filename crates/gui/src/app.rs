@@ -3,6 +3,7 @@
 //! export menu), sidebar, central pane, status bar. OWNER: RSK-14.
 use eframe::egui;
 use repowalk_core::analysis::Analysis;
+use repowalk_core::export::Diagram;
 use repowalk_core::model::Index;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -53,6 +54,13 @@ pub struct IndexProgress {
     pub error: Option<String>,
     /// Current learn phase (`walk` / `parse` / `resolve` / `analyze` / `cache`).
     pub phase: String,
+    /// Non-fatal degradation note, e.g. analysis unavailable on a read-only repo.
+    pub warning: Option<String>,
+    /// Running extraction counts while learning (zero until the analyze phase).
+    pub variables: usize,
+    pub cfgs: usize,
+    pub types: usize,
+    pub uses: usize,
     pub index: Option<Arc<Index>>,
     /// The v2 analysis artifact, produced by the same `learn` pass as the index.
     pub analysis: Option<Arc<Analysis>>,
@@ -92,6 +100,8 @@ pub struct App {
     pub sidebar_tab: sidebar::Tab,
     pub usage: usage::UsageState,
     pub diagrams: diagrams::DiagramsState,
+    /// Dark (default) or light palette, switchable at runtime (DSN-2 / F13).
+    pub theme_mode: theme::ThemeMode,
 }
 
 /// The egui context handle used by the indexing thread to request repaints.
@@ -139,6 +149,7 @@ impl App {
             sidebar_tab: sidebar::Tab::Map,
             usage: Default::default(),
             diagrams: Default::default(),
+            theme_mode: theme::ThemeMode::Dark,
         };
         if let Some(repo) = repo {
             app.start_indexing(repo);
@@ -172,14 +183,36 @@ impl App {
                     s.phase = p.phase.to_string();
                     s.done = p.done;
                     s.total = p.total;
+                    s.variables = p.variables;
+                    s.cfgs = p.cfgs;
+                    s.types = p.types;
+                    s.uses = p.uses;
                 }
                 if let Some(ctx) = &ctx {
                     ctx.request_repaint();
                 }
             };
-            let result = repowalk_core::learn::learn(&repo, &notify);
+            let mut warning = None;
+            let result = match repowalk_core::learn::learn(&repo, &notify) {
+                Ok(pair) => Ok(pair),
+                Err(e) => {
+                    // `learn` persists its caches, so a read-only repo (or a full
+                    // disk) would otherwise fail to open at all. Fall back to the
+                    // index-only path and say what degraded instead of refusing.
+                    match repowalk_core::pipeline::build_index(&repo, &|_: usize| {}) {
+                        Ok(idx) => {
+                            warning = Some(format!(
+                                "analysis unavailable ({e:#}) — showing the index only"
+                            ));
+                            Ok((idx, Analysis::new()))
+                        }
+                        Err(_) => Err(e),
+                    }
+                }
+            };
             let mut p = shared.lock().unwrap();
             p.finished = true;
+            p.warning = warning;
             match result {
                 Ok((idx, analysis)) => {
                     p.total = idx.files.len();
@@ -217,6 +250,9 @@ impl App {
                 self.analysis = Some(a);
             } else if let Some(files) = learned {
                 self.status = format!("learned {files} files");
+            }
+            if let Some(w) = p.warning.take() {
+                self.status = w;
             }
             if let Some(e) = p.error.take() {
                 self.error = Some(e);
@@ -299,7 +335,7 @@ impl App {
     }
 
     fn handle_keyboard(&mut self, ctx: &egui::Context) {
-        let (tab, slash, esc, question, g, enter, j, k, ctrl_s, ctrl_k) = ctx.input(|i| {
+        let (tab, slash, esc, question, g, enter, j, k, ctrl_s, ctrl_k, ctrl_t) = ctx.input(|i| {
             (
                 i.key_pressed(egui::Key::Tab),
                 i.key_pressed(egui::Key::Slash) && i.modifiers.is_none(),
@@ -311,6 +347,7 @@ impl App {
                 i.key_pressed(egui::Key::K) && i.modifiers.is_none(),
                 i.key_pressed(egui::Key::S) && i.modifiers.ctrl && !i.modifiers.shift,
                 i.key_pressed(egui::Key::K) && i.modifiers.ctrl,
+                i.key_pressed(egui::Key::T) && i.modifiers.ctrl,
             )
         });
         if self.show_command_palette {
@@ -325,6 +362,13 @@ impl App {
             self.show_command_palette = true;
             self.palette_query.clear();
             return;
+        }
+        if ctrl_t {
+            self.theme_mode = match self.theme_mode {
+                theme::ThemeMode::Dark => theme::ThemeMode::Light,
+                theme::ThemeMode::Light => theme::ThemeMode::Dark,
+            };
+            theme::apply_theme(ctx, self.theme_mode);
         }
         if tab {
             self.mode = match self.mode {
@@ -454,6 +498,63 @@ impl App {
         }
     }
 
+    /// The index + analysis the v2 emitters need, or a status message saying
+    /// what is missing. Both are produced by one `learn` pass, so they appear
+    /// together — but keep the guard honest in case a repo opened index-only.
+    fn export_inputs(&mut self) -> Option<(Arc<Index>, Arc<Analysis>, std::path::PathBuf)> {
+        let (Some(idx), Some(analysis)) = (self.index.clone(), self.analysis.clone()) else {
+            self.error = Some(if self.index.is_none() {
+                "open a repository first".to_string()
+            } else {
+                "no analysis yet — press Learn".to_string()
+            });
+            return None;
+        };
+        let Some(repo) = self.repo.clone() else {
+            self.error = Some("open a repository first".to_string());
+            return None;
+        };
+        Some((idx, analysis, repo))
+    }
+
+    /// v2 architecture report (F8): the exact Markdown the CLI `report` prints,
+    /// written next to the repo. Same core emitter, so the two cannot drift.
+    pub fn export_architecture_report(&mut self) {
+        let Some((idx, analysis, repo)) = self.export_inputs() else {
+            return;
+        };
+        let md = repowalk_core::export::markdown_report(&idx, &analysis);
+        let path = repo.join("repowalk-architecture.md");
+        match std::fs::write(&path, md) {
+            Ok(()) => self.status = format!("saved {}", path.display()),
+            Err(e) => self.error = Some(format!("report export failed: {e}")),
+        }
+    }
+
+    /// One v2 diagram (F8) as Mermaid / DOT / SVG — the same pure emitters the
+    /// CLI `graph` uses. `ext` is the file extension, `format` the emitter key.
+    pub fn export_diagram(&mut self, diagram: Diagram, format: &str, ext: &str) {
+        let Some((idx, analysis, repo)) = self.export_inputs() else {
+            return;
+        };
+        let text = match format {
+            "mermaid" => repowalk_core::export::mermaid(&idx, &analysis, &diagram),
+            "dot" => repowalk_core::export::dot(&idx, &analysis, &diagram),
+            _ => repowalk_core::export::svg(&idx, &analysis, &diagram),
+        };
+        let name = match &diagram {
+            Diagram::CallGraph => "callgraph",
+            Diagram::Types => "types",
+            Diagram::Cfg { .. } => "cfg",
+            Diagram::Modules => "modules",
+        };
+        let path = repo.join(format!("repowalk-{name}.{ext}"));
+        match std::fs::write(&path, text) {
+            Ok(()) => self.status = format!("saved {}", path.display()),
+            Err(e) => self.error = Some(format!("diagram export failed: {e}")),
+        }
+    }
+
     // ── Shell chrome ────────────────────────────────────────────────────────
 
     /// Top toolbar: segmented mode control, open-repo button, export menu,
@@ -501,6 +602,71 @@ impl App {
                     self.export_markdown();
                     ui.close();
                 }
+                if ui.button("Architecture report → Markdown").clicked() {
+                    self.export_architecture_report();
+                    ui.close();
+                }
+                ui.separator();
+                // v2 diagrams: the same core emitters `repowalk graph` uses, so
+                // the file the GUI writes and the file the CLI prints are equal.
+                ui.menu_button("Diagrams → Mermaid (.mmd)", |ui| {
+                    if ui.button("Call graph").clicked() {
+                        self.export_diagram(Diagram::CallGraph, "mermaid", "mmd");
+                        ui.close();
+                    }
+                    if ui.button("Types").clicked() {
+                        self.export_diagram(Diagram::Types, "mermaid", "mmd");
+                        ui.close();
+                    }
+                    if ui.button("Modules").clicked() {
+                        self.export_diagram(Diagram::Modules, "mermaid", "mmd");
+                        ui.close();
+                    }
+                });
+                ui.menu_button("Diagrams → Graphviz DOT (.dot)", |ui| {
+                    if ui.button("Call graph").clicked() {
+                        self.export_diagram(Diagram::CallGraph, "dot", "dot");
+                        ui.close();
+                    }
+                    if ui.button("Types").clicked() {
+                        self.export_diagram(Diagram::Types, "dot", "dot");
+                        ui.close();
+                    }
+                    if ui.button("Modules").clicked() {
+                        self.export_diagram(Diagram::Modules, "dot", "dot");
+                        ui.close();
+                    }
+                });
+                ui.menu_button("Diagrams → SVG (.svg)", |ui| {
+                    if ui.button("Call graph").clicked() {
+                        self.export_diagram(Diagram::CallGraph, "svg", "svg");
+                        ui.close();
+                    }
+                    if ui.button("Types").clicked() {
+                        self.export_diagram(Diagram::Types, "svg", "svg");
+                        ui.close();
+                    }
+                    if ui.button("Modules").clicked() {
+                        self.export_diagram(Diagram::Modules, "svg", "svg");
+                        ui.close();
+                    }
+                });
+            });
+
+            // F13: the palette is switchable at runtime; the choice applies
+            // immediately and the dark values stay the source of truth.
+            ui.menu_button("View ▾", |ui| {
+                let dark = self.theme_mode == theme::ThemeMode::Dark;
+                if ui.selectable_label(dark, "Dark theme").clicked() {
+                    self.theme_mode = theme::ThemeMode::Dark;
+                    theme::apply_theme(ui.ctx(), self.theme_mode);
+                    ui.close();
+                }
+                if ui.selectable_label(!dark, "Light theme").clicked() {
+                    self.theme_mode = theme::ThemeMode::Light;
+                    theme::apply_theme(ui.ctx(), self.theme_mode);
+                    ui.close();
+                }
             });
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -544,7 +710,7 @@ impl App {
         });
     }
 
-    /// Modal-ish open-repo popup (progressive disclosure: path + Index button).
+    /// Modal-ish open-repo popup (progressive disclosure: path + Learn button).
     fn open_popup(&mut self, ctx: &egui::Context) {
         if !self.show_open_popup {
             return;
@@ -560,7 +726,7 @@ impl App {
                 ui.add_space(theme::SPACE_2);
                 let resp = ui.text_edit_singleline(&mut self.repo_input);
                 let go = (resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)))
-                    || ui.button("Index").clicked();
+                    || ui.button("Learn").clicked();
                 if go {
                     let path = PathBuf::from(self.repo_input.trim());
                     if !path.as_os_str().is_empty() {
@@ -642,6 +808,19 @@ impl App {
                 PaletteKind::OpenRepo => self.show_open_popup = true,
                 PaletteKind::ExportPng => self.export_png(ctx),
                 PaletteKind::ExportMd => self.export_markdown(),
+                PaletteKind::ExportArchitecture => self.export_architecture_report(),
+                PaletteKind::ExportMermaid => {
+                    self.export_diagram(Diagram::CallGraph, "mermaid", "mmd")
+                }
+                PaletteKind::ExportDot => self.export_diagram(Diagram::CallGraph, "dot", "dot"),
+                PaletteKind::ExportSvg => self.export_diagram(Diagram::CallGraph, "svg", "svg"),
+                PaletteKind::ToggleTheme => {
+                    self.theme_mode = match self.theme_mode {
+                        theme::ThemeMode::Dark => theme::ThemeMode::Light,
+                        theme::ThemeMode::Light => theme::ThemeMode::Dark,
+                    };
+                    theme::apply_theme(ctx, self.theme_mode);
+                }
                 PaletteKind::Shortcuts => self.show_shortcuts = !self.show_shortcuts,
                 PaletteKind::ClearSelection => self.clear_transient(),
             }
@@ -672,6 +851,7 @@ impl App {
                             ("g", "Focus graph"),
                             ("Esc", "Clear selection / trace / dialogs"),
                             ("Ctrl+S", "Save the edited file"),
+                            ("Ctrl+T", "Toggle light / dark theme"),
                             ("?", "Show this overlay"),
                         ] {
                             ui.monospace(egui::RichText::new(keys).color(theme::ACCENT));
@@ -688,9 +868,9 @@ impl App {
         if self.index.is_some() || self.error.is_some() {
             return;
         }
-        let (done, total, phase) = {
+        let (done, total, phase, variables, cfgs) = {
             let p = self.progress.lock().unwrap();
-            (p.done, p.total, p.phase.clone())
+            (p.done, p.total, p.phase.clone(), p.variables, p.cfgs)
         };
         egui::Area::new(egui::Id::new("progress-overlay"))
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
@@ -707,6 +887,17 @@ impl App {
                             format!("{phase}…")
                         });
                     });
+                    // Live extraction counts (DSN-4 flagged these as missing).
+                    if variables > 0 || cfgs > 0 {
+                        ui.add_space(theme::SPACE_1);
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "{variables} variables · {cfgs} control-flow graphs so far"
+                            ))
+                            .size(theme::FONT_SMALL)
+                            .color(theme::TEXT_SECONDARY),
+                        );
+                    }
                 });
             });
     }
@@ -839,6 +1030,11 @@ enum PaletteKind {
     OpenRepo,
     ExportPng,
     ExportMd,
+    ExportArchitecture,
+    ExportMermaid,
+    ExportDot,
+    ExportSvg,
+    ToggleTheme,
     Shortcuts,
     ClearSelection,
 }
@@ -910,6 +1106,31 @@ fn palette_actions(_app: &App) -> Vec<PaletteAction> {
             label: "Export tour+health → Markdown",
             hint: "",
             kind: PaletteKind::ExportMd,
+        },
+        PaletteAction {
+            label: "Export architecture report → Markdown",
+            hint: "",
+            kind: PaletteKind::ExportArchitecture,
+        },
+        PaletteAction {
+            label: "Export call graph → Mermaid",
+            hint: "",
+            kind: PaletteKind::ExportMermaid,
+        },
+        PaletteAction {
+            label: "Export call graph → Graphviz DOT",
+            hint: "",
+            kind: PaletteKind::ExportDot,
+        },
+        PaletteAction {
+            label: "Export call graph → SVG",
+            hint: "",
+            kind: PaletteKind::ExportSvg,
+        },
+        PaletteAction {
+            label: "Toggle light / dark theme",
+            hint: "Ctrl+T",
+            kind: PaletteKind::ToggleTheme,
         },
         PaletteAction {
             label: "Toggle keyboard shortcuts",
