@@ -53,17 +53,17 @@ line and the enclosing symbol.
   **Python `fixtures/vars/python_counts.py` → 7 variables / 21 use sites**;
   **TS `fixtures/ts/sample.ts` → 13 variables / 26 use sites**.
 
-- **Product surface (in progress):** the **Variables panel** — a sortable table
+- **Product surface (shipped):** the **Variables panel** — a sortable table
   (uses · name · line); click a row to **highlight every use site** in Text mode
-  and list each site with a snippet. Owner card **TEXT-2**
-  (`crates/gui/src/usage/variables.rs`, landing).
+  and list each site with a snippet. Card **TEXT-2**
+  (`crates/gui/src/usage/variables.rs`).
 
 ## Status at this commit (`ff7f795`, 2026-10-16)
 
 - **working:** variable extraction, read/write/total counts and use-site
   collection for Rust, Python and TS; the per-language goldens are active and
   pass in the default `cargo test`, and the `variables` CLI command renders them.
-- **in progress (card TEXT-2):** the variables panel and highlight-all-uses.
+- **shipped (card TEXT-2):** the variables panel and highlight-all-uses.
   Compound writes (`x += 1`) count once as a write but increment both counters,
   and `for`/`match`/`if let` pattern bindings are not modelled as variables yet —
   recorded limitations, not bugs.

@@ -47,9 +47,9 @@ per-file analyzers, builds the module graph, and writes a versioned cache.
   | language mix | rust (5 files), python (1 file) |
   ```
 
-- **Product surface (in progress):** the GUI learn-progress view and the
-  **Onboarding report / Repo 101** panel are card **DSN-4** (`onboard.rs`); the
-  file exists and is being filled.
+- **Product surface (shipped):** the GUI learn-progress view (per-phase counts,
+  then the running variable / control-flow totals) and the **Onboarding report /
+  Repo 101** panel, card **DSN-4** (`crates/gui/src/onboard.rs`).
 
 ## What the run produces
 

@@ -74,9 +74,8 @@ Honest notes:
 
 ## v2 flows — learn → inventory → variables → CFG → refs → export report
 
-The complete understanding suite. The **CLI** steps below run today (F14); the GUI
-panels marked **in progress (card X)** have an owner card and are still being
-filled. Never show an in-progress panel as if it works.
+The complete understanding suite — every panel named below is shipped in this
+release; the **CLI** steps run against the same core.
 
 Setup (once):
 
@@ -141,10 +140,11 @@ cp -r fixtures/sample /tmp/e2e        # the repo every command below uses
    repowalk graph --format svg --scope modules /tmp/e2e > modules.svg
    ```
 
-   Working in the GUI today: **export ▾ → PNG** and **Tour + health →
-   Markdown**. The GUI menu entries for Mermaid/DOT/SVG/report are in progress;
-   the CLI exposes them now. A nonzero `report` exit means an `Error`-severity
-   rule fired — see `docs/howto-guardrails.md`.
+   Working in the GUI: **export ▾ → PNG**, **Tour + health → Markdown**,
+   **Architecture report → Markdown**, and the call graph / types / modules as
+   **Mermaid**, **DOT** or **SVG** — the same emitters the CLI drives. A nonzero
+   `report` exit means an `Error`-severity rule fired — see
+   `docs/howto-guardrails.md`.
 
 ## Minute 5 — determinism close
 

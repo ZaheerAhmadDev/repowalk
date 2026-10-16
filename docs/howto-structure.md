@@ -58,13 +58,13 @@ diagrams:
   Measured on this repo: the module graph is **390 nodes / 468 edges**, with one
   cycle found on `fixtures/sample`.
 
-- **Product surface (in progress):** **Diagrams → Types** and **Diagrams →
-  Modules** are card **GRAPH-3** (`crates/gui/src/diagrams/{types,modules}.rs`,
-  landing).
+- **Product surface (shipped):** **Diagrams → Types** and **Diagrams →
+  Modules**, card **GRAPH-3** (`crates/gui/src/diagrams/{types,modules}.rs`).
 
 ## Status at this commit (`ff7f795`, 2026-10-16)
 
 - **working:** `types.rs` and `modules.rs` (type graph, module DAG, cycle
   detection), their Mermaid/DOT/SVG emitters, and the `graph --scope
   types|modules` CLI.
-- **in progress (card GRAPH-3):** the Types and Modules diagram *views*.
+- **shipped (card GRAPH-3):** the Types and Modules diagram *views*, over the same
+  core `types.rs` / `modules.rs` data the CLI emits.
