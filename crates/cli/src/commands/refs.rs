@@ -4,9 +4,14 @@
 //! Lookups are delegated to `core::refs` (TEXT-3): the CLI resolves the user's
 //! argument to a canonical target id and renders the returned [`RefSet`],
 //! keeping **resolved** hits apart from **name-only** (unresolved) ones so the
-//! command never presents a guess as a confirmed reference (risk R-20). While
-//! `core::refs` is still an interface stub this command says so explicitly
-//! (nonzero) instead of showing a misleading "0 references".
+//! command never presents a guess as a confirmed reference (risk R-20).
+//!
+//! A symbol also gets its **name-only call sites** attached ([`collect`]):
+//! cross-file calls are recorded by the analyzer with the raw callee name as
+//! their target, and a function symbol id carries no name in the artifact, so
+//! `core::refs` alone can never link them (see its module docs). The link is
+//! made here from the index's symbol table, deliberately into the name-only
+//! half — a name is a guess, so it must not read as confirmed.
 use crate::commands::artifacts::{self, Artifacts};
 use crate::json;
 use anyhow::bail;
@@ -19,23 +24,7 @@ use std::path::Path;
 pub fn run(target: &str, json_out: bool, path: &Path) -> anyhow::Result<()> {
     let art = artifacts::load(path)?;
     let target_id = resolve_target(&art, target)?;
-    let set = refs::references_ex(&art.analysis, &target_id);
-
-    // Stub guard: `core::refs` (TEXT-3) landed in parallel. If the analysis
-    // carries use sites but both the lookup and the module-wide counts come
-    // back empty, the module is still a stub — report that honestly rather than
-    // pretending the target simply has no references.
-    if set.is_empty()
-        && !art.analysis.uses.is_empty()
-        && refs::reference_counts(&art.analysis).is_empty()
-    {
-        bail!(
-            "reference index unavailable: core::refs is still a stub (TEXT-3 pending); \
-             {} use site(s) exist in the analysis for {}",
-            art.analysis.uses.len(),
-            art.root.display()
-        );
-    }
+    let set = collect(&art, &target_id);
 
     if json_out {
         print!("{}", render_json(&target_id, &set));
@@ -43,6 +32,25 @@ pub fn run(target: &str, json_out: bool, path: &Path) -> anyhow::Result<()> {
         print!("{}", render_table(&target_id, &set));
     }
     Ok(())
+}
+
+/// Every use site of `target_id`, including the symbol's **name-only** call
+/// sites.
+///
+/// `core::refs` links a name-only use to a declaration only when the artifact
+/// stores a name next to the id — true for variables and types, false for
+/// function/method symbols. A cross-file call (`util::helper()`, `b::b_fn()`) is
+/// recorded with the **raw callee name** as its target, so querying by the
+/// symbol id alone returns nothing even though the call graph knows the edge.
+/// [`refs::references_for_symbol`] closes that gap from the index's symbol
+/// table, into the *name-only* half (the name is a guess, so it must not read as
+/// confirmed — risk R-20).
+fn collect(art: &Artifacts, target_id: &str) -> RefSet {
+    match art.index.symbols.iter().find(|s| s.id == target_id) {
+        Some(sym) => refs::references_for_symbol(&art.analysis, target_id, &sym.name),
+        // Variables/types already own their name in the artifact.
+        None => refs::references_ex(&art.analysis, target_id),
+    }
 }
 
 /// Resolve a user-typed target to a canonical id: exact symbol id → exact
@@ -276,5 +284,64 @@ mod tests {
         let table = render_table("x", &set);
         assert!(table.contains("no use sites found"), "{table}");
         assert!(render_json("x", &set).contains("\"count\":0"));
+    }
+
+    #[test]
+    fn cross_file_call_sites_attach_to_a_symbol_as_name_only() {
+        let mut a = art();
+        // The analyzer records a cross-file call with the **raw callee name** as
+        // its target. A function symbol id carries no name in the artifact, so
+        // `core::refs` alone cannot link the two; the index symbol table can.
+        a.analysis.uses.push(UseSite {
+            target: "greet".into(),
+            file: "src/main.rs".into(),
+            line: 8,
+            col: 20,
+            kind: UseKind::Call,
+            snippet: "util::greet(&person.name)".into(),
+        });
+
+        let set = collect(&a, "src/util.rs:1");
+        assert_eq!(set.resolved.len(), 0, "{set:?}");
+        assert_eq!(set.by_name.len(), 1, "{set:?}");
+        assert_eq!(set.by_name[0].file, "src/main.rs");
+        assert_eq!(set.by_name[0].kind, UseKind::Call);
+
+        // An id that is not a symbol keeps exactly what `core::refs` returned.
+        let var = collect(&a, "src/util.rs:5:name");
+        assert_eq!(var.resolved.len(), 1, "{var:?}");
+        assert_eq!(var.by_name.len(), 1, "{var:?}");
+    }
+
+    #[test]
+    fn attached_name_only_sites_keep_order_and_are_not_duplicated() {
+        let mut a = art();
+        let site_at = |target: &str, file: &str, line: usize| UseSite {
+            target: target.into(),
+            file: file.into(),
+            line,
+            col: 1,
+            kind: UseKind::Call,
+            snippet: "greet()".into(),
+        };
+        // Two name-only call sites, deliberately not in file order, plus one
+        // position that arrives through *both* lookups — it must be counted once.
+        a.analysis.uses.push(site_at("greet", "src/z.rs", 9));
+        a.analysis.uses.push(site_at("greet", "src/a.rs", 2));
+        a.analysis
+            .uses
+            .push(site_at("src/util.rs:1", "src/m.rs", 4));
+        a.analysis.uses.push(site_at("greet", "src/m.rs", 4));
+
+        let set = collect(&a, "src/util.rs:1");
+        assert_eq!(set.resolved.len(), 1, "{set:?}");
+        assert_eq!(
+            set.by_name
+                .iter()
+                .map(|s| (s.file.as_str(), s.line))
+                .collect::<Vec<_>>(),
+            vec![("src/a.rs", 2), ("src/z.rs", 9)],
+            "{set:?}"
+        );
     }
 }

@@ -12,9 +12,11 @@
 //! pane. Selecting the *target* elsewhere uses `app.select(Selection::Symbol(id))`.
 //!
 //! Known limitation (documented in `crates/core/src/refs.rs`): only `Variable`
-//! and `TypeNode` carry a name next to an id in `Analysis`, so a function/method
-//! use recorded by raw name cannot be linked to its symbol id from the analysis
-//! alone — the empty state says so instead of guessing.
+//! and `TypeNode` carry a name next to an id in `Analysis`, so a use recorded by
+//! raw name cannot be linked by `core::refs` alone. This panel supplies the
+//! symbol's name from the index (`references_for_symbol`), so a cross-file call
+//! — the common case — is found and listed in the **name-only** group instead of
+//! showing "no references".
 use eframe::egui;
 use std::collections::HashSet;
 
@@ -103,13 +105,30 @@ fn site_key(site: &UseSite) -> (String, usize, usize, u8, String) {
     )
 }
 
-/// Group the target's uses by file (via `references_by_file`) and tag each row
-/// resolved / name-only (recovered from `references_ex`).
-fn grouped_rows(analysis: &Analysis, target: &str) -> Vec<(String, Vec<RefRow>)> {
-    let set = refs::references_ex(analysis, target);
+/// The target's use sites, including the symbol's **name-only** call sites.
+///
+/// A function symbol id carries no name in the analysis artifact, so a
+/// cross-file call — recorded with the raw callee name as its target — cannot be
+/// linked from the analysis alone. The index has the name; hand it to
+/// `references_for_symbol` and the hits land in the name-only group (risk R-20:
+/// never shown as confirmed).
+fn refs_for(app: &App, analysis: &Analysis, target: &str) -> RefSet {
+    match app
+        .index
+        .as_ref()
+        .and_then(|ix| ix.symbols.iter().find(|s| s.id == target))
+    {
+        Some(sym) => refs::references_for_symbol(analysis, target, &sym.name),
+        None => refs::references_ex(analysis, target),
+    }
+}
+
+/// Tag the set's uses resolved / name-only and group them by file — the shape
+/// the panel renders.
+fn grouped_rows(set: &RefSet) -> Vec<(String, Vec<RefRow>)> {
     let name_only: HashSet<(String, usize, usize, u8, String)> =
         set.by_name.iter().map(site_key).collect();
-    refs::references_by_file(analysis, target)
+    set.by_file()
         .into_iter()
         .map(|(file, sites)| {
             let rows = sites
@@ -168,18 +187,9 @@ fn panel_state(has_analysis: bool, has_target: bool, total: usize, shown: usize)
     }
 }
 
-/// Hint shown when a name-keyed target has no hits — states the linkage
-/// limitation rather than silently showing nothing.
+/// Hint shown when a selected symbol has no use sites at all.
 fn no_refs_hint(target: &str) -> String {
-    if target.contains(':') {
-        format!("no references found for {target}")
-    } else {
-        format!(
-            "no references found for \"{target}\". If this is a function or method, \
-             uses recorded by raw name cannot be linked to a symbol id from the \
-             analysis alone — select the symbol from the map instead."
-        )
-    }
+    format!("no references found for {target}")
 }
 
 pub fn ui(ui: &mut egui::Ui, app: &mut App) {
@@ -205,13 +215,13 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
         return;
     };
 
-    let set = refs::references_ex(&analysis, &target);
+    let set = refs_for(app, &analysis, &target);
     let total = set.len();
     header(ui, &target, &set);
     filters(ui, &mut state);
     theme::separator(ui);
 
-    let rows = grouped_rows(&analysis, &target);
+    let rows = grouped_rows(&set);
     let shown = filtered_rows(&rows, state);
     let shown_count: usize = shown.iter().map(|(_, sites)| sites.len()).sum();
 
@@ -477,7 +487,7 @@ mod tests {
         let set = refs::references_ex(&a, "q");
         assert_eq!((set.resolved.len(), set.by_name.len()), (1, 1));
 
-        let rows = grouped_rows(&a, "q");
+        let rows = grouped_rows(&set);
         assert_eq!(rows.len(), 1);
         let (file, sites) = &rows[0];
         assert_eq!(file, "src/a.rs");
@@ -487,6 +497,30 @@ mod tests {
         assert!(!by_line(5).name_only);
         assert!(by_line(7).name_only);
         assert_eq!(by_line(7).site.target, "q");
+    }
+
+    #[test]
+    fn symbol_name_from_the_index_links_cross_file_call_sites() {
+        // A function symbol id carries no name in the analysis, so the same
+        // check `refs::references_ex` fails is what the panel must get right.
+        let mut a = Analysis::new();
+        a.uses
+            .push(site("helper", "src/main.rs", 8, 20, UseKind::Call));
+        a.uses
+            .push(site("helper2", "src/main.rs", 9, 20, UseKind::Call));
+
+        let direct = refs::references_ex(&a, "src/util.rs:9");
+        assert!(direct.is_empty(), "{direct:?}");
+
+        let linked = refs::references_for_symbol(&a, "src/util.rs:9", "helper");
+        assert_eq!(linked.by_name.len(), 1, "{linked:?}");
+        assert_eq!(linked.by_name[0].file, "src/main.rs");
+
+        // And the panel's grouping carries it, tagged name-only.
+        let rows = grouped_rows(&linked);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].0, "src/main.rs");
+        assert!(rows[0].1[0].name_only);
     }
 
     #[test]
@@ -535,11 +569,11 @@ mod tests {
 
         // Unknown target / empty analysis: no rows, no panic.
         let empty = Analysis::new();
-        assert!(grouped_rows(&empty, "anything").is_empty());
+        assert!(grouped_rows(&RefSet::default()).is_empty());
         assert!(refs::references_ex(&empty, "anything").is_empty());
 
-        // The name-keyed linkage limitation is surfaced, not hidden.
-        assert!(no_refs_hint("greet").contains("analysis alone"));
+        // A selected symbol with no sites says so, with the id it was given.
+        assert_eq!(no_refs_hint("greet"), "no references found for greet");
         assert_eq!(
             no_refs_hint("src/a.rs:3:q"),
             "no references found for src/a.rs:3:q"
