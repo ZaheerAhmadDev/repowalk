@@ -20,7 +20,9 @@
 //! (`id` ↔ `name`) carry a declared name next to an id here, so name-only
 //! matches can be attached to a declaration for those. Function/method symbol
 //! ids carry no name in this artifact — query those by id, and treat a
-//! name-only function match as unresolved.
+//! name-only function match as unresolved. When the caller *does* know the
+//! name (the index has it), [`references_for_symbol`] performs the link that
+//! the artifact alone cannot, still into the name-only half.
 //!
 //! ## Determinism
 //!
@@ -64,6 +66,18 @@ impl RefSet {
         out.extend(self.by_name.iter().cloned());
         sort_sites(&mut out);
         out
+    }
+
+    /// The union grouped by file, files sorted, sites in file/line order within
+    /// each group — the shape a panel renders. Unlike [`references_by_file`]
+    /// this groups the *set*, so it also carries sites that
+    /// [`references_for_symbol`] attached from the caller's name.
+    pub fn by_file(&self) -> Vec<(String, Vec<UseSite>)> {
+        let mut by_file: BTreeMap<String, Vec<UseSite>> = BTreeMap::new();
+        for u in self.all() {
+            by_file.entry(u.file.clone()).or_default().push(u);
+        }
+        by_file.into_iter().collect()
     }
 }
 
@@ -166,6 +180,40 @@ pub fn references(analysis: &Analysis, target: &str) -> Vec<UseSite> {
 /// confirmed.
 pub fn references_ex(analysis: &Analysis, target: &str) -> RefSet {
     select(analysis, target)
+}
+
+/// Use sites of a symbol, including the ones [`references_ex`] cannot link on
+/// its own.
+///
+/// A cross-file call (`util::helper()`, `b::b_fn()`) is recorded by the
+/// analyzer with the **raw callee name** as its target, and a function/method
+/// symbol id carries no name in the artifact, so querying by the id alone makes
+/// a used symbol look unreferenced. When the caller has the symbol's `name`
+/// (the index has it), this attaches those uses into the **name-only** half —
+/// a name is a guess, since another symbol may share it, so it must never read
+/// as confirmed (risk R-20). Sites the id lookup already returned are not
+/// duplicated, and the result is in file/line order like every other lookup.
+pub fn references_for_symbol(analysis: &Analysis, id: &str, name: &str) -> RefSet {
+    let mut set = select(analysis, id);
+    for site in select(analysis, name).by_name {
+        let known = set
+            .resolved
+            .iter()
+            .chain(set.by_name.iter())
+            .any(|s| same_position(s, &site));
+        if !known {
+            set.by_name.push(site);
+        }
+    }
+    sort_sites(&mut set.by_name);
+    set
+}
+
+/// Identity of one use *occurrence*: same position and kind, however it was
+/// reached. The target is deliberately excluded — the id lookup and the name
+/// lookup spell the same site differently.
+fn same_position(a: &UseSite, b: &UseSite) -> bool {
+    a.file == b.file && a.line == b.line && a.col == b.col && a.kind == b.kind
 }
 
 /// Use sites of `target` narrowed to one kind (still the union of resolved and
@@ -408,6 +456,59 @@ mod tests {
             grouped[0].1.iter().map(|u| u.line).collect::<Vec<_>>(),
             vec![1, 9]
         );
+    }
+
+    #[test]
+    fn symbol_lookup_attaches_name_only_call_sites_and_keeps_order() {
+        let mut a = Analysis::new();
+        a.uses = vec![
+            // Cross-file calls: the analyzer recorded the raw callee name, so a
+            // lookup by the symbol id alone finds nothing.
+            site("helper", "src/z.rs", 9, 1, UseKind::Call),
+            site("helper", "src/a.rs", 2, 1, UseKind::Call),
+            // The same occurrence reached through both lookups → counted once.
+            site("src/util.rs:9", "src/m.rs", 4, 1, UseKind::Call),
+            site("helper", "src/m.rs", 4, 1, UseKind::Call),
+            // A different symbol's use never leaks in.
+            site("helper2", "src/a.rs", 5, 1, UseKind::Call),
+        ];
+
+        let set = references_for_symbol(&a, "src/util.rs:9", "helper");
+        assert_eq!(set.resolved.len(), 0, "{set:?}");
+        assert_eq!(
+            set.by_name
+                .iter()
+                .map(|s| (s.file.as_str(), s.line))
+                .collect::<Vec<_>>(),
+            vec![("src/a.rs", 2), ("src/m.rs", 4), ("src/z.rs", 9)],
+            "{set:?}"
+        );
+
+        // The set groups for a panel, attached sites included.
+        let grouped = set.by_file();
+        assert_eq!(
+            grouped.iter().map(|(f, _)| f.as_str()).collect::<Vec<_>>(),
+            vec!["src/a.rs", "src/m.rs", "src/z.rs"]
+        );
+        assert_eq!(grouped.iter().map(|(_, v)| v.len()).sum::<usize>(), 3);
+    }
+
+    #[test]
+    fn symbol_lookup_is_a_no_op_when_the_id_already_owns_its_name() {
+        let mut a = Analysis::new();
+        // A variable: unlike a function symbol, its id has a name in the
+        // artifact, so `references_ex` already attaches the name-only use.
+        a.variables.push(variable("src/a.rs:10:i", "i"));
+        a.uses = vec![
+            site("src/a.rs:10:i", "src/b.rs", 2, 1, UseKind::VarWrite),
+            site("i", "src/a.rs", 11, 5, UseKind::VarRead),
+        ];
+
+        let direct = references_ex(&a, "src/a.rs:10:i");
+        assert_eq!(direct.resolved.len(), 1);
+        assert_eq!(direct.by_name.len(), 1);
+        // Passing the declared name must not double-count the site it attached.
+        assert_eq!(references_for_symbol(&a, "src/a.rs:10:i", "i"), direct);
     }
 
     #[test]
