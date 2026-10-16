@@ -180,7 +180,7 @@ Keyboard map (`app.rs::handle_keyboard`, mirrored in the `?` overlay): `Tab` cyc
 Requirements for any new card:
 
 - Every mouse action has a keyboard path (palette entry + shortcut), or a documented reason.
-- Focus is visible: selection uses `Surface_selected` fill **and** the accent stroke
+- Focus is visible: selection uses `SURFACE_SELECTED` fill **and** the accent stroke
   (`selection.stroke`), meeting 1.4.11 non-text contrast.
 - Respect the root focus order: toolbar → sidebar → central pane → status bar.
 - Avoid trapping: the palette returns focus to the app on Esc/Ctrl+K.

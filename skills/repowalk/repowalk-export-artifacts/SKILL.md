@@ -42,7 +42,8 @@ pub fn markdown_report(index: &Index, analysis: &Analysis) -> String;           
 | `SVG_NODE_CAP` | `400` — SVG legibility cap (top-degree subgraph + caption) |
 
 Builders: `build_call_graph`, `build_cfg`, `build_types`, `build_modules` — all
-sorts/dedup/cap once here so the four backends agree and stay byte-stable.
+sorts/dedup/cap once here so the four emitters (Mermaid, DOT, SVG, report) agree
+and stay byte-stable.
 
 ## Determinism rules (the whole promise)
 
@@ -122,7 +123,7 @@ stub the report degrades to a clearly-labelled table derived from raw
 | GUI tour + health | `repowalk-report.md` | `export::markdown::tour_markdown` + `health_markdown` |
 | GUI architecture report | `repowalk-architecture.md` | the exact `markdown_report` the CLI prints |
 | GUI diagrams | `repowalk-{callgraph\|types\|cfg\|modules}.{mmd\|dot\|svg}` | `export_diagram(Diagram, format, ext)` |
-| CLI | stdout | `repowalk report [--json] <path>`; `repowalk graph --format <mermaid\|dot\|svg> --scope <call\|types\|modules\|cfg> <path>` |
+| CLI | stdout | `repowalk report [--json] <path>`; `repowalk graph --format <mermaid\|dot\|svg> --scope <call\|types\|modules\|cfg> [--symbol <id>] <path>` (`--symbol` is required by `--scope cfg`, rejected elsewhere) |
 
 PNG has **no image crate** (zero-new-deps rule): `png.rs` writes a valid RGBA8,
 non-interlaced PNG with *stored* (uncompressed) deflate blocks — hand-rolled
