@@ -311,11 +311,14 @@ the file exists and compiles but the view is not finished:
 - Graph v2 changes (real names, LOD, clustering, layout, filters) live in the
   existing `graph/**` (GRAPH-4). Theme additions in `theme.rs` (DSN-2).
 
-Existing sidebar panes: `sidebar/{map,search,tour,flow}.rs`. Exports today in the
-GUI: `export/{markdown,png}.rs` (PNG of the window, tour+health Markdown). The
-new Mermaid/DOT/SVG/report formats are rendered by the shared core emitters
-(`crates/core/src/export/**`, PROD-2) and are exposed through the **CLI** today
-(`report` / `graph`); the GUI export menu for them is still in progress.
+Existing sidebar panes: `sidebar/{map,search,tour,flow}.rs`. Exports in the GUI:
+`export/{markdown,png}.rs` (PNG of the window, tour+health Markdown) plus the
+**Export ▾** menu in `app.rs`, which writes the v2 architecture report
+(`repowalk-architecture.md`) and the call-graph / types / modules diagrams as
+`repowalk-<scope>.{mmd,dot,svg}`. Those formats are rendered by the shared core
+emitters (`crates/core/src/export/**`, PROD-2) — the same functions behind the
+CLI `report` / `graph`, so the exported file and the terminal output cannot
+drift.
 
 ## CLI surface
 
