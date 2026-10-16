@@ -55,7 +55,7 @@ stay **dashed with a `?`** — honesty over fake precision.
   The data they need is already in the index (guided by `resolve` confidence; see
   `docs/architecture.md`).
 
-## Status at this commit (`ff7f795`, 2026-10-16)
+## Status at this release (v2.0.0, 2026-10-16)
 
 - **working:** v1 graph — force layout, fan-in sizing, module colour, entrypoint
   ring, dashed `?` for non-`Exact` edges — plus the `graph --scope call` CLI for

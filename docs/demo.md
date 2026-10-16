@@ -92,8 +92,9 @@ cp -r fixtures/sample /tmp/e2e        # the repo every command below uses
    repowalk report /tmp/e2e            # learns + caches, prints the report
    ```
 
-   In progress (card DSN-4): the learn-progress view and the **Onboarding
-   report** panel.
+   Shipped (card DSN-4): the learn-progress view (per-phase counts, then the
+   running variable / control-flow totals) and the **Onboarding report / Repo
+   101** panel.
 
 2. **Inventory** — LOC, languages, entrypoints, complexity, hotspots, god files,
    cycles.
@@ -104,8 +105,9 @@ cp -r fixtures/sample /tmp/e2e        # the repo every command below uses
    repowalk complexity --by file /tmp/e2e       # per-file roll-up
    ```
 
-   In progress (card DSN-3): the `health-v2` panel with sortable
-   complexity/hotspot tables and graph tinting.
+   Shipped (card DSN-3): the **Health** panel — module complexity, god files
+   with the rule that named them, hotspots, unused variables and tinted
+   guardrail findings.
 
 3. **Variables** — per-file table with **reads / writes / total uses**.
 
@@ -113,7 +115,7 @@ cp -r fixtures/sample /tmp/e2e        # the repo every command below uses
    repowalk variables model.rs /tmp/e2e
    ```
 
-   In progress (card TEXT-2): the sortable variables panel and click-to-
+   Shipped (card TEXT-2): the sortable variables panel and click-to-
    highlight-all-uses.
 
 4. **Control flow** — a CFG per function with a cyclomatic badge.
@@ -122,7 +124,7 @@ cp -r fixtures/sample /tmp/e2e        # the repo every command below uses
    repowalk graph --scope cfg --symbol main /tmp/e2e
    ```
 
-   In progress (card GRAPH-2): Diagrams → Control flow.
+   Shipped (card GRAPH-2): Diagrams → Control flow.
 
 5. **Refs** — every use site of a symbol, split resolved vs name-only.
 
@@ -130,7 +132,9 @@ cp -r fixtures/sample /tmp/e2e        # the repo every command below uses
    repowalk refs greet /tmp/e2e
    ```
 
-   In progress (card TEXT-3): the refs panel and Ctrl+click navigation.
+   Shipped (card TEXT-3): the refs panel and jump-to-source navigation. A
+   cross-file call is listed in the **name-only** group, so it is found without
+   being claimed as confirmed.
 
 6. **Export the report** — Mermaid / DOT / SVG plus a self-contained Markdown
    report.

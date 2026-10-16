@@ -58,7 +58,7 @@ line and the enclosing symbol.
   and list each site with a snippet. Card **TEXT-2**
   (`crates/gui/src/usage/variables.rs`).
 
-## Status at this commit (`ff7f795`, 2026-10-16)
+## Status at this release (v2.0.0, 2026-10-16)
 
 - **working:** variable extraction, read/write/total counts and use-site
   collection for Rust, Python and TS; the per-language goldens are active and

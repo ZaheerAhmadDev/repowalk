@@ -1,11 +1,11 @@
 # repowalk v2.0.0 — release notes
 
-> **Status: pre-release.** This document prepares the `v2.0.0` release on branch
-> `prerelease-v2`. Nothing here is tagged or pushed; the version bump and the
-> `git tag` are applied by the integrator at the release commit, and the push/PR
-> happens **only when the user says so**. Author: PMO-3 (seat TL-PMO). Companion
-> files: [`../CHANGELOG.md`](../CHANGELOG.md), [`v2-plan.md`](v2-plan.md),
-> [`v2-execution-plan.md`](v2-execution-plan.md), [`architecture.md`](architecture.md).
+> **Status: released as `2.0.0`** (`Cargo.toml`, annotated tag `v2.0.0`) on branch
+> `prerelease-v2`; the tree is pushed to `origin/prerelease-v2`. No pull request
+> has been opened — that happens **only when the user says so**. Author: PMO-3
+> (seat TL-PMO). Companion files: [`../CHANGELOG.md`](../CHANGELOG.md),
+> [`v2-plan.md`](v2-plan.md), [`v2-execution-plan.md`](v2-execution-plan.md),
+> [`architecture.md`](architecture.md).
 
 ## What v2 is
 
@@ -134,57 +134,49 @@ the incremental stamp to a per-file `(nanosecond mtime, byte size)` with
   miss, and `analysis.json` is version-checked (a mismatch is a miss, never a
   misread).
 
-## Version bump plan (for the integrator — do **not** apply as part of PMO-3)
+## Version bump (applied)
 
-**Current workspace version: `0.1.0`.**
+**Workspace version: `2.0.0`** (was `0.1.0`), applied at the release commit
+`d188803`.
 
 - The single source of truth is `[workspace.package] version` in the root
-  `Cargo.toml` (line 6: `version = "0.1.0"`).
-- All three crates inherit it — `crates/core/Cargo.toml`, `crates/gui/Cargo.toml`
-  and `crates/cli/Cargo.toml` each declare `version.workspace = true` — so **no
-  per-crate version needs editing.**
-- `Cargo.lock` records each member's concrete version (`repowalk-cli` @ line
-  2941, `repowalk-core` @ line 2951, `repowalk-gui` @ line 2968, all `0.1.0`), so
-  the lock **must be regenerated** after the bump.
+  `Cargo.toml` (line 6). All three crates inherit it — `crates/core/Cargo.toml`,
+  `crates/gui/Cargo.toml` and `crates/cli/Cargo.toml` each declare
+  `version.workspace = true` — so **no per-crate version was edited.**
+- `Cargo.lock` records each member's concrete version, so it was regenerated in
+  the same commit (`repowalk-cli`, `repowalk-core` and `repowalk-gui` all read
+  `2.0.0`).
 
-Exact edit (from the repo root, release commit only):
-
-```bash
-sed -i 's/^version = "0.1.0"$/version = "2.0.0"/' Cargo.toml
-cargo metadata --format-version 1 > /dev/null   # rewrites the 3 member versions in Cargo.lock (offline)
-```
-
-**Recommended tag: `v2.0.0`.** Rationale: v2 is a large, additive, backwards-
-compatible *surface* release (new artifact + new languages + new GUI modes + new
-CLI commands) with the frozen `index.json`/`SCHEMA_VERSION = 1` contract
-untouched; the current manifests say `0.1.0`, so `v2.0.0` is the intended major
-line (the card's alternatives `v2.0.0-pre` / `v0.2.0` are **not** recommended:
-the plan, branch and artifacts all name v2, and `0.1.0 → 0.2.0` would undersell
-the change).
-
-```bash
-# release commit only, when the user says so:
-git tag -a v2.0.0 -m "repowalk v2.0.0 — complete understanding suite"
-```
+The tag is **`v2.0.0`**, annotated, matching the CHANGELOG heading. Rationale: v2
+is a large, additive, backwards-compatible *surface* release (new artifact + new
+languages + new GUI modes + new CLI commands) with the frozen
+`index.json`/`SCHEMA_VERSION = 1` contract untouched, so it is the intended major
+line (`v0.2.0` would undersell it).
 
 ## Release checklist
 
-A gated list a human can tick. Run from the repo root. **Do not push or open a
-PR until the user says so.**
+A gated list a human can tick. Run from the repo root. Push is authorized; a
+pull request is **not** — that happens only when the user says so.
 
-- [ ] **Format** — `cargo fmt --all -- --check` → clean.
-- [ ] **Lint** — `cargo clippy --workspace --all-targets --locked -- -D warnings`
-      → no warnings.
-- [ ] **Tests** — `cargo test --workspace --locked` → 0 failed (includes
-      `analysis_golden.rs`, `grammar_abi.rs`, `contract.rs`, `golden.rs`).
-- [ ] **No network** — `cargo tree --workspace --locked | grep -cE 'reqwest|tokio|hyper|ureq|native-tls'`
-      → `0` (RISK-3 owns this; proof/citation in
+- [x] **Format** — `cargo fmt --all -- --check` → clean.
+- [x] **Lint** — `cargo clippy --workspace --all-targets -- -D warnings` → 0
+      warnings.
+- [x] **Tests** — `cargo test --workspace --locked` → **359 passed, 0 failed**
+      (core lib 167 incl. the grammar/analysis goldens, cli 43 unit + 6 + 9 + 2
+      PROD-4 + 2 PROD-5 + 3 acceptance, gui 78).
+- [x] **No network** — `cargo tree --workspace --locked | grep -cE 'reqwest|tokio|hyper|ureq|native-tls'`
+      → **0** (RISK-3 owns this; proof in
       [`board/docs/risks-v2.md`](../board/docs/risks-v2.md) R-18).
-- [ ] **Board** — `python3 -m unittest discover -s board/tests` → OK.
-- [ ] **Cold learn on this repo** — fresh `<repo>/.repowalk/` removed, then one
-      cold `learn` (e.g. `repowalk report .`) completes and writes
-      `.repowalk/analysis.json`.
-- [ ] **CLI smoke set** — each exits honestly:
+- [x] **Board** — `python3 -m unittest discover -s board/tests` → **OK (23
+      tests)**.
+- [x] **Cold learn on this repo** — `.repowalk/` removed, then
+      `repowalk report .`: **5.25 s cold, 66 MB peak RSS** (58,491 LOC / 376
+      files), then **0.80 s warm**. The independent budget run measured **0.33 s
+      cold on the 15k-LOC TS/JS corpus** (MET, <5 s) — see
+      [`board/docs/verification-v2.md`](../board/docs/verification-v2.md). On
+      repowalk's own mixed 58-kLOC tree the cold pass is 0.25 s over the 5 s
+      target; recorded as a measured number rather than claimed MET.
+- [x] **CLI smoke set** — all exit 0:
       `repowalk report .`;
       `repowalk graph --format mermaid .`;
       `repowalk graph --format dot .`;
@@ -192,13 +184,17 @@ PR until the user says so.**
       `repowalk variables crates/core/src/model.rs .`;
       `repowalk complexity --by file .`;
       `repowalk refs build_index .`
-      (and `--json` on the ones that support it parses as one JSON object).
-- [ ] **GUI smoke set** — open a repo, one click per **mode** (Text/Graph/Flow/
-      Diagrams) and per **tab** (Trace/Waves/Feature; Control flow/Types/Modules;
-      variables/refs/health-v2/notes/onboarding); use the **Export menu's four
-      outputs** (`Markdown report`, `Mermaid`, `DOT`, `SVG` — plus PNG);
-      **restart** and confirm **Notes persist**.
-- [ ] **Version bump applied** — root `Cargo.toml` `version = "2.0.0"`,
-      `Cargo.lock` regenerated (see above); commit at the release commit.
-- [ ] **Tag** — `git tag -a v2.0.0 …` (above).
-- [ ] **Push / PR** — **only when the user says so.**
+      (`--json` parses as one object on `report`, `variables`, `complexity` and
+      `refs`; `graph` renders a diagram and has no `--json` — a flag it never
+      had, not a regression).
+- [ ] **GUI smoke set** — needs a display: one click per **mode** (Text/Graph/
+      Flow/Diagrams) and per **tab** (Trace/Waves/Feature; Control flow/Types/
+      Modules; variables/refs/health/notes/101); use the **Export ▾ menu's**
+      outputs (architecture report, call graph/types/modules as Mermaid, DOT and
+      SVG, plus PNG); **restart** and confirm **Notes persist**. The GUI half of
+      the independent verification (including the idle-UI budget) is VER-3's
+      `board/docs/verification-v2.md` §8.
+- [x] **Version bump applied** — root `Cargo.toml` `version = "2.0.0"`,
+      `Cargo.lock` regenerated (see above); release commit `d188803`.
+- [x] **Tag** — annotated `v2.0.0`, pushed.
+- [x] **Push** — `origin/prerelease-v2` (no PR opened).
