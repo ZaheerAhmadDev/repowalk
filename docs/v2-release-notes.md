@@ -78,49 +78,43 @@ measurements).
 | **`fixtures/sample`** (6 files: `a.rs`, `b.rs`, `main.rs`, `model.rs`, `tool.py`, `util.rs`) | **6 files · 75 LOC · 14 symbols · 10 call edges · 7 modules · 1 type · 5 variables** |
 | parallel parse speed-up (B2 log) | **2.24×** vs the serial path |
 
-Budget targets still **unproved** until VER-3 runs them on an external repo
-(axios, ~13k LOC JS/TS): cold learn < 5 s, incremental re-learn re-parses 1 file,
-100k-LOC RSS < 1.5 GB, idle UI ~0 % CPU — see `risks-v2.md` §Budgets.
+Budget targets are measured on **local** repositories only (this build never
+fetches anything): this repo (~344 files / ~52k LOC) and
+`vendor/egui_code_editor-0.4.2`. Targets: cold learn < 5 s, an incremental
+re-learn re-parses exactly one file, 100k-LOC RSS < 1.5 GB, idle UI ~0 % CPU.
+VER-3's numbers live in [`board/docs/verification-v2.md`](../board/docs/verification-v2.md).
 
 ## Known-open items
 
-Two materialized defects are **not** fixed in this branch. Both are card
-**`CORE-8`** (on disk `board/tasks/CORE-8.json`, status **`todo`**, unassigned)
-— note the plan text calls it "in flight", but the card itself is still `todo`;
-quoting the disk is the honest state.
+**The two defects the risk pass materialized are FIXED** (card `CORE-8`, commit
+`62e25e6`), each with regression tests that fail on the old code:
 
-1. **R-27 — silent language drop (v1 `build_index` spine).**
-   `crates/core/src/pipeline.rs:40-44` dispatches only `rust`/`python`:
-   ```rust
-   let (symbols, sites, imports) = match file.lang.as_str() {
-       "rust" => crate::parse_rust::extract(&text, &file.path),
-       "python" => crate::parse_py::extract(&text, &file.path),
-       _ => (Vec::new(), Vec::new(), Vec::new()),
-   };
-   ```
-   So TS/JS (and any other language) index as files with **0 symbols / 0 edges**
-   through the v1 spine used by `map` / `explain` / `find` / `tour` / `flow` and
-   the GUI's initial index. **The v2 `learn` path is correct** — it dispatches
-   through `analyze::Lang::from_walk` and does cover TS/JS — so the v2 CLI query
-   commands (`report` / `graph` / `variables` / `complexity` / `refs`) and the
-   `notes`/analysis surfaces are unaffected. Trust `learn`, not `build_index`,
-   until CORE-8 lands. (Cross-ref: `architecture.md` §"Analyzer output
-   semantics", `board/docs/risks-v2.md` R-27.)
+1. **R-27 — silent language drop: fixed.** `pipeline` now dispatches through
+   `analyze::{Lang::from_walk, analyze}`, so TypeScript and JavaScript extract
+   through every spine. Measured: a TS-only fixture went from **0 symbols / 0
+   edges** to **3 symbols / 1 edge**. A genuinely unsupported language is no
+   longer a silent zero: it is reported as `UnsupportedLanguage` with a summary
+   such as `1 files not analyzed (go)`. (`build_index`'s signature is unchanged;
+   `build_index_with_report` is additive.)
+2. **R-14 — stale cache on a whole-second mtime: fixed.** The index cache keeps
+   its own `cache-header.json` sidecar with a **per-file `(mtime_nanos, size)`**
+   stamp and compares the file set as a set; `learn`'s incremental stamp is
+   `(mtime_nanos, size)` too (`STAMP_VERSION = 2`). A same-second rewrite, a
+   `git checkout` / `touch -r` that preserved the mtime, an edit of a non-newest
+   file, and an added or removed file are all cache **misses**. No whole-second
+   `max(mtime)` remains anywhere. `index.json`'s schema is untouched.
 
-2. **R-14 — stale analysis on a whole-second cache.**
-   `crates/core/src/store.rs:36-38` compares only the global max mtime:
-   ```rust
-   let cached_max = idx.files.iter().map(|f| f.mtime).max().unwrap_or(0);
-   let current_max = files.iter().map(|f| f.mtime).max().unwrap_or(0);
-   cached_max == current_max
-   ```
-   with `crates/core/src/walk.rs:69-74` truncating to seconds
-   (`.as_secs()`). A same-second edit, a `git checkout` / `touch -r` that
-   preserves mtime, or an edit of a non-newest file is a cache **hit** and the
-   old index is served silently. (The v2 incremental stamp in
-   `crates/core/src/learn.rs` is safer — it keys per file on `(mtime, lines)` —
-   but it too uses whole-second mtime, so a same-second edit that preserves line
-   count can still be missed.) (Cross-ref: `board/docs/risks-v2.md` R-14.)
+One defect found by VER-3's independent battery is **open at the time of
+writing** — card `CORE-11`, in flight:
+
+- **R-21 interaction — an unloadable `analysis.json` does not force a
+  re-analyze.** If the artifact is missing, corrupt or version-mismatched while
+  `analysis-stamps.json` still looks current, `learn()` re-analyzed nothing and
+  rewrote a **version-current but empty** artifact; the next read then served
+  zero variables/types with exit 0. The fix (treat "the cached analysis did not
+  load" as full staleness) is landing with tests for all three poisons. Until it
+  lands, if you hand-edit or delete `.repowalk/analysis.json`, delete
+  `.repowalk/analysis-stamps.json` with it.
 
 Everything else tracked in [`board/docs/risks-v2.md`](../board/docs/risks-v2.md)
 is either mitigated (and test-guarded) or a forward-looking hook that passes only
@@ -128,17 +122,16 @@ while the mitigation is in place.
 
 ## Upgrade note
 
-v2 adds `.repowalk/analysis.json` and changes the producer revision of the
-incremental sidecar (`LEARN_REVISION = 2`). Upgrading across this boundary:
+v2 adds `.repowalk/analysis.json` and `.repowalk/cache-header.json`, and changes
+the incremental stamp to a per-file `(nanosecond mtime, byte size)` with
+`LEARN_REVISION = 2`. Upgrading across this boundary:
 
-- **Easiest:** delete `<repo>/.repowalk/` **once**. Both caches rebuild on the
-  next learn/index. Nothing outside `.repowalk/` is affected.
-- **Or do nothing:** the new cache key invalidates the old sidecar for you — a
-  pre-revision stamp file is treated as a full miss and the analysis is
-  re-derived; `analysis.json` is version-checked and a mismatch is a miss. The
-  only edge case is the frozen `index.json` v1 cache, whose invalidation is still
-  mtime-based (R-14 above); if in doubt after a same-second edit, delete
-  `.repowalk/index.json`.
+- **Easiest:** delete `<repo>/.repowalk/` **once**. Everything rebuilds on the
+  next learn. Nothing outside `.repowalk/` is affected.
+- **Or do nothing:** the new keys invalidate the old caches for you — a
+  version-1 stamp sidecar is a full miss, a missing producer revision is a full
+  miss, and `analysis.json` is version-checked (a mismatch is a miss, never a
+  misread).
 
 ## Version bump plan (for the integrator — do **not** apply as part of PMO-3)
 
