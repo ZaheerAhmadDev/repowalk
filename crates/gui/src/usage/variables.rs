@@ -62,12 +62,7 @@ struct ViewState {
 pub fn ui(ui: &mut egui::Ui, app: &mut App) {
     // Arc clone only — the `Variable` rows are borrowed, never duplicated.
     let Some(analysis) = app.analysis.clone() else {
-        ui_kit::not_ready(
-            ui,
-            "Variables",
-            "TEXT-2",
-            "no analysis yet — press Learn first",
-        );
+        ui_kit::empty_state(ui, "Variables", ui_kit::NO_ANALYSIS_HINT);
         return;
     };
 

@@ -234,8 +234,9 @@ fn arrow_head(painter: &egui::Painter, from: Pos2, to: Pos2, stroke: Stroke) {
     painter.line_segment([to, back - perp], s);
 }
 
-/// Centered empty-state card (does NOT use `ui_kit::not_ready`, whose text says
-/// the view "lands with" a card — this view has landed; only the data is thin).
+/// Centered empty-state card — the local multi-line variant of
+/// `ui_kit::empty_state` (it takes a list of lines), not a "not built yet"
+/// placeholder: this view has landed; only the data is thin.
 fn notice(ui: &mut egui::Ui, title: &str, lines: &[String]) {
     ui.add_space(theme::SPACE_8);
     ui.vertical_centered(|ui| {
