@@ -24,6 +24,7 @@ the map. Every skill's `description` frontmatter starts with its trigger
 | **karpathy-guidelines** | Writing, reviewing, or refactoring any code — avoid overcomplication, surgical changes, surface assumptions, verifiable success criteria | [`meta/karpathy-guidelines/SKILL.md`](meta/karpathy-guidelines/SKILL.md) |
 | **agent-board** | Taking or updating a board task — claim protocol, schema, file ownership | [`meta/agent-board/SKILL.md`](meta/agent-board/SKILL.md) |
 | **lessons-learned** | After a mistake or rework — record an entry, extract a rule, promote to a skill | [`meta/lessons-learned/SKILL.md`](meta/lessons-learned/SKILL.md) |
+| **skill-authoring** | Writing, extending, reviewing, or promoting a skill under `skills/` — the folder/frontmatter contract, the anatomy of a usable skill, and the six gates (pinned source, links, markdownlint, identity, spelling, indexed) to pass before reporting | [`meta/skill-authoring/SKILL.md`](meta/skill-authoring/SKILL.md) |
 
 ## sdlc/ — software development cycle
 
