@@ -1,0 +1,71 @@
+# Simple workflow for deploying static content to GitHub Pages
+name: Deploy static content to Pages
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Prepare deploy root (ensure index.html at artifact root)
+        run: |
+          rm -rf .deploy_root
+          mkdir -p .deploy_root
+
+          # Prefer site/ (your static site dir). Fall back to docs/ or repo root if necessary.
+          if [ -f "site/index.html" ]; then
+            echo "index.html found at site/"
+            cp -a site/. .deploy_root/
+          elif [ -f "site/dist/index.html" ]; then
+            echo "index.html found at site/dist/"
+            cp -a site/dist/. .deploy_root/
+          elif [ -f "docs/index.html" ]; then
+            echo "index.html found at docs/"
+            cp -a docs/. .deploy_root/
+          elif [ -f "index.html" ]; then
+            echo "index.html found at repository root/"
+            cp -a . .deploy_root/
+          else
+            echo "Error: index.html not found under site/, site/dist/, docs/, or repo root — listing for debug:" >&2
+            ls -la site || true
+            ls -la site/dist || true
+            ls -la docs || true
+            ls -la . || true
+            exit 1
+          fi
+
+          echo "Contents of .deploy_root (top-level):"
+          ls -la .deploy_root
+          find .deploy_root -maxdepth 2 -type f | sort
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .deploy_root
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

@@ -1144,3 +1144,105 @@ fn palette_actions(_app: &App) -> Vec<PaletteAction> {
         },
     ]
 }
+
+// ── Toolbar helpers ─────────────────────────────────────────────────────────
+
+/// Segmented-control segment for Text/Graph mode (active = accent top-border).
+fn mode_segment(ui: &mut egui::Ui, label: &str, shortcut: &str, active: bool) -> egui::Response {
+    let text = if active {
+        egui::RichText::new(label)
+            .color(theme::TEXT_PRIMARY)
+            .strong()
+    } else {
+        egui::RichText::new(label).color(theme::TEXT_SECONDARY)
+    };
+    let resp = ui.add(egui::Button::new(text).frame(false));
+    let resp = resp.on_hover_text(format!("{label} mode ({shortcut})"));
+    if active {
+        let rect = resp.rect;
+        ui.painter().rect_filled(
+            egui::Rect::from_min_max(egui::pos2(rect.min.x, rect.max.y - 2.0), rect.max),
+            egui::CornerRadius::ZERO,
+            theme::ACCENT,
+        );
+    }
+    resp
+}
+
+/// Plain toolbar button with optional hover tooltip.
+fn toolbar_button(ui: &mut egui::Ui, label: &str, tooltip: &str) -> egui::Response {
+    ui.add(egui::Button::new(
+        egui::RichText::new(label).color(theme::TEXT_SECONDARY),
+    ))
+    .on_hover_text(tooltip)
+}
+
+// ── Command palette model ───────────────────────────────────────────────────
+
+enum PaletteKind {
+    ModeText,
+    ModeGraph,
+    ModeFlow,
+    FocusSearch,
+    OpenRepo,
+    ExportPng,
+    ExportMd,
+    Shortcuts,
+    ClearSelection,
+}
+
+struct PaletteAction {
+    label: &'static str,
+    hint: &'static str,
+    kind: PaletteKind,
+}
+
+fn palette_actions(_app: &App) -> Vec<PaletteAction> {
+    vec![
+        PaletteAction {
+            label: "Switch to Text mode",
+            hint: "Tab",
+            kind: PaletteKind::ModeText,
+        },
+        PaletteAction {
+            label: "Switch to Graph mode",
+            hint: "Tab / g",
+            kind: PaletteKind::ModeGraph,
+        },
+        PaletteAction {
+            label: "Switch to Flow mode",
+            hint: "Tab",
+            kind: PaletteKind::ModeFlow,
+        },
+        PaletteAction {
+            label: "Focus search",
+            hint: "/",
+            kind: PaletteKind::FocusSearch,
+        },
+        PaletteAction {
+            label: "Open repository…",
+            hint: "",
+            kind: PaletteKind::OpenRepo,
+        },
+        PaletteAction {
+            label: "Export window → PNG",
+            hint: "",
+            kind: PaletteKind::ExportPng,
+        },
+        PaletteAction {
+            label: "Export tour+health → Markdown",
+            hint: "",
+            kind: PaletteKind::ExportMd,
+        },
+        PaletteAction {
+            label: "Toggle keyboard shortcuts",
+            hint: "?",
+            kind: PaletteKind::Shortcuts,
+        },
+        PaletteAction {
+            label: "Clear selection / trace",
+            hint: "Esc",
+            kind: PaletteKind::ClearSelection,
+        },
+    ]
+}

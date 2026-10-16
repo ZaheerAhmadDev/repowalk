@@ -92,6 +92,31 @@ fn strip_button(ui: &mut egui::Ui, label: &str, color: egui::Color32) -> bool {
     .clicked()
 }
 
+/// Human-readable node name for banners: symbol name, or bare file path.
+fn display_name(idx: &Index, id: &str) -> String {
+    if let Some(sym) = idx.symbols.iter().find(|s| s.id == id) {
+        return sym.name.clone();
+    }
+    id.strip_prefix("file:")
+        .map(|p| p.to_string())
+        .unwrap_or_else(|| id.to_string())
+}
+
+/// Small tinted strip button (Cancel / Clear affordances).
+fn strip_button(ui: &mut egui::Ui, label: &str, color: egui::Color32) -> bool {
+    ui.add(
+        egui::Button::new(
+            egui::RichText::new(label)
+                .size(theme::FONT_SMALL)
+                .color(color),
+        )
+        .fill(egui::Color32::TRANSPARENT)
+        .stroke(egui::Stroke::new(1.0, color.gamma_multiply(0.35)))
+        .corner_radius(egui::CornerRadius::same(theme::CORNER_SM)),
+    )
+    .clicked()
+}
+
 pub fn handle(ui: &mut egui::Ui, app: &mut App) {
     let Some(idx) = app.index.clone() else {
         return;

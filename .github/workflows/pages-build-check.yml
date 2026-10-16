@@ -7,13 +7,33 @@ on:
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
 
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
+
+      - name: Configure GitHub Pages for non-fork PRs
+        if: ${{ github.event.pull_request.head.repo.fork == false }}
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Verify site/index.html exists at the root of the site
+        run: |
+          if [ -f "site/index.html" ]; then
+            echo "index.html found in site/"
+            ls -la site
+            find site -maxdepth 2 -type f | sort
+          else
+            echo "Error: site/index.html not found. Ensure your static site is generated into the 'site' directory." >&2
+            ls -la site || true
+            exit 1
+          fi
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: ./site
