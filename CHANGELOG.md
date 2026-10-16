@@ -11,10 +11,9 @@ The v2 **"complete understanding suite"** — F1–F15 from
 read it five ways: **Text**, **Graph**, **Flow**, **Diagrams**, **Report**. Pure
 static analysis: no AI, no network, no API keys.
 
-> Human-facing notes, the measured numbers, the one known-open item and the
-> release checklist live in
-> [`docs/v2-release-notes.md`](docs/v2-release-notes.md). The workspace version
-> is `2.0.0` at this commit; the tag is `v2.0.0`.
+> Human-facing notes, the measured numbers and the executed release checklist
+> live in [`docs/v2-release-notes.md`](docs/v2-release-notes.md). The workspace
+> version is `2.0.0` at this commit; the tag is `v2.0.0`.
 
 ### Added
 
@@ -23,12 +22,14 @@ static analysis: no AI, no network, no API keys.
   five ordered phases **walk → parse → resolve → analyze → cache**, reporting
   `LearnProgress { phase, done, total, variables, cfgs, types, uses }` at every
   phase boundary and once per file.
-- **Warm cache + incremental re-analysis**: a per-file stamp of `(mtime, lines)`
-  is persisted in the sibling `.repowalk/analysis-stamps.json` sidecar; files
-  whose stamp is unchanged reuse their cached `variables` / `cfgs` / `types` /
-  `uses` verbatim, changed/added files are re-analyzed, deleted files drop out.
-  `reanalyzed` reports how many files the last run re-parsed (F10's
-  "observable in the UI").
+- **Warm cache + incremental re-analysis**: a per-file stamp of `(nanosecond
+  mtime, size)` (`STAMP_VERSION = 2`) is persisted in the sibling
+  `.repowalk/analysis-stamps.json` sidecar; files whose stamp is unchanged reuse
+  their cached `variables` / `cfgs` / `types` / `uses` verbatim, changed/added
+  files are re-analyzed, deleted files drop out. `reanalyzed` reports how many
+  files the last run re-parsed (F10's "observable in the UI"). If the artifact
+  itself cannot be loaded, every file is treated as changed — a refused load is
+  a full re-analyze, never an empty artifact served as truth.
 - **`LEARN_REVISION` cache key** (`crates/core/src/learn.rs:70`, currently `2`):
   when the pipeline's *output* shape changes, every pre-existing sidecar becomes
   a full cache miss instead of a silently stale hit — a cache key, not a schema
@@ -172,6 +173,34 @@ static analysis: no AI, no network, no API keys.
 - The dependency set stays network-crate-free; `regex` is the only new scanning
   dependency and the parallel work uses `std::thread::scope`.
 
+### Fixed
+Defects found by the **independent** acceptance pass
+([`board/docs/verification-v2.md`](board/docs/verification-v2.md)) and by
+dogfooding the release binary, all fixed before release:
+- **CORE-11** — an unloadable `.repowalk/analysis.json` (deleted, corrupt, or
+  version-mismatched) did not force a re-analyze: `learn` trusted the stamp
+  sidecar, rewrote a **version-current but empty** artifact, and the next read
+  served zero variables/types with exit 0. A refused load is now full staleness
+  (`4c5db5c`).
+- **R-14 at the learn level** — the incremental stamp was whole-second
+  `(mtime, lines)`, so a same-second rewrite was a warm hit. It is now per file
+  `(nanosecond mtime, size)` (`STAMP_VERSION = 2`) (`4c5db5c`).
+- **R-27** — `pipeline::build_index` dispatched rust/python only, so TS/JS (and
+  everything else) indexed as files with 0 symbols while the UI reported the
+  language as valid. It now dispatches through `analyze::Lang::from_walk`, and an
+  unsupported language is **reported** rather than silently contributing nothing
+  (`62e25e6`, plus PROD-5 surfacing the count in `map`/`report`).
+- **PROD-4** — the query commands could serve a report whose index-derived fields
+  were fresh and whose analysis-derived fields were stale, silently, with exit 0.
+  They now always run one stamp-incremental `learn` pass (`b77a007`).
+- **PROD-5** — the unsupported-language count was computed and shown nowhere
+  (`80c2755`).
+- **PROD-6** — `refs` and the refs panel could not link a symbol id to its
+  name-only cross-file call sites, so a used function printed `0 references`
+  (`15e22ba`).
+- **PROD-7** — two panels still rendered the development scaffold "this view
+  lands with card …" in their no-analysis state (`ea47e95`).
+
 ### Removed
 - Dead code: unused `App::module_color` wrapper, unused theme constants,
   `let _ = …` placeholder statements, always-visible repo path row in text
@@ -187,10 +216,11 @@ planned, **not** stubbed, **not** coming with this release:
   v1; that is not a refactoring feature.)
 - **No git-churn overlay and no diff/watch mode.**
 - **No Tauri / web port** — the GUI stays a native eframe/egui desktop app.
-- (R-27 language dispatch and R-14 whole-second cache staleness landed as fixes in
-  this cycle — see [`docs/v2-release-notes.md`](docs/v2-release-notes.md). The one
-  defect open at release time is CORE-11, an unloadable `analysis.json` not
-  forcing a re-analyze.)
+
+Every defect found by the independent pass during this cycle — R-14, R-27,
+CORE-11, PROD-4, PROD-5, PROD-6, PROD-7 — was fixed before release; see
+**Fixed** above and [`docs/v2-release-notes.md`](docs/v2-release-notes.md). There
+is no known-open defect at `v2.0.0`.
 
 ## [0.1.0] - 2026-10-13
 ### Added
