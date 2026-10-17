@@ -19,6 +19,7 @@ use repowalk_core::complexity::parse_symbol_id;
 use repowalk_core::model::Index;
 
 use crate::app::{App, Selection};
+use crate::diagrams::interact;
 use crate::theme;
 use crate::ui_kit;
 
@@ -41,6 +42,11 @@ const PAD: f32 = 24.0;
 /// node boxes deterministically without a font context (the canvas re-lays the
 /// text out for real when it paints).
 const CHAR_W: f32 = 6.6;
+
+/// egui-memory key fragment for this canvas's interact layer. Full id is
+/// `reverse("diagrams-cfg-canvas") + cfg.symbol`, so dragging one function's
+/// CFG never bleeds into the next.
+const STATE_ID: &str = "diagrams-cfg-canvas";
 
 // ── Entry point ─────────────────────────────────────────────────────────────
 
@@ -217,7 +223,14 @@ fn picker(
 // ── Canvas ──────────────────────────────────────────────────────────────────
 
 fn canvas(ui: &mut egui::Ui, cfg: &FunctionCfg, index: Option<&Index>) {
-    badge_strip(ui, cfg, &resolve_name(index, &cfg.symbol));
+    let state_id = egui::Id::new(STATE_ID).with(cfg.symbol.as_str());
+    let mut reset_requested = false;
+    badge_strip(
+        ui,
+        cfg,
+        &resolve_name(index, &cfg.symbol),
+        &mut reset_requested,
+    );
 
     let view = View::build(cfg);
     if view.capped {
@@ -246,55 +259,82 @@ fn canvas(ui: &mut egui::Ui, cfg: &FunctionCfg, index: Option<&Index>) {
 
     let layout = layout(&view.nodes, &view.edges);
 
-    egui::ScrollArea::both()
-        .id_salt("diagrams-cfg-canvas")
-        .auto_shrink([false, false])
-        .show(ui, |ui| {
-            let desired = egui::vec2(
-                layout.width.max(ui.available_width()),
-                layout.height.max(ui.available_height()),
-            );
-            let (resp, painter) = ui.allocate_painter(desired, egui::Sense::hover());
-            let origin = resp.rect.min.to_vec2();
-            painter.rect_filled(
-                resp.rect,
-                egui::CornerRadius::same(theme::CORNER_MD),
-                theme::SURFACE_E0,
-            );
+    // No ScrollArea here (B5-02): pan — dragging empty canvas — replaced
+    // scrolling inside the canvas, so the plain wheel is free to zoom about the
+    // cursor with no painter-coordinates-vs-scroll-rows fight. The painter's
+    // clip keeps off-canvas content from bleeding over the rest of the panel.
+    let (resp, painter) = ui.allocate_painter(ui.available_size(), egui::Sense::click_and_drag());
+    let mut state = interact::CanvasState::load(ui.ctx(), state_id);
+    if reset_requested {
+        state.reset();
+    }
+    let origin = resp.rect.min.to_vec2();
+    painter.rect_filled(
+        resp.rect,
+        egui::CornerRadius::same(theme::CORNER_MD),
+        theme::SURFACE_E0,
+    );
 
-            paint_edges(&painter, &view, &layout, origin);
-            paint_nodes(&painter, &view, &layout, origin);
+    // Base layout items for the interact layer: stable node ids paired with
+    // their canonical rects. User drags/pan/zoom apply on top of `layout`.
+    let id_key = |i: usize| format!("n{}", view.nodes[i].id);
+    let items: Vec<(String, egui::Rect)> = view
+        .nodes
+        .iter()
+        .enumerate()
+        .map(|(i, _)| (id_key(i), layout.nodes[i].rect))
+        .collect();
+    let (hovered_id, actions) = interact::frame(&resp, &mut state, &items);
+    if actions.double_clicked_empty {
+        state.reset();
+    }
+    // Screen rects (offset + layer transform + canvas origin), reused by the
+    // hit-test above, the painting below, and the edge elbows.
+    let placed: Vec<egui::Rect> = view
+        .nodes
+        .iter()
+        .enumerate()
+        .map(|(i, _)| {
+            interact::placed_rect(
+                layout.nodes[i].rect,
+                state.node_offset(&id_key(i)),
+                state.layer,
+            )
+            .translate(origin)
+        })
+        .collect();
 
-            // Node labels are truncated to fit; reveal the real text on hover.
-            let hovered = resp.hover_pos().and_then(|p| {
-                view.nodes.iter().enumerate().find_map(|(i, _)| {
-                    layout.nodes[i]
-                        .rect
-                        .translate(origin)
-                        .contains(p)
-                        .then_some(i)
-                })
-            });
-            if let Some(i) = hovered {
-                let nd = view.nodes[i];
-                let label = if nd.label.is_empty() {
-                    "(no label)"
-                } else {
-                    nd.label.as_str()
-                };
-                let _ = resp.on_hover_text(format!(
-                    "{} · {:?} · L{}..{}\n{label}",
-                    kind_tag(nd.kind),
-                    nd.kind,
-                    nd.start_line,
-                    nd.end_line
-                ));
-            }
-        });
+    paint_edges(&painter, &view, &layout, &placed, state.layer.scale);
+    paint_nodes(&painter, &view, &placed, state.layer.scale);
+
+    // Node labels are truncated to fit; reveal the real text on hover (unless
+    // that pointer is busy dragging the node).
+    let hovered = hovered_id.as_deref().and_then(|id| {
+        id.strip_prefix('n')
+            .and_then(|n| n.parse::<u32>().ok())
+            .and_then(|nid| view.by_id.get(&nid).copied())
+    });
+    if let Some(i) = hovered.filter(|_| !state.is_dragging()) {
+        let nd = view.nodes[i];
+        let label = if nd.label.is_empty() {
+            "(no label)"
+        } else {
+            nd.label.as_str()
+        };
+        let _ = resp.on_hover_text(format!(
+            "{} · {:?} · L{}..{}\n{label}",
+            kind_tag(nd.kind),
+            nd.kind,
+            nd.start_line,
+            nd.end_line
+        ));
+    }
+    state.store(ui.ctx(), state_id);
 }
 
-/// The cyclomatic / nesting badge strip above the canvas.
-fn badge_strip(ui: &mut egui::Ui, cfg: &FunctionCfg, name: &str) {
+/// The cyclomatic / nesting badge strip above the canvas (+ the Reset action
+/// for the interact layer, which writes back through `reset`).
+fn badge_strip(ui: &mut egui::Ui, cfg: &FunctionCfg, name: &str, reset: &mut bool) {
     ui.horizontal(|ui| {
         ui.add(
             egui::Label::new(
@@ -312,6 +352,16 @@ fn badge_strip(ui: &mut egui::Ui, cfg: &FunctionCfg, name: &str) {
                 .color(theme::TEXT_MUTED),
         );
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if ui
+                .button("Reset")
+                .on_hover_text(
+                    "put every node back on the deterministic layout \
+                     (double-click on empty canvas does the same)",
+                )
+                .clicked()
+            {
+                *reset = true;
+            }
             badge(
                 ui,
                 "nesting",
@@ -641,11 +691,10 @@ fn node_width(label: &str) -> f32 {
 
 // ── Painting ────────────────────────────────────────────────────────────────
 
-fn paint_nodes(painter: &egui::Painter, view: &View, layout: &Layout, origin: egui::Vec2) {
-    let font = egui::FontId::new(theme::FONT_SMALL, egui::FontFamily::Monospace);
+fn paint_nodes(painter: &egui::Painter, view: &View, placed: &[egui::Rect], scale: f32) {
+    let font = egui::FontId::new(theme::FONT_SMALL * scale, egui::FontFamily::Monospace);
     for (i, nd) in view.nodes.iter().enumerate() {
-        let rect = layout.nodes[i].rect.translate(origin);
-        paint_node(painter, rect, nd, &font);
+        paint_node(painter, placed[i], nd, &font);
     }
 }
 
@@ -697,15 +746,21 @@ fn paint_node(painter: &egui::Painter, rect: egui::Rect, nd: &CfgNode, font: &eg
     );
 }
 
-fn paint_edges(painter: &egui::Painter, view: &View, layout: &Layout, origin: egui::Vec2) {
-    let font = egui::FontId::new(theme::FONT_SMALL, egui::FontFamily::Monospace);
+fn paint_edges(
+    painter: &egui::Painter,
+    view: &View,
+    layout: &Layout,
+    placed: &[egui::Rect],
+    scale: f32,
+) {
+    let font = egui::FontId::new(theme::FONT_SMALL * scale, egui::FontFamily::Monospace);
     let mut lane = 0usize;
     for e in &view.edges {
         let (Some(&a), Some(&b)) = (view.by_id.get(&e.from), view.by_id.get(&e.to)) else {
             continue;
         };
-        let ra = layout.nodes[a].rect.translate(origin);
-        let rb = layout.nodes[b].rect.translate(origin);
+        let ra = placed[a];
+        let rb = placed[b];
         let back = e.kind == CfgEdgeKind::Back;
         let (color, dashed) = match e.kind {
             CfgEdgeKind::Back => (theme::WARNING, true),
@@ -720,7 +775,7 @@ fn paint_edges(painter: &egui::Painter, view: &View, layout: &Layout, origin: eg
             // Forward: elbow through the empty gap just above the target row.
             let sx = ra.center().x;
             let tx = rb.center().x;
-            let midy = rb.top() - V_GAP * 0.5;
+            let midy = rb.top() - V_GAP * 0.5 * scale;
             pts = vec![
                 egui::pos2(sx, ra.bottom()),
                 egui::pos2(sx, midy),
@@ -732,7 +787,7 @@ fn paint_edges(painter: &egui::Painter, view: &View, layout: &Layout, origin: eg
             // Side lane: leaves and re-enters on the left, so a loop-closing
             // back edge visibly doubles back.
             lane += 1;
-            let lane_x = ra.left().min(rb.left()) - SIDE_GAP * lane as f32;
+            let lane_x = ra.left().min(rb.left()) - SIDE_GAP * lane as f32 * scale;
             let sy = ra.center().y;
             let ty = rb.center().y;
             pts = vec![

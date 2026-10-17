@@ -16,7 +16,12 @@ use repowalk_core::analysis::{Analysis, ModuleEdge, ModuleEdgeKind, ModuleKind, 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use crate::app::{App, Selection};
+use crate::diagrams::interact;
 use crate::theme;
+
+/// egui-memory key for this canvas's interact layer (state survives tab
+/// switches within one session; the layout id is global — one module graph).
+const STATE_ID: &str = "diagrams-modules-interact";
 
 // ── Geometry: fixed node size, layered grid → deterministic layout ──────────
 const NODE_W: f32 = 184.0;
@@ -237,10 +242,6 @@ fn elide(text: &str, max: usize) -> String {
     out
 }
 
-fn box_center(b: &ModuleBox) -> Pos2 {
-    b.pos + b.size * 0.5
-}
-
 fn arrow_head(painter: &egui::Painter, from: Pos2, to: Pos2, stroke: Stroke) {
     let dir = to - from;
     if dir.length_sq() < 1.0 {
@@ -277,7 +278,13 @@ fn notice(ui: &mut egui::Ui, title: &str, lines: &[String]) {
     });
 }
 
-fn header(ui: &mut egui::Ui, lay: &ModuleLayout, edge_count: usize, cycles: &[Vec<String>]) {
+fn header(
+    ui: &mut egui::Ui,
+    lay: &ModuleLayout,
+    edge_count: usize,
+    cycles: &[Vec<String>],
+    reset: &mut bool,
+) {
     ui.horizontal(|ui| {
         ui.label(
             egui::RichText::new(format!(
@@ -312,10 +319,23 @@ fn header(ui: &mut egui::Ui, lay: &ModuleLayout, edge_count: usize, cycles: &[Ve
             label.on_hover_text(detail);
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if ui
+                .button("Reset")
+                .on_hover_text(
+                    "put every node back on the deterministic layout \
+                     (double-click on empty canvas does the same)",
+                )
+                .clicked()
+            {
+                *reset = true;
+            }
             ui.label(
-                egui::RichText::new("tree faint · imports labelled ×N · ⟳ = cycle")
-                    .size(theme::FONT_SMALL)
-                    .color(theme::TEXT_MUTED),
+                egui::RichText::new(
+                    "tree faint · imports labelled ×N · ⟳ = cycle · \
+                     wheel zoom · drag pan · drag node move",
+                )
+                .size(theme::FONT_SMALL)
+                .color(theme::TEXT_MUTED),
             );
         });
     });
@@ -346,163 +366,188 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
         Some(Selection::File(path)) => Some(path.clone()),
         _ => None,
     };
+    let mut reset_requested = false;
 
-    header(ui, &lay, analysis.module_edges.len(), &cycles);
+    header(
+        ui,
+        &lay,
+        analysis.module_edges.len(),
+        &cycles,
+        &mut reset_requested,
+    );
 
-    let by_id: BTreeMap<&str, &ModuleBox> = lay.boxes.iter().map(|b| (b.id.as_str(), b)).collect();
+    // box id → position in `lay.boxes` / the placed screen-rect list below.
+    let by_id: BTreeMap<&str, usize> = lay
+        .boxes
+        .iter()
+        .enumerate()
+        .map(|(i, b)| (b.id.as_str(), i))
+        .collect();
 
     egui::Frame::new()
         .fill(theme::BG_BASE)
         .stroke(Stroke::new(1.0, theme::BORDER_SUBTLE))
         .show(ui, |ui| {
-            egui::ScrollArea::both()
-                .id_salt("modules-diagram")
-                .auto_shrink([false, false])
-                .show(ui, |ui| {
-                    let canvas = Vec2::new(lay.width.max(420.0), lay.height.max(180.0));
-                    let (rect, resp) = ui.allocate_exact_size(canvas, egui::Sense::click());
-                    let painter = ui.painter_at(rect);
-                    let origin = rect.min;
-                    let to_screen = |p: Pos2| origin + p.to_vec2();
+            // No ScrollArea (B5-02): pan — dragging empty canvas — replaced
+            // scrolling inside the canvas, so the plain wheel is free to zoom
+            // about the cursor (nodes here sit in fixed depth columns, so a
+            // scroll bar said nothing that a pan drag does not say better).
+            let (rect, resp) =
+                ui.allocate_exact_size(ui.available_size(), egui::Sense::click_and_drag());
+            let painter = ui.painter_at(rect);
+            let origin = rect.min;
+            let mut state = interact::CanvasState::load(ui.ctx(), egui::Id::new(STATE_ID));
+            if reset_requested {
+                state.reset();
+            }
+            let s = state.layer.scale;
 
-                    let hovered = resp.hover_pos().and_then(|p| {
-                        let local = p - origin;
-                        lay.boxes
-                            .iter()
-                            .find(|b| {
-                                Rect::from_min_size(b.pos, b.size)
-                                    .contains(Pos2::new(local.x, local.y))
-                            })
-                            .map(|b| b.id.as_str())
-                    });
+            // Base depth-layer items for the interact layer; user drags/pan/
+            // zoom apply strictly on top of the deterministic `layout`.
+            let items: Vec<(String, Rect)> = lay
+                .boxes
+                .iter()
+                .map(|b| (b.id.clone(), Rect::from_min_size(b.pos, b.size)))
+                .collect();
+            let (hovered, actions) = interact::frame(&resp, &mut state, &items);
+            if actions.double_clicked_empty {
+                state.reset();
+            }
+            let placed: Vec<Rect> = lay
+                .boxes
+                .iter()
+                .map(|b| {
+                    interact::placed_rect(
+                        Rect::from_min_size(b.pos, b.size),
+                        state.node_offset(&b.id),
+                        state.layer,
+                    )
+                    .translate(origin.to_vec2())
+                })
+                .collect();
 
-                    // Nesting tree first, faint, so it recedes behind edges/nodes.
-                    for e in &analysis.module_edges {
-                        if e.kind != ModuleEdgeKind::Submodule {
-                            continue;
-                        }
-                        let (Some(a), Some(b)) =
-                            (by_id.get(e.from.as_str()), by_id.get(e.to.as_str()))
-                        else {
-                            continue;
-                        };
-                        painter.line_segment(
-                            [to_screen(box_center(a)), to_screen(box_center(b))],
-                            Stroke::new(1.0, theme::with_alpha(theme::TEXT_MUTED, 70)),
-                        );
+            // Nesting tree first, faint, so it recedes behind edges/nodes.
+            // Endpoints follow dragged nodes.
+            for e in &analysis.module_edges {
+                if e.kind != ModuleEdgeKind::Submodule {
+                    continue;
+                }
+                let (Some(&a), Some(&b)) = (by_id.get(e.from.as_str()), by_id.get(e.to.as_str()))
+                else {
+                    continue;
+                };
+                painter.line_segment(
+                    [placed[a].center(), placed[b].center()],
+                    Stroke::new(1.0, theme::with_alpha(theme::TEXT_MUTED, 70)),
+                );
+            }
+
+            // Import edges, labelled with the aggregated count.
+            for e in analysis
+                .module_edges
+                .iter()
+                .filter(|e| e.kind == ModuleEdgeKind::Import)
+                .take(EDGE_CAP)
+            {
+                let (Some(&a), Some(&b)) = (by_id.get(e.from.as_str()), by_id.get(e.to.as_str()))
+                else {
+                    continue;
+                };
+                let in_cycle = cycle_ids.contains(&e.from) && cycle_ids.contains(&e.to);
+                let color = if in_cycle {
+                    theme::DANGER
+                } else {
+                    theme::with_alpha(theme::INFO, 170)
+                };
+                let stroke = Stroke::new(if in_cycle { 1.8 } else { 1.2 }, color);
+                let pa = placed[a].center();
+                let pb = placed[b].center();
+                painter.line_segment([pa, pb], stroke);
+                arrow_head(&painter, pa, pb, stroke);
+                let mid = pa + (pb - pa) * 0.5;
+                painter.text(
+                    mid,
+                    Align2::CENTER_CENTER,
+                    format!("×{}", e.count),
+                    font(theme::FONT_SMALL * s, true),
+                    color,
+                );
+            }
+
+            // Nodes on top. `placed` is parallel to `lay.boxes`.
+            for (bi, b) in lay.boxes.iter().enumerate() {
+                let brect = placed[bi];
+                let corner = egui::CornerRadius::same(theme::CORNER_MD);
+                let group_color = theme::module_color(&root_of(&b.id, &parent));
+                let sel = selected_file.as_deref() == Some(b.id.as_str());
+                let hov = hovered.as_deref() == Some(b.id.as_str());
+                let in_cycle = cycle_ids.contains(&b.id);
+
+                let fill = if sel {
+                    theme::SURFACE_SELECTED
+                } else {
+                    theme::SURFACE_E2
+                };
+                painter.rect_filled(brect, corner, fill);
+                let (border, bw) = if in_cycle {
+                    (theme::DANGER, 2.0)
+                } else if sel || hov {
+                    (theme::ACCENT, 2.0)
+                } else {
+                    (group_color, 1.4)
+                };
+                painter.rect_stroke(
+                    brect,
+                    corner,
+                    Stroke::new(bw, border),
+                    egui::StrokeKind::Middle,
+                );
+
+                let pad = Vec2::new(theme::SPACE_2 * s, (theme::SPACE_1 + 1.0) * s);
+                painter.text(
+                    brect.min + pad,
+                    Align2::LEFT_TOP,
+                    elide(&b.id, TEXT_CHARS),
+                    font(theme::FONT_SMALL * s, true),
+                    theme::TEXT_PRIMARY,
+                );
+                painter.text(
+                    brect.right_top() + Vec2::new(-theme::SPACE_2 * s, (theme::SPACE_1 + 1.0) * s),
+                    Align2::RIGHT_TOP,
+                    kind_label(b.kind),
+                    font(theme::FONT_SMALL * s, false),
+                    group_color,
+                );
+                painter.text(
+                    brect.min + Vec2::new(theme::SPACE_2 * s, 20.0 * s),
+                    Align2::LEFT_TOP,
+                    format!("{} loc · {} sym", b.loc, b.symbols),
+                    font(theme::FONT_SMALL * s, false),
+                    theme::TEXT_MUTED,
+                );
+                if in_cycle {
+                    painter.text(
+                        brect.right_bottom()
+                            + Vec2::new(-theme::SPACE_2 * s, -(theme::SPACE_1 + 1.0) * s),
+                        Align2::RIGHT_BOTTOM,
+                        "⟳",
+                        font(theme::FONT_BODY * s, false),
+                        theme::DANGER,
+                    );
+                }
+            }
+
+            // Click a file node → open it through the shared selection (egui's
+            // click-vs-drag threshold keeps an unmoved click a click).
+            if let Some(id) = actions.clicked {
+                if let Some(&bi) = by_id.get(id.as_str()) {
+                    if lay.boxes[bi].kind == ModuleKind::File {
+                        app.select(Selection::File(lay.boxes[bi].id.clone()));
                     }
+                }
+            }
 
-                    // Import edges, labelled with the aggregated count.
-                    for e in analysis
-                        .module_edges
-                        .iter()
-                        .filter(|e| e.kind == ModuleEdgeKind::Import)
-                        .take(EDGE_CAP)
-                    {
-                        let (Some(a), Some(b)) =
-                            (by_id.get(e.from.as_str()), by_id.get(e.to.as_str()))
-                        else {
-                            continue;
-                        };
-                        let in_cycle = cycle_ids.contains(&e.from) && cycle_ids.contains(&e.to);
-                        let color = if in_cycle {
-                            theme::DANGER
-                        } else {
-                            theme::with_alpha(theme::INFO, 170)
-                        };
-                        let stroke = Stroke::new(if in_cycle { 1.8 } else { 1.2 }, color);
-                        let pa = to_screen(box_center(a));
-                        let pb = to_screen(box_center(b));
-                        painter.line_segment([pa, pb], stroke);
-                        arrow_head(&painter, pa, pb, stroke);
-                        let mid = pa + (pb - pa) * 0.5;
-                        painter.text(
-                            mid,
-                            Align2::CENTER_CENTER,
-                            format!("×{}", e.count),
-                            font(theme::FONT_SMALL, true),
-                            color,
-                        );
-                    }
-
-                    // Nodes on top.
-                    for b in &lay.boxes {
-                        let brect = Rect::from_min_size(to_screen(b.pos), b.size);
-                        let corner = egui::CornerRadius::same(theme::CORNER_MD);
-                        let group_color = theme::module_color(&root_of(&b.id, &parent));
-                        let sel = selected_file.as_deref() == Some(b.id.as_str());
-                        let hov = hovered == Some(b.id.as_str());
-                        let in_cycle = cycle_ids.contains(&b.id);
-
-                        let fill = if sel {
-                            theme::SURFACE_SELECTED
-                        } else {
-                            theme::SURFACE_E2
-                        };
-                        painter.rect_filled(brect, corner, fill);
-                        let (border, bw) = if in_cycle {
-                            (theme::DANGER, 2.0)
-                        } else if sel || hov {
-                            (theme::ACCENT, 2.0)
-                        } else {
-                            (group_color, 1.4)
-                        };
-                        painter.rect_stroke(
-                            brect,
-                            corner,
-                            Stroke::new(bw, border),
-                            egui::StrokeKind::Middle,
-                        );
-
-                        let pad = Vec2::new(theme::SPACE_2, theme::SPACE_1 + 1.0);
-                        painter.text(
-                            brect.min + pad,
-                            Align2::LEFT_TOP,
-                            elide(&b.id, TEXT_CHARS),
-                            font(theme::FONT_SMALL, true),
-                            theme::TEXT_PRIMARY,
-                        );
-                        painter.text(
-                            brect.right_top() + Vec2::new(-theme::SPACE_2, theme::SPACE_1 + 1.0),
-                            Align2::RIGHT_TOP,
-                            kind_label(b.kind),
-                            font(theme::FONT_SMALL, false),
-                            group_color,
-                        );
-                        painter.text(
-                            brect.min + Vec2::new(theme::SPACE_2, 20.0),
-                            Align2::LEFT_TOP,
-                            format!("{} loc · {} sym", b.loc, b.symbols),
-                            font(theme::FONT_SMALL, false),
-                            theme::TEXT_MUTED,
-                        );
-                        if in_cycle {
-                            painter.text(
-                                brect.right_bottom()
-                                    + Vec2::new(-theme::SPACE_2, -(theme::SPACE_1 + 1.0)),
-                                Align2::RIGHT_BOTTOM,
-                                "⟳",
-                                font(theme::FONT_BODY, false),
-                                theme::DANGER,
-                            );
-                        }
-                    }
-
-                    // Click a file node → open it through the shared selection.
-                    if resp.clicked() {
-                        if let Some(p) = resp.interact_pointer_pos() {
-                            let local = p - origin;
-                            if let Some(b) = lay.boxes.iter().find(|b| {
-                                Rect::from_min_size(b.pos, b.size)
-                                    .contains(Pos2::new(local.x, local.y))
-                            }) {
-                                if b.kind == ModuleKind::File {
-                                    app.select(Selection::File(b.id.clone()));
-                                }
-                            }
-                        }
-                    }
-                });
+            state.store(ui.ctx(), egui::Id::new(STATE_ID));
         });
 }
 
