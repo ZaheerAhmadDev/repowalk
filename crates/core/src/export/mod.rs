@@ -4,6 +4,7 @@
 //! I/O, no filesystem, no network — the caller decides where bytes land. That is
 //! what lets `repowalk graph --format dot` (PROD-3) reuse exactly what the GUI
 //! Export menu renders, instead of a second implementation drifting.
+pub mod directory;
 pub mod dot;
 pub mod mermaid;
 pub mod report;
@@ -27,6 +28,11 @@ pub enum Diagram {
     Types,
     /// Crate / directory / module structure with import edges.
     Modules,
+    /// Directory tree of the actually indexed files: real directory and file
+    /// names only (nothing invented). The flag turns on optional dashed
+    /// aggregated `Import` edges between directories; callers that do not ask
+    /// get the plain containment tree (`imports: false` default).
+    Directory { imports: bool },
 }
 
 /// Mermaid diagram **body** (no ``` fence — the caller adds one).

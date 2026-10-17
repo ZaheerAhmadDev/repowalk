@@ -22,22 +22,42 @@ const CAPTION_H: f64 = 20.0;
 
 /// Render `diagram` as a standalone SVG document.
 pub fn render(index: &Index, analysis: &Analysis, diagram: &Diagram) -> String {
-    let (graph, title) = match diagram {
+    let (graph, title, cap) = match diagram {
         Diagram::CallGraph => (
             util::build_call_graph(index, usize::MAX),
             "Call graph".to_string(),
+            util::SVG_NODE_CAP,
         ),
         Diagram::Cfg { symbol } => (
             util::build_cfg(analysis, symbol),
             format!("Control-flow graph — {symbol}"),
+            util::SVG_NODE_CAP,
         ),
-        Diagram::Types => (util::build_types(analysis), "Type graph".to_string()),
+        Diagram::Types => (
+            util::build_types(analysis),
+            "Type graph".to_string(),
+            util::SVG_NODE_CAP,
+        ),
         Diagram::Modules => (
             util::build_modules(analysis),
             "Module structure".to_string(),
+            util::SVG_NODE_CAP,
         ),
+        Diagram::Directory { imports } => {
+            let options = super::directory::DirectoryOptions {
+                import_edges: *imports,
+                loc_labels: true,
+            };
+            (
+                super::directory::build(index, analysis, &options),
+                "Directory tree".to_string(),
+                // The degree-based legibility cap would drop tree leaves;
+                // a containment tree is drawn whole or not at all.
+                usize::MAX,
+            )
+        }
     };
-    render_graph(&graph, &title)
+    render_graph(&graph, &title, cap)
 }
 
 fn fmt(v: f64) -> String {
@@ -66,14 +86,14 @@ fn depths(nodes: &[&GNode], edges: &[&GEdge]) -> BTreeMap<String, usize> {
     d
 }
 
-fn render_graph(graph: &Graph, title: &str) -> String {
+fn render_graph(graph: &Graph, title: &str, cap: usize) -> String {
     let mut nodes: Vec<&GNode> = graph.nodes.iter().collect();
     nodes.sort_by(|a, b| a.id.cmp(&b.id));
     let mut edges: Vec<&GEdge> = graph.edges.iter().collect();
     let mut caption = graph.caption.clone();
 
     // Legibility cap: keep the highest-degree subgraph.
-    if nodes.len() > util::SVG_NODE_CAP {
+    if nodes.len() > cap {
         let mut degree: BTreeMap<&str, usize> = BTreeMap::new();
         for e in &edges {
             *degree.entry(e.from.as_str()).or_default() += 1;
@@ -85,17 +105,12 @@ fn render_graph(graph: &Graph, title: &str) -> String {
                 .cmp(&degree[a.id.as_str()])
                 .then_with(|| a.id.cmp(&b.id))
         });
-        let keep: BTreeSet<&str> = nodes
-            .iter()
-            .take(util::SVG_NODE_CAP)
-            .map(|n| n.id.as_str())
-            .collect();
+        let keep: BTreeSet<&str> = nodes.iter().take(cap).map(|n| n.id.as_str()).collect();
         nodes.retain(|n| keep.contains(n.id.as_str()));
         edges.retain(|e| keep.contains(e.from.as_str()) && keep.contains(e.to.as_str()));
         caption = Some(format!(
             "showing top {} of {} nodes by degree (legibility cap)",
-            util::SVG_NODE_CAP,
-            total
+            cap, total
         ));
     }
 
@@ -166,11 +181,13 @@ fn render_graph(graph: &Graph, title: &str) -> String {
     out
 }
 
-fn marker_id(arrow: Arrow) -> &'static str {
+/// Arrow head marker per edge, `None` when the edge has no head (plain lines).
+fn marker_id(arrow: Arrow) -> Option<&'static str> {
     match arrow {
-        Arrow::Normal => "arrow-normal",
-        Arrow::Triangle => "arrow-hollow",
-        Arrow::Diamond => "arrow-diamond",
+        Arrow::Normal => Some("arrow-normal"),
+        Arrow::Triangle => Some("arrow-hollow"),
+        Arrow::Diamond => Some("arrow-diamond"),
+        Arrow::Open => None,
     }
 }
 
@@ -223,13 +240,17 @@ fn edge_svg(e: &GEdge, pos: &BTreeMap<&str, (f64, f64)>) -> String {
     } else {
         "edge"
     };
+    let marker = match marker_id(e.arrow) {
+        Some(id) => format!(" marker-end=\"url(#{id})\""),
+        None => String::new(),
+    };
     let mut out = format!(
-        "<line class=\"{class}\" x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" marker-end=\"url(#{})\"/>\n",
+        "<line class=\"{class}\" x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\"{}/>\n",
         fmt(x1),
         fmt(sy),
         fmt(x2),
         fmt(ty),
-        marker_id(e.arrow)
+        marker
     );
     if !e.label.is_empty() {
         let mx = (x1 + x2) / 2.0;

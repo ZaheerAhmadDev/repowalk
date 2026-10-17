@@ -3,7 +3,7 @@
 //! Pure and deterministic: `(index, analysis, diagram)` in, diagram body out.
 //! Call graph / CFG / modules render from the shared [`super::util::Graph`];
 //! the type graph uses Mermaid's `classDiagram` syntax directly.
-use super::util::{self, GNode, Graph, Shape, Style};
+use super::util::{self, Arrow, GNode, Graph, Shape, Style};
 use super::Diagram;
 use crate::analysis::{Analysis, TypeEdgeKind};
 use crate::model::Index;
@@ -24,6 +24,14 @@ pub fn render(index: &Index, analysis: &Analysis, diagram: &Diagram) -> String {
             let g = util::build_modules(analysis);
             flow(&g, "LR", "module graph")
         }
+        Diagram::Directory { imports } => {
+            let options = super::directory::DirectoryOptions {
+                import_edges: *imports,
+                loc_labels: true,
+            };
+            let g = super::directory::build(index, analysis, &options);
+            flow(&g, "TD", "directory tree")
+        }
     }
 }
 
@@ -42,11 +50,33 @@ fn flow(g: &Graph, direction: &str, kind: &str) -> String {
         out.push('\n');
     }
     for e in &g.edges {
+        // `Arrow::Open` (plain containment lines) loses its head in Mermaid:
+        // `---` solid, `-.` dotted. Labelled dotted lines use `A-. text .-B`.
+        let open = e.arrow == Arrow::Open;
+        let dotted = e.style == Style::Dashed;
         let mut line = e.from.clone();
         line.push(' ');
-        match e.style {
-            Style::Dashed => line.push_str("-.->"),
-            Style::Solid => line.push_str("-->"),
+        match (open, dotted) {
+            (true, true) => {
+                if e.label.is_empty() {
+                    line.push_str("-.-");
+                    line.push(' ');
+                    line.push_str(&e.to);
+                    out.push_str(&line);
+                    out.push('\n');
+                    continue;
+                }
+                line.push_str("-. ");
+                line.push_str(&util::mermaid_escape(&e.label));
+                line.push_str(" .- ");
+                line.push_str(&e.to);
+                out.push_str(&line);
+                out.push('\n');
+                continue;
+            }
+            (true, false) => line.push_str("---"),
+            (false, true) => line.push_str("-.->"),
+            (false, false) => line.push_str("-->"),
         }
         if !e.label.is_empty() {
             line.push('|');

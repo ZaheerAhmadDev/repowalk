@@ -30,6 +30,8 @@ pub enum Arrow {
     Triangle,
     /// Filled diamond: composition.
     Diamond,
+    /// No head at all: plain containment line (directory tree edges).
+    Open,
 }
 
 /// Line style.

@@ -46,7 +46,12 @@ pub fn load(root: &Path) -> anyhow::Result<Artifacts> {
         bail!("repo path not found or not a directory: {}", root.display());
     }
 
-    let (index, analysis) = learn::learn(root, &|_| {})?;
+    // Canonical root: `learn` records `repo_root` as the *string passed in*,
+    // so the index (and, e.g., the `--scope tree` root label) should describe
+    // the canonical directory name — `.` must not name the repo `.`.
+    let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+
+    let (index, analysis) = learn::learn(&root, &|_| {})?;
     if analysis_is_empty(&analysis) && analyzable_files(&index) > 0 {
         return Err(anyhow!(
             "no analysis yet for {}: analyzers produced no variables/CFGs/uses \
