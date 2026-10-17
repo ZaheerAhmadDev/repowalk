@@ -3,38 +3,332 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>repowalk — Understand any codebase</title>
+  <meta name="description" content="repowalk — open a folder, see the architecture, know where to start reading. Offline static analysis: no AI, no network, no API keys.">
+<meta name="color-scheme" content="light dark">
+<title>repowalk — understand any codebase</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
-<body>
-<header>
-  <nav>
-    <h1><a href="index.html">repowalk</a></h1>
-    <ul>
-      <li><a href="v2.html">v2 tour</a></li>
-      <li><a href="tutorial.html">Add HTML/CSS/JS</a></li>
-      <li><a href="https://github.com/ZaheerAhmadDev/repowalk">GitHub</a></li>
-    </ul>
-  </nav>
-</header>
-<main>
-  <section class="hero">
-    <h2>See architecture. Know where to start.</h2>
-    <p>repowalk is a GUI-first desktop app for exploring unfamiliar codebases using static analysis, graphs, and guided reading. No AI, no network, no API keys.</p>
-    <a class="btn" href="https://github.com/ZaheerAhmadDev/repowalk/releases">Releases</a>
-  </section>
-  <section class="features">
-    <article><h3>Map & Tour</h3><p>Orientation in seconds.</p></article>
-    <article><h3>Graph</h3><p>Call/import relationships.</p></article>
-    <article><h3>Honest edges</h3><p>Uncertainty shown clearly.</p></article>
-    <article><h3>Flow playback</h3><p>Watch a call path run step by step.</p></article>
-  </section>
-  <section class="tutorial">
-    <h2>New in v2</h2>
-    <p>Learn, inventory, control flow, connections, structure, usage and export — the complete understanding suite. <a href="v2.html">Take the v2 tour &rarr;</a></p>
-  </section>
-</main>
-<footer><p>© 2026 repowalk contributors — Apache-2.0</p></footer>
-<script src="js/app.js"></script>
+<body class="site">
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="shell">
+
+  <aside class="sidebar">
+    <a class="brand" href="#top">
+      <span class="brand-mark" aria-hidden="true">rw</span>
+      <span>repowalk</span>
+    </a>
+    <p class="tagline">Open a folder → see the architecture → know where to start reading.</p>
+
+    <nav aria-label="Site sections">
+      <p class="nav-group">About the project</p>
+      <a class="nav-link" href="#about">What is repowalk?</a>
+      <a class="nav-link" href="#why">Why it exists</a>
+      <a class="nav-link" href="#features">Features</a>
+      <a class="nav-link" href="#how">How it works</a>
+
+      <p class="nav-group">Docs</p>
+      <a class="nav-link" href="#install">Install &amp; run</a>
+      <a class="nav-link" href="#cli">CLI reference</a>
+      <a class="nav-link" href="#gui">GUI guide</a>
+      <a class="nav-link" href="#shortcuts">Keyboard shortcuts</a>
+      <a class="nav-link" href="#docs">How-to guides</a>
+
+      <p class="nav-group">Release notes</p>
+      <a class="nav-link" href="#releases">v2.0.0</a>
+      <a class="nav-link" href="#v1">v0.1.0</a>
+      <a class="nav-link" href="#limits">Known limits</a>
+
+      <p class="nav-group">Links</p>
+      <a class="nav-link" href="v2.html">v2 tour</a>
+      <a class="nav-link" href="tutorial.html">Web tutorial</a>
+      <a class="nav-link" href="https://github.com/ZaheerAhmadDev/repowalk">GitHub</a>
+      <a class="nav-link" href="https://github.com/ZaheerAhmadDev/repowalk/releases">Releases</a>
+    </nav>
+
+    <p class="sidebar-note">Pure static analysis. No AI, no network, no API keys — ground truth you can verify yourself.</p>
+  </aside>
+
+  <main class="content" id="main">
+
+    <header class="page-hero" id="top">
+      <p class="eyebrow">Offline codebase understanding</p>
+      <h1>See architecture. Know where to start.</h1>
+      <p class="lede">repowalk is a GUI-first desktop app with a small CLI. Point it at any repository and it walks the tree, builds the graphs, and hands you a guided reading order — in about a second.</p>
+      <ul class="badges">
+        <li class="badge badge-accent">No AI · no network · no keys</li>
+        <li class="badge">Rust / Python / TypeScript / JavaScript</li>
+        <li class="badge">Apache-2.0</li>
+        <li class="badge">v2.0.0</li>
+      </ul>
+      <div class="actions">
+        <a class="btn btn-primary" href="#install">Get started</a>
+        <a class="btn btn-ghost" href="#how">How it works</a>
+      </div>
+    </header>
+
+    <section class="section prose" id="about">
+      <h2>What is repowalk?</h2>
+      <p>A repository opens as a folder. repowalk answers the four questions you always hit in an unfamiliar codebase: where to start, what a thing does, how it connects, and what matters. It reads the code with <a href="https://tree-sitter.github.io/">tree-sitter</a>, resolves call and import edges, and renders the result as text, an interactive graph, an animated flow, and diagrams — all derived from the source on disk.</p>
+      <p>It is deliberately <strong>not</strong> a summarizer. AI writes code fast; repowalk is the verification layer you check the result against, using ground truth you can point at line by line.</p>
+      <div class="callout">
+        <strong>One pass, two artifacts.</strong> A single <code>learn()</code> pass writes <code>.repowalk/index.json</code> (structure) and <code>.repowalk/analysis.json</code> (variables, control flow, types, modules). Both are versioned; a mismatch is a cache miss, never a silent misread.
+      </div>
+    </section>
+
+    <section class="section" id="why">
+      <h2>Why it exists</h2>
+      <p class="section-intro">Repositories grow faster than people can read them. Opening a large one usually means hitting four walls — each maps to a feature.</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>The wall</th><th>How repowalk breaks it</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>“Where do I even start?”</td><td><strong>Tour</strong> (reading order) and <strong>Map</strong> (orientation)</td></tr>
+            <tr><td>“What does this do, and why?”</td><td><strong>Explain cards</strong> and an editable, highlighted <strong>Text mode</strong></td></tr>
+            <tr><td>“How does it connect?”</td><td><strong>Graph mode</strong>, an A→B flow trace, and dynamic <strong>Flow playback</strong></td></tr>
+            <tr><td>“What parts matter?”</td><td><strong>Legend encoding</strong> (size = fan-in) and the <strong>Health report</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" id="features">
+      <h2>Features</h2>
+      <p class="section-intro">Five reading surfaces over one model of the code.</p>
+      <div class="card-grid">
+        <article class="card">
+          <h3><span class="card-icon" aria-hidden="true">◆</span>Map &amp; Tour</h3>
+          <p>Languages, LOC, entrypoints, module tree, largest files, hottest symbols — plus a computed reading order with a one-line “why” per item.</p>
+        </article>
+        <article class="card">
+          <h3><span class="card-icon" aria-hidden="true">▤</span>Text mode</h3>
+          <p>File tree beside a syntax-highlighted pane with line numbers. Every selection stays in sync across panes.</p>
+        </article>
+        <article class="card">
+          <h3><span class="card-icon" aria-hidden="true">⌂</span>Explain cards</h3>
+          <p>Docstring, full signature, <code>file:line</code>, callers, callees, and module role — everything clickable.</p>
+        </article>
+        <article class="card">
+          <h3><span class="card-icon" aria-hidden="true">⇄</span>Graph mode</h3>
+          <p>Interactive call/import graph: pan, zoom, drag, real names, clustering and confidence filters. Low-confidence edges are drawn dashed.</p>
+        </article>
+        <article class="card">
+          <h3><span class="card-icon" aria-hidden="true">▶</span>Flow mode</h3>
+          <p>An A→B trace with animated stage playback (playhead, step, 0.5×–2×) and a Feature tab that slices the call tree from an entrypoint.</p>
+        </article>
+        <article class="card">
+          <h3><span class="card-icon" aria-hidden="true">▦</span>Diagrams</h3>
+          <p>Per-function control-flow graphs, a type/class structure diagram, and a module dependency diagram.</p>
+        </article>
+        <article class="card">
+          <h3><span class="card-icon" aria-hidden="true">≡</span>Usage &amp; references</h3>
+          <p>A per-file variable table (kind, type, reads/writes/uses, declaration) and all-use-sites for any symbol.</p>
+        </article>
+        <article class="card">
+          <h3><span class="card-icon" aria-hidden="true">⌕</span>Search</h3>
+          <p>Fuzzy subsequence matching over symbols and paths, sortable by fan-in, LOC, or name; <kbd>Ctrl</kbd>+<kbd>P</kbd> quick open.</p>
+        </article>
+        <article class="card">
+          <h3><span class="card-icon" aria-hidden="true">✎</span>Notes</h3>
+          <p>Bookmarks with free text stored in <code>.repowalk/notes.json</code>; a note whose target disappears is marked stale, never dropped.</p>
+        </article>
+        <article class="card">
+          <h3><span class="card-icon" aria-hidden="true">◎</span>Health &amp; guardrails</h3>
+          <p>Cycles (Tarjan), god-files by LOC percentile, complexity hotspots, and architecture rules from <code>rules.json</code>.</p>
+        </article>
+        <article class="card">
+          <h3><span class="card-icon" aria-hidden="true">⤓</span>Export</h3>
+          <p>Mermaid, Graphviz DOT, hand-rolled SVG, a self-contained Markdown report, and PNG — shared by GUI and CLI, so outputs cannot drift.</p>
+        </article>
+        <article class="card">
+          <h3><span class="card-icon" aria-hidden="true">⊙</span>Repo 101</h3>
+          <p>A thirty-second orientation card: what the repo is, how to build and run it, and where the entrypoints live.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section prose" id="how">
+      <h2>How it works</h2>
+      <p class="section-intro">Everything is derived at runtime from the source. There is no network code at all, and the same repo always gives the same result.</p>
+      <ol class="pipeline">
+        <li>repo</li>
+        <li>walk (respects .gitignore)</li>
+        <li>tree-sitter parse</li>
+        <li>resolve edges</li>
+        <li>analyze</li>
+        <li>cache</li>
+      </ol>
+      <ul>
+        <li><strong>Parsing:</strong> tree-sitter extracts definitions, doc comments, calls, and imports into a shared symbol/edge model.</li>
+        <li><strong>Edge resolution:</strong> call sites become confidence tiers — <code>exact</code>, <code>name-only</code>, <code>ambiguous</code>, <code>unresolved</code>. The UI renders low-confidence edges as dashed and marked with a <code>?</code>; a name-only hop is never shown as confirmed.</li>
+        <li><strong>Analysis:</strong> variables (reads/writes/uses per file), per-function control-flow graphs, type/class structure, module boundaries, entrypoints and feature slices, cyclomatic complexity, and guardrail rules.</li>
+        <li><strong>Tour:</strong> a topological sort of the import graph, ranked by fan-in, entrypoint status, docstring coverage, and depth.</li>
+        <li><strong>Health:</strong> strongly connected components find cycles; LOC percentiles find god-files; <code>rules.json</code> produces addressable findings.</li>
+        <li><strong>Incremental &amp; deterministic:</strong> the cache is keyed per file (nanosecond mtime + size) and on the revision of the pipeline that produced it — a one-file edit re-analyzes one file, and an analyzer change can never silently serve stale output.</li>
+      </ul>
+    </section>
+
+    <section class="section prose" id="install">
+      <h2>Install &amp; run</h2>
+      <p class="section-intro">You need a recent stable <a href="https://rustup.rs/">Rust toolchain</a>.</p>
+      <ol class="steps">
+        <li>Clone and build:
+          <pre><code>git clone https://github.com/ZaheerAhmadDev/repowalk.git
+cd repowalk
+cargo build --release</code></pre>
+        </li>
+        <li>The binaries land at <code>target/release/repowalk-gui</code> and <code>target/release/repowalk-cli</code>.</li>
+        <li>Install the CLI onto your <code>PATH</code>:
+          <pre><code>cargo install --path crates/cli</code></pre>
+        </li>
+        <li>Run it:
+          <pre><code># GUI — opens the app on a repo (path optional)
+./target/release/repowalk-gui /path/to/repo
+
+# CLI — orientation in one screen
+./target/release/repowalk-cli map /path/to/repo</code></pre>
+        </li>
+      </ol>
+      <div class="callout"><strong>Cache:</strong> opening a repo writes <code>.repowalk/</code> next to it (gitignored). Delete it to force a cold learn.</div>
+    </section>
+
+    <section class="section" id="cli">
+      <h2>CLI reference</h2>
+      <p class="section-intro">A terminal twin of the GUI — the same core, the same numbers. Query commands accept <code>--json</code> for scripting.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Command</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>map &lt;repo&gt;</code></td><td>Metrics, module tree, and health in one screen</td></tr>
+            <tr><td><code>tour &lt;repo&gt;</code></td><td>Numbered reading order with why-lines</td></tr>
+            <tr><td><code>explain &lt;symbol&gt; &lt;repo&gt;</code></td><td>Signature, docs, callers, callees</td></tr>
+            <tr><td><code>find &lt;query&gt; &lt;repo&gt;</code></td><td>Ranked fuzzy hits: <code>path:line name score</code></td></tr>
+            <tr><td><code>flow &lt;A&gt; &lt;B&gt; &lt;repo&gt;</code></td><td>A→B trace with hop confidence, or <code>--from</code> wave report</td></tr>
+            <tr><td><code>report &lt;repo&gt;</code></td><td>Architecture report (Markdown); runs guardrails, non-zero exit on an <code>Error</code> rule</td></tr>
+            <tr><td><code>graph --format mermaid|dot|svg --scope call|cfg|types|modules</code></td><td>Render one diagram to stdout</td></tr>
+            <tr><td><code>variables &lt;file&gt; &lt;repo&gt;</code></td><td>Per-file variable table</td></tr>
+            <tr><td><code>complexity --by function|file</code></td><td>Sorted hotspots per function, or a per-file roll-up</td></tr>
+            <tr><td><code>refs &lt;target&gt; &lt;repo&gt;</code></td><td>All use sites of a symbol or variable</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section prose" id="gui">
+      <h2>GUI guide</h2>
+      <p class="section-intro">The window is a sidebar plus four modes. One selection drives every pane.</p>
+      <ul>
+        <li><strong>Sidebar panels:</strong> Map, Tour, Search, Health, Notes, and Repo 101.</li>
+        <li><strong>Mode buttons (or <kbd>Tab</kbd>):</strong> Text → Graph → Flow → Diagrams. Switching modes keeps your selection.</li>
+        <li><strong>Export menu:</strong> architecture report, call graph / types / modules as Mermaid, DOT and SVG, plus PNG.</li>
+        <li><strong>Explain cards</strong> carry <em>Trace from here</em> / <em>Trace to here</em> handoffs straight into Flow mode.</li>
+      </ul>
+    </section>
+
+    <section class="section" id="shortcuts">
+      <h2>Keyboard shortcuts</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Key</th><th>Action</th></tr></thead>
+          <tbody>
+            <tr><td><kbd>Tab</kbd></td><td>Cycle Text → Graph → Flow → Diagrams</td></tr>
+            <tr><td><kbd>Ctrl</kbd>+<kbd>K</kbd></td><td>Command palette</td></tr>
+            <tr><td><kbd>/</kbd></td><td>Focus search</td></tr>
+            <tr><td><kbd>j</kbd> / <kbd>k</kbd></td><td>Move through sidebar lists</td></tr>
+            <tr><td><kbd>Enter</kbd></td><td>Jump to / select</td></tr>
+            <tr><td><kbd>g</kbd></td><td>Focus graph</td></tr>
+            <tr><td><kbd>Ctrl</kbd>+<kbd>T</kbd></td><td>Toggle light / dark theme</td></tr>
+            <tr><td><kbd>Esc</kbd></td><td>Clear selection / trace / dialogs</td></tr>
+            <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>Save the edited file</td></tr>
+            <tr><td><kbd>?</kbd></td><td>Show shortcuts overlay</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" id="docs">
+      <h2>How-to guides</h2>
+      <p class="section-intro">Short, task-oriented walkthroughs. The full set lives in the repository under <code>docs/</code>.</p>
+      <div class="doc-grid">
+        <a class="doc-card" href="https://github.com/ZaheerAhmadDev/repowalk/tree/main/docs">
+          <h3>Learn a codebase</h3>
+          <p>Walk → parse → resolve → analyze → cache, and the Repo 101 panel.</p>
+        </a>
+        <a class="doc-card" href="https://github.com/ZaheerAhmadDev/repowalk/tree/main/docs">
+          <h3>Control-flow graphs</h3>
+          <p>A CFG per function: branches, loops, match arms, cyclomatic badge.</p>
+        </a>
+        <a class="doc-card" href="https://github.com/ZaheerAhmadDev/repowalk/tree/main/docs">
+          <h3>The connection graph</h3>
+          <p>Real names, clusters, filters, and honest dashed <code>?</code> edges.</p>
+        </a>
+        <a class="doc-card" href="https://github.com/ZaheerAhmadDev/repowalk/tree/main/docs">
+          <h3>Structure diagrams</h3>
+          <p>Type diagrams and the module DAG with import edges and cycles.</p>
+        </a>
+        <a class="doc-card" href="https://github.com/ZaheerAhmadDev/repowalk/tree/main/docs">
+          <h3>Variables &amp; references</h3>
+          <p>Read/write counts, highlight-all-uses, and find-all-references.</p>
+        </a>
+        <a class="doc-card" href="https://github.com/ZaheerAhmadDev/repowalk/tree/main/docs">
+          <h3>Export &amp; guardrails</h3>
+          <p>Mermaid / DOT / SVG / Markdown output and the <code>rules.json</code> checks.</p>
+        </a>
+      </div>
+    </section>
+
+    <section class="section" id="releases">
+      <h2>Release notes</h2>
+      <p class="section-intro">Honest, code-traceable changes. Nothing is advertised that you cannot point at in the source.</p>
+
+      <article class="release" id="v2">
+        <div class="release-head">
+          <p class="release-version">v2.0.0</p>
+          <span class="tag tag-ok">released</span>
+          <span class="release-date">2026-10-16</span>
+        </div>
+        <p>The <strong>complete understanding suite</strong> (F1–F15): learn any codebase once, then read it five ways — Text, Graph, Flow, Diagrams, Report.</p>
+        <ul>
+          <li>TypeScript / JavaScript analyzers alongside Rust and Python.</li>
+          <li>Flow mode: animated A→B playback plus an entrypoint Feature tab.</li>
+          <li>Diagrams mode: per-function CFG, types, and the module DAG.</li>
+          <li>Usage panels: variables (reads/writes/uses) and find-all-references.</li>
+          <li>Health v2, Notes that travel with the checkout, light theme, and Repo 101.</li>
+          <li>One shared export layer: Mermaid, DOT, SVG, and a Markdown architecture report used by both GUI and CLI.</li>
+          <li>CLI v2 surface: <code>report</code>, <code>graph</code>, <code>variables</code>, <code>complexity</code>, <code>refs</code>, <code>flow</code> — with <code>--json</code>.</li>
+          <li>Architecture guardrails (F15) that fail CI on an <code>Error</code> finding.</li>
+        </ul>
+      </article>
+
+      <article class="release" id="v1">
+        <div class="release-head">
+          <p class="release-version">v0.1.0</p>
+          <span class="tag tag-ok">released</span>
+          <span class="release-date">2026-10-13</span>
+        </div>
+        <p>Initial public release of repowalk: the GUI + CLI + core static analysis, the project site, and community health files. Relicensed to Apache-2.0 only.</p>
+      </article>
+    </section>
+
+    <section class="section prose" id="limits">
+      <h2>Known limits &amp; non-goals</h2>
+      <p><strong>Deliberately not planned</strong> — these would make repowalk something it is not:</p>
+      <ul>
+        <li>AI or LLM summaries (the point is ground truth you can verify yourself).</li>
+        <li>Refactoring or editing automation (repowalk tells you what the code is, not what it should be).</li>
+        <li>Git churn, diff, and watch modes (analysis is keyed to a checkout, not to history).</li>
+        <li>A Tauri or web port (a desktop app that never touches the network).</li>
+      </ul>
+      <p><strong>Known limits:</strong> an edge the analyzer cannot resolve is drawn dashed with a <code>?</code>; a cross-file reference is listed as <em>name-only</em> rather than confirmed; a graph stops at 400 nodes and says what it hid instead of drawing a blank canvas.</p>
+    </section>
+
+    <footer class="site-footer">
+      <p>repowalk — offline codebase understanding. Licensed under Apache-2.0.</p>
+      <p>© 2026 repowalk contributors · <a href="https://github.com/ZaheerAhmadDev/repowalk">GitHub</a></p>
+    </footer>
+
+  </main>
+</div>
 </body>
 </html>

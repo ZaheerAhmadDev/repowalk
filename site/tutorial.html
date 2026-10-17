@@ -3,20 +3,71 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Add HTML, CSS & JS to a Project</title>
-<link rel="stylesheet" href="css/style.css">
+<meta name="description" content="How to add HTML, CSS and JavaScript to a static project, and deploy it with GitHub Pages.">
+<meta name="color-scheme" content="light dark">
+<title>Add HTML, CSS &amp; JS to a project</title>
 </head>
-<body>
-<header><nav><h1><a href="index.html">repowalk</a></h1></nav></header>
-<main class="tutorial">
-<h2>Add HTML, CSS & JS</h2>
-<ol>
-  <li>Create `index.html`, `css/style.css`, `js/app.js` in your project folder.</li>
-  <li>Link CSS: <code>&lt;link rel="stylesheet" href="css/style.css"&gt;</code> in <code>&lt;head&gt;</code>.</li>
-  <li>Link JS: <code>&lt;script src="js/app.js"&gt;&lt;/script&gt;</code> before <code>&lt;/body&gt;</code>.</li>
-  <li>Open <code>index.html</code> in a browser, or use <a href="https://pages.github.com/">GitHub Pages</a> to deploy.</li>
-</ol>
-<pre><code>&lt;!doctype html&gt;
+<body class="site">
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="shell">
+
+  <aside class="sidebar">
+    <a class="brand" href="index.html">
+      <span class="brand-mark" aria-hidden="true">rw</span>
+      <span>repowalk</span>
+    </a>
+    <p class="tagline">A tiny static-site recipe: three files, one stylesheet link, one script tag.</p>
+
+    <nav aria-label="Site sections">
+      <p class="nav-group">About the project</p>
+      <a class="nav-link" href="index.html#about">What is repowalk?</a>
+      <a class="nav-link" href="index.html#features">Features</a>
+      <a class="nav-link" href="index.html#how">How it works</a>
+
+      <p class="nav-group">Docs</p>
+      <a class="nav-link" href="index.html#install">Install &amp; run</a>
+      <a class="nav-link" href="index.html#cli">CLI reference</a>
+      <a class="nav-link" href="index.html#gui">GUI guide</a>
+      <a class="nav-link" href="index.html#docs">How-to guides</a>
+
+      <p class="nav-group">Release notes</p>
+      <a class="nav-link" href="index.html#releases">v2.0.0</a>
+      <a class="nav-link" href="index.html#limits">Known limits</a>
+
+      <p class="nav-group">Links</p>
+      <a class="nav-link" href="v2.html">v2 tour</a>
+      <a class="nav-link is-active" href="tutorial.html">Web tutorial</a>
+      <a class="nav-link" href="https://github.com/ZaheerAhmadDev/repowalk">GitHub</a>
+    </nav>
+
+    <p class="sidebar-note">This page is a generic recipe; repowalk itself ships as a single HTML file and one stylesheet, with no JavaScript.</p>
+  </aside>
+
+  <main class="content" id="main">
+
+    <header class="page-hero">
+      <p class="eyebrow">Tutorial</p>
+      <h1>Add HTML, CSS &amp; JS</h1>
+      <p class="lede">Three files in your project folder are enough to publish a page.</p>
+    </header>
+
+    <section class="section prose">
+      <h2>Steps</h2>
+      <ol class="steps">
+        <li>Create <code>index.html</code>, <code>css/style.css</code>, and <code>js/app.js</code> in your project folder.</li>
+        <li>Link the stylesheet from <code>&lt;head&gt;</code>:
+          <pre><code>&lt;link rel="stylesheet" href="css/style.css"&gt;</code></pre>
+        </li>
+        <li>Link the script just before <code>&lt;/body&gt;</code>:
+          <pre><code>&lt;script src="js/app.js"&gt;&lt;/script&gt;</code></pre>
+        </li>
+        <li>Open <code>index.html</code> in a browser, or deploy it with <a href="https://pages.github.com/">GitHub Pages</a>.</li>
+      </ol>
+    </section>
+
+    <section class="section prose">
+      <h2>Minimal page</h2>
+      <pre><code>&lt;!doctype html&gt;
 &lt;html lang="en"&gt;
 &lt;head&gt;
   &lt;meta charset="utf-8"&gt;
@@ -26,9 +77,26 @@
   &lt;h1&gt;Hello&lt;/h1&gt;
   &lt;script src="js/app.js"&gt;&lt;/script&gt;
 &lt;/body&gt;
-&lt;/html&gt;</code></pre>
-</main>
-<footer><p>Apache-2.0</p></footer>
-<script src="js/app.js"></script>
+&lt;/html&gt;
+      </code></pre>
+    </section>
+
+    <section class="section prose">
+      <h2>Tips</h2>
+      <ul>
+        <li>Keep the stylesheet in a <code>css/</code> folder and scripts in a <code>js/</code> folder; relative links then work wherever the site is hosted.</li>
+        <li>Prefer one stylesheet over inline styles — it caches once for every page.</li>
+        <li>When you ship to GitHub Pages, make sure <code>index.html</code> sits at the root of the published folder.</li>
+      </ul>
+      <p><a href="index.html">← Back to the repowalk home page</a></p>
+    </section>
+
+    <footer class="site-footer">
+      <p>repowalk — offline codebase understanding. Licensed under Apache-2.0.</p>
+      <p>© 2026 repowalk contributors · <a href="https://github.com/ZaheerAhmadDev/repowalk">GitHub</a></p>
+    </footer>
+
+  </main>
+</div>
 </body>
 </html>
