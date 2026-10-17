@@ -3,8 +3,8 @@
   "title": "directory-structure diagram: core emitter (Mermaid/DOT/SVG) + CLI `graph --scope tree` — real dir/file names",
   "phase": "implementation",
   "skill": "sdlc-maintenance",
-  "status": "todo",
-  "assignee": null,
+  "status": "done",
+  "assignee": "TL-PROD",
   "description": "User request 1 of the B5 batch (asked 2026-10-17): create a feature that shows the directory structure using graphs/diagrams, using the actual names, representing the directory.\n\nSibling cards: B5-02 (GUI drag/pan/zoom for diagram canvases), B5-03 (flow/graph interactivity), B5-04 (VS Code-like shell), B5-05 (GUI Diagrams to Directory panel).\nOwner seat: CORE/exp + PROD graph (one seat, because the CLI and the GUI export both read this emitter).\n\nDeliverable: an additive core emitter that renders the directory tree of `Index::files` (and nothing invented), exported like the other diagrams.\n  * Nodes = the repository root, then every directory that actually contains indexed files, then files as leaves. Labels are the real names (`src`, `diagrams`, `control.rs`), not synthetic ids; a file label may carry `name (LOC)` because the emitter has `FileEntry.lines`.\n  * Structure edges: plain parent-child containment, visually distinct (e.g. plain lines rather than arrows); mark entrypoints (`FileEntry.is_entrypoint`) with a distinct shape/color in DOT/SVG and a text marker in Mermaid.\n  * Optional (flag on the emitter, defaults off): dashed `Import` edges aggregated between directories, so the same shape can also show cross-directory traffic.\n  * Wire it: CLI `repowalk graph --scope tree [--format mermaid|dot|svg] <path>` (mermaid default). The same emitter must be reusable by the GUI Export menu (another card adds that entry; you only expose the variant).\n\nConstraints: no contract change (add the `Diagram::Directory` variant; do not rename existing variants), no new dependencies, emitters stay pure functions over `(&Index, &Analysis)` like the sibling scopes, output deterministic (BTreeMap/sorted everywhere). Template/escaping rules must match the existing emitters (Mermaid ids/names escaping, DOT quoting).\n\nVerify: on `fixtures/sample` (with root, a.rs, b.rs, main.rs, model.rs, tool.py, util.rs) the mermaid output contains one node per real name and correct parent-child shape; on this repo the root plus `crates`, `crates/core`, `crates/core/src` appear with real names and the file leaves carry LOC. Determinism: two runs byte-identical. Unknown formats error as today.\nGATES: cargo fmt/clippy/test on core + cli. Never commit/push; hand to the integrator by message.",
   "artifacts": [
     "crates/core/src/export/directory.rs",
@@ -12,5 +12,35 @@
     "crates/cli/src/commands/graph.rs"
   ],
   "created": "2026-10-17T06:10:00Z",
-  "updated": "2026-10-17T06:15:00Z"
+  "updated": "2026-10-17T00:20:53Z",
+  "evidence": {
+    "summary": "Diagram::Directory { imports: bool } added after Modules (no variant renamed/reordered). New pure emitter crates/core/src/export/directory.rs builds, from Index::files ONLY: root named with the repo basename, real directories (ancestor chain only), real file leaves with '(N LOC)' labels; entrypoints get a star marker + Oval/stadium/ellipse shape. Containment edges are plain open lines (new util::Arrow::Open -> mermaid '---', dot arrowhead=none, svg line without marker-end); optional flag renders dashed aggregated Import edges between directories of two indexed files (never invents nodes for unmappable targets like 'crate::other'). CLI: GraphScope::Tree + clap possible-value help; --symbol rejected like types/modules/call (diagram_for_scope helper). CLI artifacts::load canonicalizes the root so passing '.' still names the repo 'repowalk' (store/cache semantics untouched; a cache-root contract test forced that revert).",
+    "before": {
+      "cmd": "cargo build --release -p repowalk-cli; ./target/release/repowalk-cli graph --scope tree fixtures/sample",
+      "out": "error: invalid value 'tree' for '--scope <SCOPE>'\\n  [possible values: call, cfg, types, modules]\\n\\nFor more information, try '--help'.\\nexit=2"
+    },
+    "after_sample": {
+      "cmd": "./target/release/repowalk-cli graph --scope tree fixtures/sample",
+      "out": "flowchart TD\\n%% repowalk directory tree\\nd__811c9dc5[\"sample\"]\\nf_a_rs_8b7a865d(\"a.rs (8 LOC)\")\\n...\\nf_main_rs_af3a7169([\"main.rs ★ (10 LOC)\"])\\n...\\nd__811c9dc5 --- f_a_rs_8b7a865d (plain containment lines, exit=0)"
+    },
+    "after_symbol_reject": {
+      "cmd": "./target/release/repowalk-cli graph --scope tree --symbol main fixtures/sample",
+      "out": "Error: --symbol \"main\" is only valid with --scope cfg (this scope is Tree)\\nexit=1"
+    },
+    "after_repo_dot": {
+      "cmd": "./target/release/repowalk-cli graph --scope tree --format dot .",
+      "evidence": "root node [label=\"repowalk\"]; dirs d_crates_fcecbe49 [label=\"crates\"], d_crates_core_59f0b8c5 [label=\"core\"], d_crates_core_src_c511d154 [label=\"src\"]; 387 file leaves carry LOC; spot checks: graph.rs (236 LOC), model.rs (103 LOC), pipeline.rs ★ (546 LOC) with shape=ellipse (entrypoint). ~98KB output.",
+      "out_size_bytes": 98824
+    },
+    "determinism": {
+      "cmd": "run same command twice into run1.dot / run2.dot; diff",
+      "out": "DIFF EMPTY (byte-identical); 98824 bytes each"
+    },
+    "gates": {
+      "fmt": "cargo fmt -p repowalk-core -p repowalk-cli -- --check -> exit=0",
+      "clippy": "cargo clippy -p repowalk-core -p repowalk-cli --all-targets -- -D warnings -> Finished, no warnings",
+      "tests": "cargo test -p repowalk-core -p repowalk-cli: 173 passed (core lib, incl. 7 new export::directory tests) + 44/6/9/2/2/3/10/6/10/4/15/2/1/1 passed across bins/tests; 0 failed; 2 pre-existing core ignores"
+    },
+    "cli_help": "--scope possible values now: call, cfg, types, modules, tree - 'tree: Directory tree of the really indexed files (real names + LOC)' [default: call]"
+  }
 }
