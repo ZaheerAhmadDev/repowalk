@@ -282,6 +282,140 @@ const ZOOM_FULL: f32 = 1.15;
 /// Below this zoom no labels are drawn (glyphs would be unreadable).
 const ZOOM_SHORT: f32 = 0.55;
 
+/// egui_graphs custom id: keys the persisted layout state and (pan/zoom)
+/// metadata for the one graph view in the app. Keep in sync with `with_id`.
+const GRAPH_ID: &str = "repowalk-graph";
+
+// ── Interaction knobs (B5-03) ───────────────────────────────────────────────
+//
+// egui_graphs 0.32 already provides node drag (`SettingsInteraction::
+// with_dragging_enabled`, which implicitly enables node clicking + hover),
+// primary-drag pan over empty space, and zoom (Ctrl+wheel / pinch). The
+// click-vs-drag threshold inside the crate rides on egui's click decision, so
+// a sub-threshold press keeps counting as a click (selection stays intact).
+// What the crate does NOT do out of the box here: select nodes for us
+// (`with_node_selection_enabled` was off, so the app's selection reader saw
+// nothing), and the Fruchterman–Reingold layout never stops stepping, which
+// would shove a dragged node back onto nearby nodes forever. So we enable
+// selection + dragging, and freeze the simulation once it has settled — after
+// that, nodes stay exactly where the user drags them (B5-03).
+
+/// Hard cap on simulation steps before the force layout freezes regardless of
+/// displacement (no endless CPU burn on a stubborn layout).
+pub const LAYOUT_STEPS_CAP: u64 = 600;
+/// Freeze only after this many steps, so the initial spread has a chance to
+/// act before we pin everything down.
+pub const LAYOUT_SETTLE_MIN_STEPS: u64 = 90;
+/// Average per-node displacement (graph units) under which the layout counts
+/// as settled.
+pub const LAYOUT_SETTLE_AVG: f32 = 0.25;
+
+/// Pure freeze predicate: settled (few steps done + tiny average movement) or
+/// the hard cap. Note `None` displacement (never measured) never freezes.
+pub fn layout_should_freeze(steps: u64, avg_displacement: Option<f32>) -> bool {
+    if steps >= LAYOUT_STEPS_CAP {
+        return true;
+    }
+    steps >= LAYOUT_SETTLE_MIN_STEPS && avg_displacement.is_some_and(|avg| avg < LAYOUT_SETTLE_AVG)
+}
+
+/// Pure fit-to-rect transform using the crate's metadata semantics
+/// (`screen = pan + canvas·zoom`): `screen = pan + canvas_pos·zoom`. Returns
+/// `None` for empty/invalid input (never a wild zoom).
+pub fn fit_pan_zoom(
+    bounds: egui::Rect,
+    canvas: egui::Vec2,
+    padding: f32,
+) -> Option<(f32, egui::Vec2)> {
+    let dim = bounds.size();
+    let ok = dim.x.is_finite()
+        && dim.y.is_finite()
+        && dim.x > 0.0
+        && dim.y > 0.0
+        && canvas.x.is_finite()
+        && canvas.y.is_finite()
+        && canvas.x > 0.0
+        && canvas.y > 0.0;
+    if !ok {
+        return None;
+    }
+    let size = dim * (1.0 + padding).max(1.0);
+    let zoom = (canvas.x / size.x).min(canvas.y / size.y);
+    if !zoom.is_finite() || zoom <= 0.0 {
+        return None;
+    }
+    Some((zoom, canvas * 0.5 - bounds.center().to_vec2() * zoom))
+}
+
+/// Perspective bounds of all nodes (position ± node half-extents + a label
+/// allowance below, so labels aren't clipped by a tight fit).
+fn node_bounds(g: &WalkGraph) -> egui::Rect {
+    let mut r = egui::Rect::NOTHING;
+    for n in g.g().node_weights() {
+        let d = n.display();
+        let (hx, hy) = if d.is_cluster {
+            (d.radius * 1.1, d.radius * 0.75)
+        } else {
+            (d.radius, d.radius)
+        };
+        r.min.x = r.min.x.min(d.pos.x - hx);
+        r.min.y = r.min.y.min(d.pos.y - hy);
+        r.max.x = r.max.x.max(d.pos.x + hx);
+        r.max.y = r.max.y.max(d.pos.y + hy + 34.0);
+    }
+    r
+}
+
+/// Store a computed fit into egui_graphs' (pan/zoom) metadata so the next
+/// frame draws fitted. Honest no-op when the bounds degenerate.
+fn store_fit(ui: &mut egui::Ui, g: &WalkGraph, canvas: egui::Vec2) {
+    if let Some((zoom, pan)) = fit_pan_zoom(node_bounds(g), canvas, 0.1) {
+        let mut meta = egui_graphs::MetadataFrame::new(Some(GRAPH_ID.to_string())).load(ui);
+        meta.zoom = zoom;
+        meta.pan = pan;
+        meta.save(ui);
+    }
+}
+
+/// Whether the user has manually panned/zoomed/moved a node since the last
+/// (re)build — auto-fit defers to manual framing. egui temp memory.
+#[derive(Clone, Debug, Default, PartialEq)]
+struct NavFlags {
+    user_adjusted: bool,
+}
+
+fn nav_flags_id() -> egui::Id {
+    egui::Id::new("repowalk_graph_nav_flags")
+}
+
+fn load_nav_flags(ui: &egui::Ui) -> NavFlags {
+    ui.ctx()
+        .data_mut(|d| d.get_temp::<NavFlags>(nav_flags_id()))
+        .unwrap_or_default()
+}
+
+fn save_nav_flags(ui: &egui::Ui, flags: NavFlags) {
+    ui.ctx().data_mut(|d| d.insert_temp(nav_flags_id(), flags));
+}
+
+/// Point the persisted force-layout state at a fresh, running simulation
+/// (used after a graph rebuild and by the legend's `relayout` control).
+pub fn arm_layout(ui: &mut egui::Ui) {
+    let mut st = egui_graphs::get_layout_state::<egui_graphs::FruchtermanReingoldState>(
+        ui,
+        Some(GRAPH_ID.to_string()),
+    );
+    st.is_running = true;
+    st.step_count = 0;
+    st.last_avg_displacement = None;
+    egui_graphs::set_layout_state::<egui_graphs::FruchtermanReingoldState>(
+        ui,
+        st,
+        Some(GRAPH_ID.to_string()),
+    );
+    save_nav_flags(ui, NavFlags::default());
+}
+
 /// Straight edge; dashed + `?` badge when the resolver was not Exact.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WalkEdgeShape {
@@ -698,6 +832,8 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
             ),
             built.graph,
         ));
+        // Fresh graph, fresh positions: re-run (and re-fit) the force layout.
+        arm_layout(ui);
         save_state(ui.ctx(), state.clone());
     }
 
@@ -712,47 +848,88 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
                 empty_canvas_inline(ui, &state, app);
                 return;
             }
-            egui::ScrollArea::both()
-                .id_salt("graph-area")
-                .auto_shrink([false, false])
-                .show(ui, |ui| {
-                    let mut toggle_cluster: Option<String> = None;
-                    if let Some((_, g)) = app.graph_state.as_mut() {
-                        let response = egui_graphs::GraphView::<
-                            egui_graphs::FruchtermanReingoldState,
-                            egui_graphs::LayoutForceDirected<egui_graphs::FruchtermanReingold>,
-                        >::new()
-                        .with_id(Some("repowalk-graph".to_string()))
-                        .with_interactions(
-                            &egui_graphs::SettingsInteraction::new()
-                                .with_node_clicking_enabled(true),
-                        )
-                        .with_navigations(
-                            &egui_graphs::SettingsNavigation::new()
-                                .with_zoom_and_pan_enabled(true)
-                                .with_fit_to_screen_enabled(true),
-                        )
-                        .show(ui, g);
-                        for change in &response.changes {
-                            if let egui_graphs::GraphChange::NodeClicked { node } = change {
-                                if let Some(n) = g.node(*node) {
-                                    if n.payload().is_cluster {
-                                        toggle_cluster = Some(n.payload().module.clone());
-                                    }
+            // No ScrollArea wrapper: the viewer works in one transformable
+            // canvas (pan/zoom), so a scroller would double-handle wheel
+            // events and clip nothing that the viewer doesn't clip itself.
+            let mut toggle_cluster: Option<String> = None;
+            if let Some((_, g)) = app.graph_state.as_mut() {
+                let mut interacted = false;
+                let response = egui_graphs::GraphView::<
+                    egui_graphs::FruchtermanReingoldState,
+                    egui_graphs::LayoutForceDirected<egui_graphs::FruchtermanReingold>,
+                >::new()
+                .with_id(Some(GRAPH_ID.to_string()))
+                .with_interactions(
+                    &egui_graphs::SettingsInteraction::new()
+                        .with_dragging_enabled(true)
+                        .with_node_selection_enabled(true),
+                )
+                .with_navigations(
+                    &egui_graphs::SettingsNavigation::new()
+                        .with_zoom_and_pan_enabled(true)
+                        // Per-frame refit would cancel user pan/zoom after
+                        // every gesture; the crate still fits on the first
+                        // frame (`first_frame_pending`), and B5-03's auto-fit
+                        // keeps re-fitting only until the layout settles.
+                        .with_fit_to_screen_enabled(false),
+                )
+                .show(ui, g);
+                for change in &response.changes {
+                    match change {
+                        egui_graphs::GraphChange::NodeClicked { node } => {
+                            if let Some(n) = g.node(*node) {
+                                if n.payload().is_cluster {
+                                    toggle_cluster = Some(n.payload().module.clone());
                                 }
                             }
                         }
-                    }
-                    // Cluster nodes toggle their module; symbols/files are
-                    // selected by `interaction::handle` (single source).
-                    if let Some(module) = toggle_cluster {
-                        let mut st = load_state(ui.ctx());
-                        if !st.collapsed.remove(&module) {
-                            st.collapsed.insert(module);
+                        egui_graphs::GraphChange::Panned { .. }
+                        | egui_graphs::GraphChange::Zoomed { .. }
+                        | egui_graphs::GraphChange::NodeMoved { .. }
+                        | egui_graphs::GraphChange::NodeDragStarted { .. } => {
+                            interacted = true;
                         }
-                        save_state(ui.ctx(), st);
+                        _ => {}
                     }
-                });
+                }
+
+                // While the force layout is still breathing, keep the whole
+                // graph fitted (unless the user took manual control), and
+                // freeze the simulation once it settles so dragged nodes stay
+                // exactly where the user put them.
+                let mut flags = load_nav_flags(ui);
+                if interacted && !flags.user_adjusted {
+                    flags.user_adjusted = true;
+                    save_nav_flags(ui, flags.clone());
+                }
+                let settle = egui_graphs::get_layout_state::<egui_graphs::FruchtermanReingoldState>(
+                    ui,
+                    Some(GRAPH_ID.to_string()),
+                );
+                if settle.is_running {
+                    if !flags.user_adjusted {
+                        store_fit(ui, g, response.response.rect.size());
+                    }
+                    if layout_should_freeze(settle.step_count, settle.last_avg_displacement) {
+                        let mut st = settle;
+                        st.is_running = false;
+                        egui_graphs::set_layout_state::<egui_graphs::FruchtermanReingoldState>(
+                            ui,
+                            st,
+                            Some(GRAPH_ID.to_string()),
+                        );
+                    }
+                }
+            }
+            // Cluster nodes toggle their module; symbols/files are selected
+            // by `interaction::handle` (single source).
+            if let Some(module) = toggle_cluster {
+                let mut st = load_state(ui.ctx());
+                if !st.collapsed.remove(&module) {
+                    st.collapsed.insert(module);
+                }
+                save_state(ui.ctx(), st);
+            }
         });
 }
 
@@ -884,6 +1061,9 @@ pub fn legend(ui: &mut egui::Ui, app: &mut App) {
                 ui.label(hint("size = fan-in"));
                 ui.label(hint("dashed ? = low confidence"));
                 ui.label(hint("▢ cluster · ◆ god file"));
+                ui.label(hint(
+                    "drag nodes · drag empty space to pan · ctrl+scroll to zoom",
+                ));
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui
@@ -993,6 +1173,16 @@ pub fn legend(ui: &mut egui::Ui, app: &mut App) {
                     ui.add_space(theme::SPACE_2);
                     let counts = format!("{} nodes · {} edges", g.node_count(), g.edge_count());
                     ui.label(hint(&counts));
+                }
+                ui.add_space(theme::SPACE_2);
+                // Re-run the force layout from scratch; it re-fits while it
+                // settles, then freezes — user drags survive after that.
+                if ui
+                    .button(egui::RichText::new("relayout").size(theme::FONT_SMALL))
+                    .on_hover_text("Restart the force layout and re-fit the view")
+                    .clicked()
+                {
+                    arm_layout(ui);
                 }
             });
         });
@@ -1207,6 +1397,57 @@ mod tests {
         assert_eq!(short_label("Type::method"), "method");
         assert_eq!(short_label("plain"), "plain");
         assert_eq!(basename("src/graph/render.rs"), "render.rs");
+    }
+
+    #[test]
+    fn freeze_only_after_settling_or_cap() {
+        // Too few steps: never frozen, even at zero displacement.
+        assert!(!layout_should_freeze(
+            LAYOUT_SETTLE_MIN_STEPS - 1,
+            Some(0.0)
+        ));
+        // Settled: enough steps + tiny average displacement.
+        assert!(layout_should_freeze(
+            LAYOUT_SETTLE_MIN_STEPS,
+            Some(LAYOUT_SETTLE_AVG * 0.9)
+        ));
+        // Still breathing: displacement above the settle threshold.
+        assert!(!layout_should_freeze(
+            LAYOUT_SETTLE_MIN_STEPS + 10,
+            Some(LAYOUT_SETTLE_AVG * 3.0)
+        ));
+        // No measurement yet (never froze on missing data).
+        assert!(!layout_should_freeze(LAYOUT_SETTLE_MIN_STEPS + 10, None));
+        // Hard cap freezes regardless of displacement.
+        assert!(layout_should_freeze(LAYOUT_STEPS_CAP, Some(100.0)));
+        assert!(layout_should_freeze(LAYOUT_STEPS_CAP, None));
+    }
+
+    #[test]
+    fn fit_pan_zoom_matches_metadata_semantics_and_rejects_junk() {
+        use eframe::egui::{pos2, vec2};
+        let bounds = egui::Rect::from_min_size(pos2(0.0, 0.0), vec2(100.0, 50.0));
+        let canvas = vec2(200.0, 125.0);
+        let (zoom, pan) = fit_pan_zoom(bounds, canvas, 0.0).unwrap();
+        // Height is the binding axis: 125 / 50 = 2.5; width allows 2.0.
+        assert_eq!(zoom, 2.0);
+        // screen = pan + canvas·zoom maps the bounds center to canvas center.
+        let screen_center = pan + bounds.center().to_vec2() * zoom;
+        assert!((screen_center - canvas * 0.5).length() < 1e-4);
+        // Padding widens the margins (smaller zoom, same centered result).
+        let (z2, p2) = fit_pan_zoom(bounds, canvas, 0.1).unwrap();
+        assert!(z2 < zoom);
+        let screen2 = p2 + bounds.center().to_vec2() * z2;
+        assert!((screen2 - canvas * 0.5).length() < 1e-4);
+        // Degenerate input: no wild zoom.
+        assert!(fit_pan_zoom(egui::Rect::NOTHING, canvas, 0.1).is_none());
+        assert!(fit_pan_zoom(bounds, vec2(0.0, 125.0), 0.1).is_none());
+        assert!(fit_pan_zoom(
+            egui::Rect::from_min_size(pos2(0.0, 0.0), vec2(f32::NAN, 3.0)),
+            canvas,
+            0.1
+        )
+        .is_none());
     }
 
     /// Spot-check against a real learned index: every visible node label is a

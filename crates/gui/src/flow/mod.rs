@@ -224,13 +224,17 @@ pub fn ui(ctx: &egui::Context, ui: &mut egui::Ui, app: &mut App) {
     // Canvas: the animated stage strip, or the wave fan filling in per layer.
     match &seq {
         Sequence::Path(path) => {
-            if let Some(i) = render::stage_strip(ui, &idx, path, step, progress, pulse) {
+            if let Some(i) =
+                render::stage_strip(ui, &idx, path, step, progress, pulse, app.flow.tab)
+            {
                 app.flow.playback.goto_step(i, steps);
                 app.flow.detail = path.get(i).cloned();
             }
         }
         Sequence::Waves(layers) => {
-            if let Some((layer, id)) = render::wave_view(ui, &idx, layers, step, progress) {
+            if let Some((layer, id)) =
+                render::wave_view(ui, &idx, layers, step, progress, app.flow.tab)
+            {
                 app.flow.playback.goto_step(layer, steps);
                 app.flow.detail = Some(id);
             }
