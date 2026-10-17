@@ -267,7 +267,17 @@ filters change; node size encodes fan-in, color encodes module
 All GUI color, spacing, and type decisions come from the central token system
 in `crates/gui/src/theme.rs` (HCI-derived: 4pt spacing grid, 5-layer dark
 elevation, WCAG-checked text colors, semantic success/warning/danger). The
-shell is a toolbar + sidebar + central pane + status bar; a `Ctrl+K` command
+shell is **VS Code-like (B5-04)**: a toolbar + **activity bar** (Explorer ·
+Search · Map · Health · Usage · Notes · Repo 101 — the strip that selects the
+side panel; `Ctrl+B` hides the panel but not the strip) + sidebar + a central
+pane that opens with a **document tab strip** (`tabs.rs`: dirty dots, close
+buttons, `Ctrl+Tab` cycle, `Ctrl+W` close) and **breadcrumbs** (path › file ›
+selected symbol) + status bar. `Ctrl+P` **quick open** (`quick_open.rs`)
+filters all indexed files by an earliest-match-position ranking;
+`sidebar/explorer.rs` shows the real directory tree (`Index.files` →
+deterministic tree, entrypoint markers, LOC/lang). Every file-open click still
+routes through `App::select`, so the tab model and the panes stay one truth.
+Tab state, quick open and the sidebar live in memory only. A `Ctrl+K` command
 palette and a `?` shortcut overlay provide recognition-over-recall. Syntax
 highlighting colors are supplied by the `egui_code_editor` built-in
 `ColorTheme::AYU_DARK` rather than a local palette. Hardcoded hexes outside
@@ -292,15 +302,25 @@ diagrams}::ui`.
 | **Text** | what does this exact code say? | `text::ui` (`text/{mod,tree,editor}.rs`) | ☑ (variables panel — TEXT-2; refs panel + jump-to-source — TEXT-3) |
 | **Graph** | how is everything connected? | `graph::ui` (`graph/{mod,render,interaction,filter}.rs`) | ☑ v1 + v2 (real-name LOD, clusters, `exact only`, search-highlight, 400-node cap — GRAPH-4) |
 | **Flow** | what happens when this runs? | `flow::ui` (`flow/{mod,render,playback,feature}.rs`), sub-tabs `FlowTab::{Trace, Waves, Feature}` | ☑ (Feature tab + call coverage — GRAPH-5) |
-| **Diagrams** | control flow / types / modules | `Mode::Diagrams` + `diagrams::ui` (`diagrams/{mod,control,types,modules}.rs`) | ☑ (GRAPH-2 / GRAPH-3) |
+| **Diagrams** | control flow / types / modules / directory | `Mode::Diagrams` + `diagrams::ui` (`diagrams/{mod,control,types,modules,directory}.rs`) | ☑ (GRAPH-2 / GRAPH-3; **Directory** — B5-05) |
 
 `Mode::Diagrams` is wired in `app.rs` (Tab cycle Text → Graph → Flow → Diagrams,
 plus the palette and the toolbar segment) and `diagrams/mod.rs` owns the
-sub-tab strip. All three bodies render real core data:
+sub-tab strip; the active tab's diagram sub-tab is remembered by its
+`TabView::diagrams` field. All four bodies render real core data:
 
 - **Diagrams** sub-tabs: **Control flow** (`diagrams/control.rs`, GRAPH-2) ·
   **Types** (`diagrams/types.rs`, GRAPH-3) · **Modules**
-  (`diagrams/modules.rs`, GRAPH-3).
+  (`diagrams/modules.rs`, GRAPH-3) · **Directory** (`diagrams/directory.rs`,
+  B5-05 — the real directory tree as an interactive canvas).
+- **Interactivity (B5-02/03)**: `diagrams/interact.rs` is the shared pan /
+  zoom / node-drag layer used by control, types, modules, **Directory** and
+  the Flow trace — drag any node anywhere (edges follow), drag empty canvas to
+  pan, wheel zooms about the cursor, double-click empty canvas or the panel's
+  Reset button restores the deterministic layout, and a 6 px threshold keeps
+  clicks from turning into drags. Graph mode node drag comes from
+  `egui_graphs`' own `SettingsInteraction`. Per-panel state persists in egui
+  memory for the session.
 - **Flow** gains a **Feature** sub-tab (`flow/feature.rs`, GRAPH-5).
 - Panels: `variables` (`usage/variables.rs`, TEXT-2), `refs`
   (`usage/refs.rs`, TEXT-3), `health-v2` (`health/mod.rs`, DSN-3), `notes`
@@ -309,14 +329,17 @@ sub-tab strip. All three bodies render real core data:
 - Graph v2 changes (real names, LOD, clustering, layout, filters) live in the
   existing `graph/**` (GRAPH-4). Theme additions in `theme.rs` (DSN-2).
 
-Existing sidebar panes: `sidebar/{map,search,tour,flow}.rs`. Exports in the GUI:
+Existing sidebar panes: `sidebar/{map,search,tour,flow}.rs` stack under the
+**Map** activity, plus the standalone **Explorer**
+(`sidebar/explorer.rs`, B5-04) and **Search** activities. Exports in the GUI:
 `export/{markdown,png}.rs` (PNG of the window, tour+health Markdown) plus the
 **Export ▾** menu in `app.rs`, which writes the v2 architecture report
-(`repowalk-architecture.md`) and the call-graph / types / modules diagrams as
-`repowalk-<scope>.{mmd,dot,svg}`. Those formats are rendered by the shared core
-emitters (`crates/core/src/export/**`, PROD-2) — the same functions behind the
-CLI `report` / `graph`, so the exported file and the terminal output cannot
-drift.
+(`repowalk-architecture.md`) and the call-graph / types / modules /
+**directory tree** diagrams as `repowalk-<scope>.{mmd,dot,svg}`. Those formats
+are rendered by the shared core
+emitters (`crates/core/src/export/**`, PROD-2 / B5-01) — the same functions
+behind the CLI `report` / `graph`, so the exported file and the terminal output
+cannot drift.
 
 ## CLI surface
 
@@ -342,7 +365,7 @@ data as a single machine-readable object on stdout (no ANSI escapes).
 | Command | Purpose | Key flags |
 |---|---|---|
 | `report [path]` | architecture report from `core::export::markdown_report` + a `## Guardrails` section | `--md` (explicit default), `--json` (underlying data) |
-| `graph [path]` | render one diagram to stdout | `--format mermaid\|dot\|svg` (default `mermaid`), `--scope call\|cfg\|types\|modules` (default `call`), `--symbol <id>` (only with `--scope cfg`) |
+| `graph [path]` | render one diagram to stdout | `--format mermaid\|dot\|svg` (default `mermaid`), `--scope call\|cfg\|types\|modules\|tree` (default `call`), `--symbol <id>` (only with `--scope cfg`); `tree` = the real directory tree (B5-01), `--imports` toggles dashed cross-file import edges |
 | `variables <file> [path]` | per-file variable table (`name kind type reads/writes/uses line`) | `--json` |
 | `complexity [path]` | hotspot ranking (`--by function`) or per-file roll-up (`--by file`) | `--by function\|file` (default `function`), `--top N` (0 = all), `--json` |
 | `refs <target> [path]` | every use site of a symbol/variable, split resolved vs name-only | `--json` |
@@ -352,6 +375,7 @@ with a message on stderr (never partial or bogus output):
 
 - `graph --scope cfg` without `--symbol` → `Error: --scope cfg requires --symbol <id>` (exit 1).
 - `--symbol` passed to any scope other than `cfg` → rejected (`--symbol "x" is only valid with --scope cfg`), exit 1.
+- `graph --scope tree` twice → byte-identical output (deterministic emitter; B5-01).
 - unknown / ambiguous `--symbol`, `refs` target, or `variables` file → exit 1
   (e.g. `Error: unknown symbol: nosuch`, `Error: no such file in index: nope.rs`).
 - any query command on a non-directory path → `Error: repo path not found or not a directory: …` (exit 1).
