@@ -1,16 +1,20 @@
-//! Diagrams mode — control flow, types, modules (v2 F2/F3).
+//! Diagrams mode — control flow, types, modules, directory (v2 F2/F3 + B5).
 //!
 //! OWNER of this file: integrator (mode + tab plumbing is pre-wired so the
 //! diagram cards never touch it). Panels: GRAPH-2 fills `control.rs`, GRAPH-3
-//! fills `types.rs` and `modules.rs`.
+//! fills `types.rs` and `modules.rs`; `interact.rs` is the shared pan/zoom/
+//! node-drag layer (B5-02); `directory.rs` is the B5-05 panel.
 use eframe::egui;
 
 use crate::theme;
 use crate::ui_kit;
 
 mod control;
+mod directory;
 mod modules;
 mod types;
+
+pub mod interact;
 
 /// Which diagram the Diagrams mode is showing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -19,6 +23,8 @@ pub enum DiagramsTab {
     Control,
     Types,
     Modules,
+    /// B5-05: the real directory tree, interactive.
+    Directory,
 }
 
 /// Per-mode view state (survives frames).
@@ -36,6 +42,7 @@ pub fn ui(ui: &mut egui::Ui, app: &mut crate::app::App) {
             (DiagramsTab::Control, "Control flow"),
             (DiagramsTab::Types, "Types"),
             (DiagramsTab::Modules, "Modules"),
+            (DiagramsTab::Directory, "Directory"),
         ],
     ) {
         app.diagrams.tab = tab;
@@ -45,5 +52,6 @@ pub fn ui(ui: &mut egui::Ui, app: &mut crate::app::App) {
         DiagramsTab::Control => control::ui(ui, app),
         DiagramsTab::Types => types::ui(ui, app),
         DiagramsTab::Modules => modules::ui(ui, app),
+        DiagramsTab::Directory => directory::ui(ui, app),
     }
 }

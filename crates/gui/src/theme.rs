@@ -190,6 +190,14 @@ pub const STATUS_BAR_HEIGHT: f32 = 26.0;
 pub const SIDEBAR_DEFAULT: f32 = 272.0;
 pub const SIDEBAR_MIN: f32 = 180.0;
 pub const SIDEBAR_MAX: f32 = 480.0;
+// VS Code-like shell (B5-04): the icon strip and tab geometry.
+pub const ACTIVITY_BAR_WIDTH: f32 = 48.0;
+/// Height of the tab strip; the active tab carries the 2 px accent line.
+pub const TAB_HEIGHT: f32 = 34.0;
+/// Height of the breadcrumb row under the tab strip.
+pub const BREADCRUMB_HEIGHT: f32 = 24.0;
+/// Codicon glyph size in the activity bar (VS Code ~24 px icon strip).
+pub const ACTIVITY_ICON: f32 = 18.0;
 pub const TREE_INDENT: f32 = 14.0;
 pub const CORNER_SM: u8 = 3;
 pub const CORNER_MD: u8 = 4;
@@ -265,6 +273,10 @@ pub fn apply_theme(ctx: &egui::Context, mode: ThemeMode) {
     ctx.set_theme(theme);
 
     let mut style = (*ctx.style_of(theme)).clone();
+
+    // The icon font (VS Code codicons) rides along with the theme switch —
+    // `icons::register` is idempotent, so toggling never re-pushes it.
+    crate::icons::register(ctx);
 
     style.text_styles = [
         (

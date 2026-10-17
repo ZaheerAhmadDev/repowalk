@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use crate::theme;
-use crate::{diagrams, flow, graph, sidebar, text, usage};
+use crate::{diagrams, flow, graph, icons, quick_open, sidebar, tabs, text, usage};
 
 /// (edges, symbols, edge_calls, edge_imports) signature guarding graph rebuilds.
 pub type GraphState = ((usize, usize, bool, bool), crate::graph::render::WalkGraph);
@@ -93,6 +93,14 @@ pub struct App {
     pub progress: Arc<Mutex<IndexProgress>>,
     pub pending_screenshot: Option<(u64, PathBuf)>,
     pub status: String,
+    /// B5-04: open documents for the VS Code tab strip, and which is active.
+    pub tabs: Vec<crate::tabs::TabView>,
+    pub active_tab: usize,
+    /// B5-04: Ctrl+P quick-open overlay state.
+    pub show_quick_open: bool,
+    pub quick_open_query: String,
+    /// B5-04: Ctrl+B hides the sidebar; the activity bar itself stays.
+    pub show_sidebar: bool,
     pub graph_state: Option<GraphState>,
     pub flow: crate::flow::FlowState,
     /// v2 analysis artifact; `None` until the first `learn` completes.
@@ -143,10 +151,15 @@ impl App {
             progress: Arc::new(Mutex::new(IndexProgress::default())),
             pending_screenshot: None,
             status: String::new(),
+            tabs: vec![crate::tabs::TabView::default()],
+            active_tab: 0,
+            show_quick_open: false,
+            quick_open_query: String::new(),
+            show_sidebar: true,
             graph_state: None,
             flow: Default::default(),
             analysis: None,
-            sidebar_tab: sidebar::Tab::Map,
+            sidebar_tab: sidebar::Tab::default(),
             usage: Default::default(),
             diagrams: Default::default(),
             theme_mode: theme::ThemeMode::Dark,
@@ -170,6 +183,10 @@ impl App {
         self.editor_buffers.clear();
         self.dirty_edits.clear();
         self.open_file = None;
+        self.tabs = vec![crate::tabs::TabView::default()];
+        self.active_tab = 0;
+        self.show_quick_open = false;
+        self.quick_open_query.clear();
         self.graph_state = None;
         self.flow = Default::default();
         self.analysis = None;
@@ -262,10 +279,12 @@ impl App {
         }
     }
 
-    /// One selection drives every pane (plan §4.2).
+    /// One selection drives every pane (plan §4.2). File selections also open
+    /// or activate a document tab (the VS Code-shell behaviour).
     pub fn select(&mut self, sel: Selection) {
         match &sel {
             Selection::File(path) => {
+                self.open_in_tabs(path.clone());
                 self.open_file_with(path.clone(), None);
             }
             Selection::Symbol(id) => {
@@ -273,12 +292,27 @@ impl App {
                     if let Some(sym) = idx.symbols.iter().find(|s| s.id == *id) {
                         let file = sym.file.clone();
                         let line = sym.start_line;
+                        self.open_in_tabs(file.clone());
                         self.open_file_with(file, Some(line));
                     }
                 }
             }
         }
         self.selection = Some(sel);
+    }
+
+    /// Change the reading mode of the active document. Every mode switch (the
+    /// toolbar segments, the Tab/g keys, the palette) goes through here so the
+    /// tab strip and the mode stay one truth.
+    pub fn set_mode(&mut self, mode: Mode) {
+        self.mode = mode;
+        if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+            tab.mode = mode;
+            if mode == Mode::Diagrams {
+                tab.diagrams = self.diagrams.tab;
+            }
+        }
+        self.jump_line = None;
     }
 
     pub fn open_file_with(&mut self, path: String, line: Option<usize>) {
@@ -335,7 +369,23 @@ impl App {
     }
 
     fn handle_keyboard(&mut self, ctx: &egui::Context) {
-        let (tab, slash, esc, question, g, enter, j, k, ctrl_s, ctrl_k, ctrl_t) = ctx.input(|i| {
+        let (
+            tab,
+            slash,
+            esc,
+            question,
+            g,
+            enter,
+            j,
+            k,
+            ctrl_s,
+            ctrl_k,
+            ctrl_t,
+            ctrl_p,
+            ctrl_b,
+            ctrl_w,
+            ctrl_tab,
+        ) = ctx.input(|i| {
             (
                 i.key_pressed(egui::Key::Tab),
                 i.key_pressed(egui::Key::Slash) && i.modifiers.is_none(),
@@ -348,6 +398,10 @@ impl App {
                 i.key_pressed(egui::Key::S) && i.modifiers.ctrl && !i.modifiers.shift,
                 i.key_pressed(egui::Key::K) && i.modifiers.ctrl,
                 i.key_pressed(egui::Key::T) && i.modifiers.ctrl,
+                i.key_pressed(egui::Key::P) && i.modifiers.ctrl && !i.modifiers.shift,
+                i.key_pressed(egui::Key::B) && i.modifiers.ctrl && !i.modifiers.shift,
+                i.key_pressed(egui::Key::W) && i.modifiers.ctrl && !i.modifiers.shift,
+                i.key_pressed(egui::Key::Tab) && i.modifiers.ctrl,
             )
         });
         if self.show_command_palette {
@@ -370,13 +424,37 @@ impl App {
             };
             theme::apply_theme(ctx, self.theme_mode);
         }
+        if self.show_quick_open {
+            // The overlay owns the keyboard; Esc/Ctrl+P close (Enter is read
+            // inside the overlay itself, where the matches live).
+            if esc || ctrl_p {
+                self.show_quick_open = false;
+                self.quick_open_query.clear();
+            }
+            return;
+        }
+        if ctrl_p {
+            self.show_quick_open = true;
+            self.quick_open_query.clear();
+            return;
+        }
+        if ctrl_b {
+            self.show_sidebar = !self.show_sidebar;
+        }
+        if ctrl_w {
+            self.close_tab(self.active_tab);
+        }
+        if ctrl_tab && self.tabs.len() > 1 {
+            let next = (self.active_tab + 1) % self.tabs.len();
+            self.activate_tab(next);
+        }
         if tab {
-            self.mode = match self.mode {
+            self.set_mode(match self.mode {
                 Mode::Text => Mode::Graph,
                 Mode::Graph => Mode::Flow,
                 Mode::Flow => Mode::Diagrams,
                 Mode::Diagrams => Mode::Text,
-            };
+            });
         }
         if slash {
             self.search_focus = true;
@@ -390,7 +468,7 @@ impl App {
             self.show_shortcuts = !self.show_shortcuts;
         }
         if g {
-            self.mode = Mode::Graph;
+            self.set_mode(Mode::Graph);
         }
         if ctrl_s {
             self.save_open_file();
@@ -547,6 +625,7 @@ impl App {
             Diagram::Types => "types",
             Diagram::Cfg { .. } => "cfg",
             Diagram::Modules => "modules",
+            Diagram::Directory { .. } => "directory",
         };
         let path = repo.join(format!("repowalk-{name}.{ext}"));
         match std::fs::write(&path, text) {
@@ -569,105 +648,165 @@ impl App {
             let flow_active = self.mode == Mode::Flow;
             let diagrams_active = self.mode == Mode::Diagrams;
             if mode_segment(ui, "Text", "Tab", text_active).clicked() {
-                self.mode = Mode::Text;
+                self.set_mode(Mode::Text);
             }
             if mode_segment(ui, "Graph", "Tab", graph_active).clicked() {
-                self.mode = Mode::Graph;
+                self.set_mode(Mode::Graph);
             }
             if mode_segment(ui, "Flow", "Tab", flow_active).clicked() {
-                self.mode = Mode::Flow;
+                self.set_mode(Mode::Flow);
             }
             if mode_segment(ui, "Diagrams", "Tab", diagrams_active).clicked() {
-                self.mode = Mode::Diagrams;
+                self.set_mode(Mode::Diagrams);
             }
 
             ui.separator();
 
-            if toolbar_button(ui, "Open…", "Open a repository folder").clicked() {
+            // Icon buttons, VS Code style: an icon + a tooltip that names the
+            // action and its shortcut (recognition over recall).
+            if ui
+                .add(egui::Button::new(
+                    crate::icons::glyph(crate::icons::OPEN, 15.0).color(theme::TEXT_SECONDARY),
+                ))
+                .on_hover_text("Open a repository folder…")
+                .clicked()
+            {
                 self.show_open_popup = true;
             }
-            if toolbar_button(ui, "⌘K", "Command palette (Ctrl+K)").clicked() {
+            if ui
+                .add(egui::Button::new(
+                    crate::icons::glyph(crate::icons::SEARCH, 15.0).color(theme::TEXT_SECONDARY),
+                ))
+                .on_hover_text("Quick open a file (Ctrl+P)")
+                .clicked()
+            {
+                self.show_quick_open = true;
+                self.quick_open_query.clear();
+            }
+            if ui
+                .add(egui::Button::new(
+                    crate::icons::glyph(crate::icons::EXPORT_ICON, 15.0)
+                        .color(theme::TEXT_SECONDARY),
+                ))
+                .on_hover_text("Command palette (Ctrl+K)")
+                .clicked()
+            {
                 self.show_command_palette = true;
                 self.palette_query.clear();
             }
 
             ui.separator();
 
-            ui.menu_button("Export ▾", |ui| {
-                if ui.button("Window → PNG").clicked() {
-                    self.export_png(ui.ctx());
-                    ui.close();
-                }
-                if ui.button("Tour + health → Markdown").clicked() {
-                    self.export_markdown();
-                    ui.close();
-                }
-                if ui.button("Architecture report → Markdown").clicked() {
-                    self.export_architecture_report();
-                    ui.close();
-                }
-                ui.separator();
-                // v2 diagrams: the same core emitters `repowalk graph` uses, so
-                // the file the GUI writes and the file the CLI prints are equal.
-                ui.menu_button("Diagrams → Mermaid (.mmd)", |ui| {
-                    if ui.button("Call graph").clicked() {
-                        self.export_diagram(Diagram::CallGraph, "mermaid", "mmd");
+            // Menus get icon labels with tooltips (one font per text widget,
+            // so the chevron lives in the tooltip, not the glyph run).
+            let export = ui.menu_button(
+                crate::icons::glyph(crate::icons::EXPORT_ICON, 15.0).color(theme::TEXT_SECONDARY),
+                |ui| {
+                    if ui.button("Window → PNG").clicked() {
+                        self.export_png(ui.ctx());
                         ui.close();
                     }
-                    if ui.button("Types").clicked() {
-                        self.export_diagram(Diagram::Types, "mermaid", "mmd");
+                    if ui.button("Tour + health → Markdown").clicked() {
+                        self.export_markdown();
                         ui.close();
                     }
-                    if ui.button("Modules").clicked() {
-                        self.export_diagram(Diagram::Modules, "mermaid", "mmd");
+                    if ui.button("Architecture report → Markdown").clicked() {
+                        self.export_architecture_report();
                         ui.close();
                     }
-                });
-                ui.menu_button("Diagrams → Graphviz DOT (.dot)", |ui| {
-                    if ui.button("Call graph").clicked() {
-                        self.export_diagram(Diagram::CallGraph, "dot", "dot");
-                        ui.close();
-                    }
-                    if ui.button("Types").clicked() {
-                        self.export_diagram(Diagram::Types, "dot", "dot");
-                        ui.close();
-                    }
-                    if ui.button("Modules").clicked() {
-                        self.export_diagram(Diagram::Modules, "dot", "dot");
-                        ui.close();
-                    }
-                });
-                ui.menu_button("Diagrams → SVG (.svg)", |ui| {
-                    if ui.button("Call graph").clicked() {
-                        self.export_diagram(Diagram::CallGraph, "svg", "svg");
-                        ui.close();
-                    }
-                    if ui.button("Types").clicked() {
-                        self.export_diagram(Diagram::Types, "svg", "svg");
-                        ui.close();
-                    }
-                    if ui.button("Modules").clicked() {
-                        self.export_diagram(Diagram::Modules, "svg", "svg");
-                        ui.close();
-                    }
-                });
-            });
+                    ui.separator();
+                    // v2 diagrams: the same core emitters `repowalk graph` uses, so
+                    // the file the GUI writes and the file the CLI prints are equal.
+                    ui.menu_button("Diagrams → Mermaid (.mmd)", |ui| {
+                        if ui.button("Call graph").clicked() {
+                            self.export_diagram(Diagram::CallGraph, "mermaid", "mmd");
+                            ui.close();
+                        }
+                        if ui.button("Types").clicked() {
+                            self.export_diagram(Diagram::Types, "mermaid", "mmd");
+                            ui.close();
+                        }
+                        if ui.button("Modules").clicked() {
+                            self.export_diagram(Diagram::Modules, "mermaid", "mmd");
+                            ui.close();
+                        }
+                        if ui.button("Directory tree").clicked() {
+                            self.export_diagram(
+                                Diagram::Directory { imports: false },
+                                "mermaid",
+                                "mmd",
+                            );
+                            ui.close();
+                        }
+                    });
+                    ui.menu_button("Diagrams → Graphviz DOT (.dot)", |ui| {
+                        if ui.button("Call graph").clicked() {
+                            self.export_diagram(Diagram::CallGraph, "dot", "dot");
+                            ui.close();
+                        }
+                        if ui.button("Types").clicked() {
+                            self.export_diagram(Diagram::Types, "dot", "dot");
+                            ui.close();
+                        }
+                        if ui.button("Modules").clicked() {
+                            self.export_diagram(Diagram::Modules, "dot", "dot");
+                            ui.close();
+                        }
+                        if ui.button("Directory tree").clicked() {
+                            self.export_diagram(
+                                Diagram::Directory { imports: false },
+                                "dot",
+                                "dot",
+                            );
+                            ui.close();
+                        }
+                    });
+                    ui.menu_button("Diagrams → SVG (.svg)", |ui| {
+                        if ui.button("Call graph").clicked() {
+                            self.export_diagram(Diagram::CallGraph, "svg", "svg");
+                            ui.close();
+                        }
+                        if ui.button("Types").clicked() {
+                            self.export_diagram(Diagram::Types, "svg", "svg");
+                            ui.close();
+                        }
+                        if ui.button("Modules").clicked() {
+                            self.export_diagram(Diagram::Modules, "svg", "svg");
+                            ui.close();
+                        }
+                        if ui.button("Directory tree").clicked() {
+                            self.export_diagram(
+                                Diagram::Directory { imports: false },
+                                "svg",
+                                "svg",
+                            );
+                            ui.close();
+                        }
+                    });
+                },
+            );
+            export.response
+                .on_hover_text("Export — PNG, Markdown reports, diagrams");
 
             // F13: the palette is switchable at runtime; the choice applies
             // immediately and the dark values stay the source of truth.
-            ui.menu_button("View ▾", |ui| {
-                let dark = self.theme_mode == theme::ThemeMode::Dark;
-                if ui.selectable_label(dark, "Dark theme").clicked() {
-                    self.theme_mode = theme::ThemeMode::Dark;
-                    theme::apply_theme(ui.ctx(), self.theme_mode);
-                    ui.close();
-                }
-                if ui.selectable_label(!dark, "Light theme").clicked() {
-                    self.theme_mode = theme::ThemeMode::Light;
-                    theme::apply_theme(ui.ctx(), self.theme_mode);
-                    ui.close();
-                }
-            });
+            let view = ui.menu_button(
+                crate::icons::glyph(crate::icons::GEAR, 15.0).color(theme::TEXT_SECONDARY),
+                |ui| {
+                    let dark = self.theme_mode == theme::ThemeMode::Dark;
+                    if ui.selectable_label(dark, "Dark theme").clicked() {
+                        self.theme_mode = theme::ThemeMode::Dark;
+                        theme::apply_theme(ui.ctx(), self.theme_mode);
+                        ui.close();
+                    }
+                    if ui.selectable_label(!dark, "Light theme").clicked() {
+                        self.theme_mode = theme::ThemeMode::Light;
+                        theme::apply_theme(ui.ctx(), self.theme_mode);
+                        ui.close();
+                    }
+                },
+            );
+            view.response.on_hover_text("View (theme, Ctrl+T)");
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.weak(repowalk_core::VERSION);
@@ -796,10 +935,23 @@ impl App {
             self.show_command_palette = false;
             self.palette_query.clear();
             match action.kind {
-                PaletteKind::ModeText => self.mode = Mode::Text,
-                PaletteKind::ModeGraph => self.mode = Mode::Graph,
-                PaletteKind::ModeFlow => self.mode = Mode::Flow,
-                PaletteKind::ModeDiagrams => self.mode = Mode::Diagrams,
+                PaletteKind::ModeText => self.set_mode(Mode::Text),
+                PaletteKind::ModeGraph => self.set_mode(Mode::Graph),
+                PaletteKind::ModeFlow => self.set_mode(Mode::Flow),
+                PaletteKind::ModeDiagrams => self.set_mode(Mode::Diagrams),
+                PaletteKind::PanelExplorer => {
+                    self.sidebar_tab = sidebar::Tab::Explorer;
+                    self.show_sidebar = true;
+                }
+                PaletteKind::PanelSearch => {
+                    self.sidebar_tab = sidebar::Tab::Search;
+                    self.show_sidebar = true;
+                    self.search_focus = true;
+                }
+                PaletteKind::QuickOpen => {
+                    self.show_quick_open = true;
+                    self.quick_open_query.clear();
+                }
                 PaletteKind::PanelUsage => self.sidebar_tab = sidebar::Tab::Usage,
                 PaletteKind::PanelHealth => self.sidebar_tab = sidebar::Tab::Health,
                 PaletteKind::PanelNotes => self.sidebar_tab = sidebar::Tab::Notes,
@@ -910,7 +1062,7 @@ impl eframe::App for App {
         self.handle_keyboard(&ctx);
         self.consume_screenshot_event(&ctx);
 
-        // Top toolbar strip.
+        // Top toolbar strip (the VS Code title/menu row).
         egui::Frame::new()
             .fill(theme::SURFACE_E0)
             .inner_margin(egui::Margin::symmetric(
@@ -923,44 +1075,60 @@ impl eframe::App for App {
             });
         ui.separator();
 
-        // Left sidebar.
-        egui::Panel::left("sidebar")
-            .resizable(true)
-            .default_size(theme::SIDEBAR_DEFAULT)
-            .min_size(theme::SIDEBAR_MIN)
-            .max_size(theme::SIDEBAR_MAX)
+        // The activity bar: the icon strip that selects the side panel.
+        egui::Panel::left("activity_bar")
+            .resizable(false)
+            .exact_size(theme::ACTIVITY_BAR_WIDTH)
+            .frame(
+                egui::Frame::new()
+                    .fill(theme::SURFACE_E1)
+                    .inner_margin(egui::Margin::symmetric(0, theme::SPACE_2 as i8)),
+            )
             .show(ui, |ui| {
-                ui.add_space(theme::SPACE_1);
-                sidebar::ui(ui, self);
+                activity_bar(self, ui);
             });
 
-        // Central pane: Text | Graph.
-        match self.mode {
-            Mode::Text => {
-                egui::CentralPanel::default().show(ui, |ui| {
+        // The side panel itself (Ctrl+B hides it).
+        if self.show_sidebar {
+            egui::Panel::left("sidebar")
+                .resizable(true)
+                .default_size(theme::SIDEBAR_DEFAULT)
+                .min_size(theme::SIDEBAR_MIN)
+                .max_size(theme::SIDEBAR_MAX)
+                .show(ui, |ui| {
                     ui.add_space(theme::SPACE_1);
-                    text::ui(ui, self);
+                    sidebar::ui(ui, self);
                 });
-            }
-            Mode::Graph => {
-                egui::CentralPanel::default().show(ui, |ui| {
-                    ui.add_space(theme::SPACE_1);
-                    graph::ui(ui, self);
-                });
-            }
-            Mode::Flow => {
-                egui::CentralPanel::default().show(ui, |ui| {
-                    ui.add_space(theme::SPACE_1);
-                    flow::ui(&ctx, ui, self);
-                });
-            }
-            Mode::Diagrams => {
-                egui::CentralPanel::default().show(ui, |ui| {
-                    ui.add_space(theme::SPACE_1);
-                    diagrams::ui(ui, self);
-                });
-            }
         }
+
+        // Central pane: tab strip → breadcrumbs → the active document view.
+        let mode = self.mode;
+        egui::CentralPanel::default().show(ui, |ui| {
+            // While reading diagrams, the active tab keeps the sub-tab truthful.
+            if mode == Mode::Diagrams {
+                let diagrams_tab = self.diagrams.tab;
+                if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+                    tab.diagrams = diagrams_tab;
+                }
+            }
+            tabs::tab_strip(ui, self);
+            ui.allocate_ui_with_layout(
+                egui::vec2(ui.available_width(), theme::BREADCRUMB_HEIGHT),
+                egui::Layout::left_to_right(egui::Align::Center),
+                |ui| {
+                    ui.add_space(theme::SPACE_3);
+                    tabs::breadcrumbs(ui, self);
+                },
+            );
+            theme::separator(ui);
+            ui.add_space(theme::SPACE_1);
+            match mode {
+                Mode::Text => text::ui(ui, self),
+                Mode::Graph => graph::ui(ui, self),
+                Mode::Flow => flow::ui(&ctx, ui, self),
+                Mode::Diagrams => diagrams::ui(ui, self),
+            }
+        });
 
         // Bottom status bar.
         ui.separator();
@@ -979,11 +1147,73 @@ impl eframe::App for App {
         self.open_popup(&ctx);
         self.command_palette(&ctx);
         self.shortcuts_window(&ctx);
+        quick_open::ui(ui, self);
         self.progress_overlay(ui);
     }
 }
 
 // ── Toolbar helpers ─────────────────────────────────────────────────────────
+
+/// The activity bar (B5-04): one monogram button per side panel, stacked
+/// vertically; the active one gets the accent border on its left edge, the way
+/// VS Code highlights the icon column.
+fn activity_bar(app: &mut App, ui: &mut egui::Ui) {
+    let items = [
+        (sidebar::Tab::Explorer, icons::FILES, "Explorer"),
+        (sidebar::Tab::Search, icons::SEARCH, "Search"),
+        (sidebar::Tab::Map, icons::MAP, "Map"),
+        (sidebar::Tab::Usage, icons::USAGE, "Usage"),
+        (sidebar::Tab::Health, icons::HEALTH, "Health"),
+        (sidebar::Tab::Notes, icons::NOTES, "Notes"),
+        (sidebar::Tab::Onboard, icons::OWNER_GUIDE, "Repo 101"),
+    ];
+    ui.vertical(|ui| {
+        ui.spacing_mut().item_spacing.y = theme::SPACE_2;
+        for (tab, icon, name) in items {
+            let active = app.sidebar_tab == tab;
+            let size = egui::vec2(
+                theme::ACTIVITY_BAR_WIDTH - 2.0 * theme::SPACE_2,
+                theme::SPACE_6,
+            );
+            let (_, resp) = ui.allocate_exact_size(size, egui::Sense::click());
+            let resp = resp.on_hover_text(format!("{name} panel"));
+            if active {
+                let edge = egui::Rect::from_min_max(
+                    resp.rect.min,
+                    egui::pos2(resp.rect.min.x + 2.0, resp.rect.max.y),
+                );
+                ui.painter()
+                    .rect_filled(edge, egui::CornerRadius::ZERO, theme::ACCENT);
+            }
+            ui.painter().text(
+                resp.rect.center(),
+                egui::Align2::CENTER_CENTER,
+                icon.to_string(),
+                egui::FontId::new(
+                    theme::ACTIVITY_ICON,
+                    egui::FontFamily::Name(icons::FONT_NAME.into()),
+                ),
+                if active {
+                    theme::TEXT_PRIMARY
+                } else {
+                    theme::TEXT_SECONDARY
+                },
+            );
+            if resp.clicked() {
+                app.sidebar_tab = tab;
+            }
+        }
+    });
+    ui.with_layout(egui::Layout::bottom_up(egui::Align::Center), |ui| {
+        if ui
+            .button(icons::glyph(icons::GEAR, 16.0).color(theme::TEXT_MUTED))
+            .on_hover_text("Keyboard shortcuts")
+            .clicked()
+        {
+            app.show_shortcuts = !app.show_shortcuts;
+        }
+    });
+}
 
 /// Segmented-control segment for Text/Graph mode (active = accent top-border).
 fn mode_segment(ui: &mut egui::Ui, label: &str, shortcut: &str, active: bool) -> egui::Response {
@@ -1007,14 +1237,6 @@ fn mode_segment(ui: &mut egui::Ui, label: &str, shortcut: &str, active: bool) ->
     resp
 }
 
-/// Plain toolbar button with optional hover tooltip.
-fn toolbar_button(ui: &mut egui::Ui, label: &str, tooltip: &str) -> egui::Response {
-    ui.add(egui::Button::new(
-        egui::RichText::new(label).color(theme::TEXT_SECONDARY),
-    ))
-    .on_hover_text(tooltip)
-}
-
 // ── Command palette model ───────────────────────────────────────────────────
 
 enum PaletteKind {
@@ -1022,6 +1244,9 @@ enum PaletteKind {
     ModeGraph,
     ModeFlow,
     ModeDiagrams,
+    PanelExplorer,
+    PanelSearch,
+    QuickOpen,
     PanelUsage,
     PanelHealth,
     PanelNotes,
@@ -1073,6 +1298,16 @@ fn palette_actions(_app: &App) -> Vec<PaletteAction> {
             kind: PaletteKind::PanelUsage,
         },
         PaletteAction {
+            label: "Show Explorer",
+            hint: "Ctrl+B to toggle the sidebar",
+            kind: PaletteKind::PanelExplorer,
+        },
+        PaletteAction {
+            label: "Show search panel",
+            hint: "/",
+            kind: PaletteKind::PanelSearch,
+        },
+        PaletteAction {
             label: "Show repository health panel",
             hint: "",
             kind: PaletteKind::PanelHealth,
@@ -1096,6 +1331,11 @@ fn palette_actions(_app: &App) -> Vec<PaletteAction> {
             label: "Open repository…",
             hint: "",
             kind: PaletteKind::OpenRepo,
+        },
+        PaletteAction {
+            label: "Quick open a file",
+            hint: "Ctrl+P",
+            kind: PaletteKind::QuickOpen,
         },
         PaletteAction {
             label: "Export window → PNG",
