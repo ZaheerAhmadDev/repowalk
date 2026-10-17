@@ -1,0 +1,17 @@
+{
+  "id": "B5-02",
+  "title": "gui: make the diagram canvases interactive — drag nodes anywhere, pan the canvas, zoom, positions persist",
+  "phase": "implementation",
+  "skill": "sdlc-maintenance",
+  "status": "todo",
+  "assignee": null,
+  "description": "User request 2 of the B5 batch (asked 2026-10-17): make the graphs and flow diagrams interactive so the user can move them anywhere they want.\n\nSibling cards: B5-01 (core directory emitter + CLI), B5-03 (flow + graph interactivity, separate files), B5-05 (GUI Directory panel consumes your interact primitive).\nOwner seat: GUI/diagrams (control.rs, types.rs, modules.rs) + a NEW shared file.\n\nDeliverable: one shared interaction primitive and three wired panels.\n  * NEW file `crates/gui/src/diagrams/interact.rs`: a reusable canvas interaction layer: pan by dragging empty space; zoom (Ctrl+wheel so it never fights scrolling, plus plain wheel when hovering the canvas with the modifier-free gesture that today only scrolls); and node dragging (a node follows the pointer while the button is down).\n  * All three existing diagram canvases (Diagrams: Control flow / Types / Modules) behave this way: grabbing a node moves that node; a drag that starts off-node pans the whole layer; wheel zooms the layer about the cursor; a small Reset button in the existing header row (double-click also) puts the deterministic layout back.\n  * Positions persist per view in egui memory (`egui::Id`) keyed by the panel id string, so they survive tab switches within the session. The egui app dies at exit, so no disk file: no schema, no IO.\n  * Keep the deterministic layout math intact and as the source of truth for the initial layout (drag offsets per node applied on top). Extract the offset/scale math into pure functions so it can be unit-tested without a UI (the existing repo pattern).\n  * Graph mode (egui_graphs) is NOT yours (B5-03 covers it): only the three Diagrams canvases.\n\nConstraints: no new dependencies. Panels must still render correctly after drags, on both themes, and the existing hover/click selection semantics must not break: use movement-threshold detection so a click is still a click. Text selection or multi-select if cheap. Never commit/push; hand to the integrator by message.",
+  "artifacts": [
+    "crates/gui/src/diagrams/interact.rs",
+    "crates/gui/src/diagrams/control.rs",
+    "crates/gui/src/diagrams/types.rs",
+    "crates/gui/src/diagrams/modules.rs"
+  ],
+  "created": "2026-10-17T06:10:00Z",
+  "updated": "2026-10-17T06:15:00Z"
+}

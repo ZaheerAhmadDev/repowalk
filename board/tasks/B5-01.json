@@ -1,0 +1,16 @@
+{
+  "id": "B5-01",
+  "title": "directory-structure diagram: core emitter (Mermaid/DOT/SVG) + CLI `graph --scope tree` — real dir/file names",
+  "phase": "implementation",
+  "skill": "sdlc-maintenance",
+  "status": "todo",
+  "assignee": null,
+  "description": "User request 1 of the B5 batch (asked 2026-10-17): create a feature that shows the directory structure using graphs/diagrams, using the actual names, representing the directory.\n\nSibling cards: B5-02 (GUI drag/pan/zoom for diagram canvases), B5-03 (flow/graph interactivity), B5-04 (VS Code-like shell), B5-05 (GUI Diagrams to Directory panel).\nOwner seat: CORE/exp + PROD graph (one seat, because the CLI and the GUI export both read this emitter).\n\nDeliverable: an additive core emitter that renders the directory tree of `Index::files` (and nothing invented), exported like the other diagrams.\n  * Nodes = the repository root, then every directory that actually contains indexed files, then files as leaves. Labels are the real names (`src`, `diagrams`, `control.rs`), not synthetic ids; a file label may carry `name (LOC)` because the emitter has `FileEntry.lines`.\n  * Structure edges: plain parent-child containment, visually distinct (e.g. plain lines rather than arrows); mark entrypoints (`FileEntry.is_entrypoint`) with a distinct shape/color in DOT/SVG and a text marker in Mermaid.\n  * Optional (flag on the emitter, defaults off): dashed `Import` edges aggregated between directories, so the same shape can also show cross-directory traffic.\n  * Wire it: CLI `repowalk graph --scope tree [--format mermaid|dot|svg] <path>` (mermaid default). The same emitter must be reusable by the GUI Export menu (another card adds that entry; you only expose the variant).\n\nConstraints: no contract change (add the `Diagram::Directory` variant; do not rename existing variants), no new dependencies, emitters stay pure functions over `(&Index, &Analysis)` like the sibling scopes, output deterministic (BTreeMap/sorted everywhere). Template/escaping rules must match the existing emitters (Mermaid ids/names escaping, DOT quoting).\n\nVerify: on `fixtures/sample` (with root, a.rs, b.rs, main.rs, model.rs, tool.py, util.rs) the mermaid output contains one node per real name and correct parent-child shape; on this repo the root plus `crates`, `crates/core`, `crates/core/src` appear with real names and the file leaves carry LOC. Determinism: two runs byte-identical. Unknown formats error as today.\nGATES: cargo fmt/clippy/test on core + cli. Never commit/push; hand to the integrator by message.",
+  "artifacts": [
+    "crates/core/src/export/directory.rs",
+    "crates/core/src/export/mod.rs",
+    "crates/cli/src/commands/graph.rs"
+  ],
+  "created": "2026-10-17T06:10:00Z",
+  "updated": "2026-10-17T06:15:00Z"
+}

@@ -1,0 +1,16 @@
+{
+  "id": "B5-04",
+  "title": "gui: VS Code-like shell — activity bar, explorer with the real directory tree, editor tabs + breadcrumbs, status bar, quick open (owns app.rs + sidebar)",
+  "phase": "implementation",
+  "skill": "sdlc-maintenance",
+  "status": "todo",
+  "assignee": "integrator",
+  "description": "User request 3 of the B5 batch (asked 2026-10-17):\n'make UI design like VSCode'.\n\nDeliverable (integrator-owned; app.rs and sidebar are the hottest files so no other seat touches them while this is in flight):\n  * **Activity bar** (left icon strip, VS Code style): Explorer, Search, Map/outline, Diaphms/views, Health, Notes, 101, Export, Theme toggle. Selecting an icon switches the side panel, with a distinct selected state.\n  * **Explorer**: the real directory tree (zip from `Index::files`, same data as `text/tree.rs` but shell-owned): directories with real names as collapsible sections, files as rows with LOC/lang badges, entrypoint markers; click opens the file in the editor area (Ctrl+click opens a second tab).\n  * **Editor tabs + breadcrumbs**: horizontal tab strip (open files and *views* e maybe later Call graph etc.), dirty dot for unsaved edits, close buttons, Ctrl+P quick open (typo-tolerant file path switcher) alongside the existing command palette.\n  * **Status bar** (bottom): repo path, learn state, totals (files/LOC/symbols), current selection, theme switcher icon, language of the active file, kernel info (e.g. analysis present/index-only).\n  * Keep every existing feature reachable in the new shell (mode cycle, trace, palette, theme, export menu, learn speed/progress). Existing palette unchanged.\n  * No new dependencies. Dark palette byte-identical (theme tests stay green).\n\nConstraints: the shell may NOT touch `diagrams/*`, `flow/*`, `graph/*`, `text/*` panels' internals beyond calling their existing `ui()` entry points. If a panel needs its title row removed because the shell now draws titles, ask on the feed first.\nGATES: fmt/clippy/test gui + full workspace.",
+  "artifacts": [
+    "crates/gui/src/app.rs",
+    "crates/gui/src/sidebar/mod.rs",
+    "crates/gui/src/sidebar/explorer.rs"
+  ],
+  "created": "2026-10-17T06:10:00Z",
+  "updated": "2026-10-17T06:10:00Z"
+}
