@@ -16,6 +16,13 @@ pub fn render(index: &Index, analysis: &Analysis, diagram: &Diagram) -> String {
         Diagram::Cfg { symbol } => (util::build_cfg(analysis, symbol), "TB"),
         Diagram::Types => (util::build_types(analysis), "BT"),
         Diagram::Modules => (util::build_modules(analysis), "LR"),
+        Diagram::Directory { imports } => {
+            let options = super::directory::DirectoryOptions {
+                import_edges: *imports,
+                loc_labels: true,
+            };
+            (super::directory::build(index, analysis, &options), "TB")
+        }
     };
 
     let mut out = String::from("digraph repowalk {\n");
@@ -73,5 +80,7 @@ fn dot_arrow(arrow: Arrow) -> &'static str {
         Arrow::Normal => "normal",
         Arrow::Triangle => "onormal",
         Arrow::Diamond => "diamond",
+        // Containment edges: a plain line, no head at all.
+        Arrow::Open => "none",
     }
 }

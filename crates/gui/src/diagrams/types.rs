@@ -8,13 +8,20 @@
 //! Edges are styled by kind — `Inherit` solid, `Impl` dashed, `Field`/`Variant`
 //! labelled — and the selected type plus its direct neighbourhood are
 //! emphasised. Clicking a box drives the shared selection (`Selection::Symbol`).
-//! Layout is deterministic (fixed grid) and capped for legibility.
+//! Layout is deterministic (fixed grid) and capped for legibility — and the
+//! canvas is interactive: nodes drag, empty canvas pans, wheel zooms
+//! (`diagrams::interact`), all on top of the canonical grid.
 use eframe::egui;
 use egui::{Align2, Color32, FontId, Pos2, Rect, Stroke, Vec2};
 use repowalk_core::analysis::{Analysis, TypeEdgeKind, TypeKind, TypeNode};
 
 use crate::app::{App, Selection};
+use crate::diagrams::interact;
 use crate::theme;
+
+/// egui-memory key for this canvas's interact layer (state survives tab
+/// switches within one session; the layout id is global — one type diagram).
+const STATE_ID: &str = "diagrams-types-interact";
 
 // ── Geometry: a fixed grid, so identical input always lays out identically ──
 const BOX_W: f32 = 200.0;
@@ -168,6 +175,18 @@ fn kind_label(kind: TypeKind) -> &'static str {
     }
 }
 
+/// Canvas item id of one module group header ("hdr:" keeps it disjoint from
+/// any `file:name` type id).
+fn header_id(group: &str) -> String {
+    format!("hdr:{group}")
+}
+
+/// The interact-layer group key of a module — every header and every one of
+/// its type boxes share it, so any single drag moves the module as a block.
+fn group_id(group: &str) -> String {
+    format!("g:{group}")
+}
+
 /// Honest empty state: `Some(reason)` when the pipeline produced no types.
 pub fn empty_notice(a: &Analysis) -> Option<String> {
     a.types.is_empty().then(|| {
@@ -217,10 +236,6 @@ fn elide(text: &str, max: usize) -> String {
     out
 }
 
-fn box_center(b: &TypeBox) -> Pos2 {
-    b.pos + b.size * 0.5
-}
-
 fn arrow_head(painter: &egui::Painter, from: Pos2, to: Pos2, stroke: Stroke) {
     let dir = to - from;
     if dir.length_sq() < 1.0 {
@@ -256,7 +271,7 @@ fn notice(ui: &mut egui::Ui, title: &str, lines: &[String]) {
     });
 }
 
-fn header(ui: &mut egui::Ui, lay: &TypeLayout, edge_count: usize) {
+fn header(ui: &mut egui::Ui, lay: &TypeLayout, edge_count: usize, reset: &mut bool) {
     ui.horizontal(|ui| {
         ui.label(
             egui::RichText::new(format!("{} type(s) · {} edge(s)", lay.total, edge_count))
@@ -271,11 +286,35 @@ fn header(ui: &mut egui::Ui, lay: &TypeLayout, edge_count: usize) {
             );
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.label(
-                egui::RichText::new("Inherit solid · Impl dashed · Field/Variant labelled")
+            if ui
+                .button("Reset")
+                .on_hover_text(
+                    "put every type box back on the deterministic grid \
+                     (double-click on empty canvas does the same)",
+                )
+                .clicked()
+            {
+                *reset = true;
+            }
+            ui.vertical(|ui| {
+                ui.label(
+                    egui::RichText::new(
+                        "what you see: a box = a type learned from the code · \
+                         arrows = how types relate (solid inherits · dashed impl · \
+                         field, variant labelled)",
+                    )
                     .size(theme::FONT_SMALL)
                     .color(theme::TEXT_MUTED),
-            );
+                );
+                ui.label(
+                    egui::RichText::new(
+                        "gestures: wheel zoom · drag empty space pans · \
+                         drag a box or its module name to move that module together",
+                    )
+                    .size(theme::FONT_SMALL)
+                    .color(theme::TEXT_MUTED),
+                );
+            });
         });
     });
     theme::separator(ui);
@@ -305,7 +344,8 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
     let avail = ui.available_width();
     let columns = (((avail + GAP_X) / (BOX_W + GAP_X)).floor() as usize).max(1);
     let lay = layout(&analysis.types, columns);
-    header(ui, &lay, analysis.type_edges.len());
+    let mut reset_requested = false;
+    header(ui, &lay, analysis.type_edges.len(), &mut reset_requested);
 
     // Borrowed lookups built once per frame (no clones of the node vec).
     let drawn: std::collections::BTreeSet<&str> = lay.boxes.iter().map(|b| b.id.as_str()).collect();
@@ -323,213 +363,293 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
                 .push(e.from.as_str());
         }
     }
-    let by_id: std::collections::BTreeMap<&str, &TypeBox> =
-        lay.boxes.iter().map(|b| (b.id.as_str(), b)).collect();
+    // box id → position in `lay.boxes` / the placed screen-rect list below.
+    let by_id: std::collections::BTreeMap<&str, usize> = lay
+        .boxes
+        .iter()
+        .enumerate()
+        .map(|(i, b)| (b.id.as_str(), i))
+        .collect();
 
     egui::Frame::new()
         .fill(theme::BG_BASE)
         .stroke(Stroke::new(1.0, theme::BORDER_SUBTLE))
         .show(ui, |ui| {
-            egui::ScrollArea::both()
-                .id_salt("types-diagram")
-                .auto_shrink([false, false])
-                .show(ui, |ui| {
-                    let canvas = Vec2::new(lay.width.max(400.0), lay.height.max(160.0));
-                    let (rect, resp) = ui.allocate_exact_size(canvas, egui::Sense::click());
-                    let painter = ui.painter_at(rect);
-                    let origin = rect.min;
-                    let to_screen = |p: Pos2| origin + p.to_vec2();
+            // No ScrollArea (B5-02): pan — dragging empty canvas — replaced
+            // scrolling inside the canvas, so the plain wheel is free to zoom
+            // about the cursor (the wheel no longer has a scroll to fight).
+            let (rect, resp) =
+                ui.allocate_exact_size(ui.available_size(), egui::Sense::click_and_drag());
+            let painter = ui.painter_at(rect);
+            let origin = rect.min;
+            let mut state = interact::CanvasState::load(ui.ctx(), egui::Id::new(STATE_ID));
+            if reset_requested {
+                state.reset();
+            }
+            let s = state.layer.scale;
 
-                    let hovered = resp.hover_pos().and_then(|p| {
-                        let local = p - origin;
-                        lay.boxes
-                            .iter()
-                            .find(|b| {
-                                Rect::from_min_size(b.pos, b.size)
-                                    .contains(Pos2::new(local.x, local.y))
-                            })
-                            .map(|b| b.id.as_str())
-                    });
+            // Base items for the interact layer: module headers then type
+            // boxes, in paint order. Every item belongs to its module group,
+            // so dragging a box — or the module name itself — moves the whole
+            // module together, name and all (user-reported mismatch: names
+            // used to stay behind while only boxes moved).
+            let items: Vec<(String, Rect)> = lay
+                .headers
+                .iter()
+                .map(|(group, pos)| {
+                    (
+                        header_id(group),
+                        Rect::from_min_size(*pos, Vec2::new(lay.width, GROUP_HEAD_H)),
+                    )
+                })
+                .chain(
+                    lay.boxes
+                        .iter()
+                        .map(|b| (b.id.clone(), Rect::from_min_size(b.pos, b.size))),
+                )
+                .collect();
+            let member_of: std::collections::BTreeMap<String, String> = lay
+                .headers
+                .iter()
+                .map(|(group, _)| (header_id(group), group_id(group)))
+                .chain(lay.boxes.iter().map(|b| (b.id.clone(), group_id(&b.group))))
+                .collect();
+            let (hovered, actions) = interact::frame_with(&resp, &mut state, &items, &member_of);
+            if actions.double_clicked_empty {
+                state.reset();
+            }
+            let placed: Vec<Rect> = lay
+                .boxes
+                .iter()
+                .map(|b| {
+                    interact::placed_rect(
+                        Rect::from_min_size(b.pos, b.size),
+                        state.node_offset(&b.id) + state.group_offset(&group_id(&b.group)),
+                        state.layer,
+                    )
+                    .translate(origin.to_vec2())
+                })
+                .collect();
 
-                    let focus = selected.as_deref();
-                    let is_focus = |id: &str| focus == Some(id) || hovered == Some(id);
-                    let is_nb = |id: &str| {
-                        focus.is_some_and(|f| adjacency.get(f).is_some_and(|v| v.contains(&id)))
+            let focus = selected.as_deref();
+            let is_focus = |id: &str| focus == Some(id) || hovered.as_deref() == Some(id);
+            let is_nb =
+                |id: &str| focus.is_some_and(|f| adjacency.get(f).is_some_and(|v| v.contains(&id)));
+            let is_dim = |id: &str| focus.is_some() && !is_focus(id) && !is_nb(id);
+
+            // Group headers ride their module group: a box drag (or a header
+            // drag) carries the name with it — own + group offsets then the
+            // layer transform, exactly the box placement math.
+            for (group, pos) in &lay.headers {
+                painter.text(
+                    state.layer.to_screen(
+                        *pos + state.node_offset(&header_id(group))
+                            + state.group_offset(&group_id(group)),
+                    ) + origin.to_vec2(),
+                    Align2::LEFT_TOP,
+                    elide(group, 44),
+                    font(theme::FONT_SMALL * s, false),
+                    theme::module_color(group),
+                );
+            }
+
+            // Plain-language answers to "what am I looking at": hover a box or
+            // a module header (suppressed while the pointer is dragging).
+            if !state.is_dragging() {
+                if let Some(pos) = resp.hover_pos() {
+                    let tag = match hovered.as_deref() {
+                        Some(h) if h.starts_with("hdr:") => {
+                            let group = h.trim_start_matches("hdr:");
+                            Some((
+                                format!("module {group}"),
+                                vec![
+                                    "drag it — or any of its type boxes —".to_string(),
+                                    "to move the module together, name included".to_string(),
+                                ],
+                            ))
+                        }
+                        Some(h) => analysis.types.iter().find(|t| t.id == *h).map(|node| {
+                            (
+                                format!("{} {}", kind_label(node.kind), node.name),
+                                vec![
+                                    format!(
+                                        "{} fields · {} methods · defined at {}:{}",
+                                        node.fields.len(),
+                                        node.methods.len(),
+                                        node.file,
+                                        node.line
+                                    ),
+                                    "arrows = how it relates to other types".to_string(),
+                                    "(solid inherits · dashed impl · field, variant)".to_string(),
+                                ],
+                            )
+                        }),
+                        None => None,
                     };
-                    let is_dim = |id: &str| focus.is_some() && !is_focus(id) && !is_nb(id);
-
-                    // Group headers.
-                    for (group, pos) in &lay.headers {
-                        painter.text(
-                            to_screen(*pos),
-                            Align2::LEFT_TOP,
-                            elide(group, 44),
-                            font(theme::FONT_SMALL, false),
-                            theme::module_color(group),
-                        );
+                    if let Some((title, lines)) = tag {
+                        interact::hover_tag(&painter, pos, &title, &lines);
                     }
+                }
+            }
 
-                    // Edges first, so boxes sit on top.
-                    for e in &analysis.type_edges {
-                        let (Some(from), Some(to)) =
-                            (by_id.get(e.from.as_str()), by_id.get(e.to.as_str()))
-                        else {
-                            continue;
-                        };
-                        let (mut color, width, dashed, label) = edge_style(e.kind);
-                        let touches = is_focus(e.from.as_str()) || is_focus(e.to.as_str());
-                        let dim = focus.is_some() && !touches;
-                        if dim {
-                            color = theme::dim_alpha(45);
-                        } else if touches {
-                            color = theme::ACCENT;
-                        }
-                        let stroke = Stroke::new(if touches { width + 0.6 } else { width }, color);
-                        let a = to_screen(box_center(from));
-                        let b = to_screen(box_center(to));
-                        if dashed {
-                            for seg in egui::Shape::dashed_line(&[a, b], stroke, 7.0, 5.0) {
-                                painter.add(seg);
-                            }
-                        } else {
-                            painter.line_segment([a, b], stroke);
-                        }
-                        arrow_head(&painter, a, b, stroke);
-                        if !dim {
-                            let mid = a + (b - a) * 0.5;
-                            painter.text(
-                                mid - Vec2::new(0.0, 3.0),
-                                Align2::CENTER_BOTTOM,
-                                label,
-                                font(theme::FONT_SMALL, false),
-                                color,
-                            );
-                        }
+            // Edges first, so boxes sit on top. Endpoints follow dragged boxes.
+            for e in &analysis.type_edges {
+                let (Some(&from), Some(&to)) =
+                    (by_id.get(e.from.as_str()), by_id.get(e.to.as_str()))
+                else {
+                    continue;
+                };
+                let (mut color, width, dashed, label) = edge_style(e.kind);
+                let touches = is_focus(e.from.as_str()) || is_focus(e.to.as_str());
+                let dim = focus.is_some() && !touches;
+                if dim {
+                    color = theme::dim_alpha(45);
+                } else if touches {
+                    color = theme::ACCENT;
+                }
+                let stroke = Stroke::new(if touches { width + 0.6 } else { width }, color);
+                let a = placed[from].center();
+                let b = placed[to].center();
+                if dashed {
+                    for seg in egui::Shape::dashed_line(&[a, b], stroke, 7.0, 5.0) {
+                        painter.add(seg);
                     }
+                } else {
+                    painter.line_segment([a, b], stroke);
+                }
+                arrow_head(&painter, a, b, stroke);
+                if !dim {
+                    let mid = a + (b - a) * 0.5;
+                    painter.text(
+                        mid - Vec2::new(0.0, 3.0),
+                        Align2::CENTER_BOTTOM,
+                        label,
+                        font(theme::FONT_SMALL * s, false),
+                        color,
+                    );
+                }
+            }
 
-                    // Boxes.
-                    for b in &lay.boxes {
-                        let brect = Rect::from_min_size(to_screen(b.pos), b.size);
-                        let corner = egui::CornerRadius::same(theme::CORNER_MD);
-                        let group_color = theme::module_color(&b.group);
-                        let sel = focus == Some(b.id.as_str());
-                        let nb = is_nb(b.id.as_str());
-                        let dim = is_dim(b.id.as_str());
+            // Boxes. `placed` is parallel to `lay.boxes`, offset + layer applied.
+            for (bi, b) in lay.boxes.iter().enumerate() {
+                let brect = placed[bi];
+                let corner = egui::CornerRadius::same(theme::CORNER_MD);
+                let group_color = theme::module_color(&b.group);
+                let sel = focus == Some(b.id.as_str());
+                let nb = is_nb(b.id.as_str());
+                let dim = is_dim(b.id.as_str());
 
-                        let fill = if sel {
-                            theme::SURFACE_SELECTED
-                        } else {
-                            theme::SURFACE_E2
-                        };
-                        painter.rect_filled(brect, corner, fill);
-                        let (border, bw) = if sel || nb {
-                            (theme::ACCENT, 2.0)
-                        } else if dim {
-                            (theme::dim_alpha(40), 1.0)
-                        } else {
-                            (group_color, 1.5)
-                        };
-                        painter.rect_stroke(
-                            brect,
-                            corner,
-                            Stroke::new(bw, border),
-                            egui::StrokeKind::Middle,
-                        );
+                let fill = if sel {
+                    theme::SURFACE_SELECTED
+                } else {
+                    theme::SURFACE_E2
+                };
+                painter.rect_filled(brect, corner, fill);
+                let (border, bw) = if sel || nb {
+                    (theme::ACCENT, 2.0)
+                } else if dim {
+                    (theme::dim_alpha(40), 1.0)
+                } else {
+                    (group_color, 1.5)
+                };
+                painter.rect_stroke(
+                    brect,
+                    corner,
+                    Stroke::new(bw, border),
+                    egui::StrokeKind::Middle,
+                );
 
-                        let Some(node) = analysis.types.iter().find(|t| t.id == b.id) else {
-                            continue;
-                        };
-                        let name_color = if dim {
-                            theme::TEXT_MUTED
-                        } else {
-                            theme::TEXT_PRIMARY
-                        };
-                        let pad = Vec2::new(theme::SPACE_2, theme::SPACE_1 + 1.0);
-                        painter.text(
-                            brect.min + pad,
-                            Align2::LEFT_TOP,
-                            elide(&node.name, 24),
-                            font(theme::FONT_BODY, false),
-                            name_color,
-                        );
-                        painter.text(
-                            brect.right_top() + Vec2::new(-theme::SPACE_2, theme::SPACE_1 + 1.0),
-                            Align2::RIGHT_TOP,
-                            kind_label(node.kind),
-                            font(theme::FONT_SMALL, false),
-                            if dim {
-                                theme::TEXT_DISABLED
-                            } else {
-                                group_color
-                            },
-                        );
+                let Some(node) = analysis.types.iter().find(|t| t.id == b.id) else {
+                    continue;
+                };
+                let name_color = if dim {
+                    theme::TEXT_MUTED
+                } else {
+                    theme::TEXT_PRIMARY
+                };
+                let pad = Vec2::new(theme::SPACE_2 * s, (theme::SPACE_1 + 1.0) * s);
+                painter.text(
+                    brect.min + pad,
+                    Align2::LEFT_TOP,
+                    elide(&node.name, 24),
+                    font(theme::FONT_BODY * s, false),
+                    name_color,
+                );
+                painter.text(
+                    brect.right_top() + Vec2::new(-theme::SPACE_2 * s, (theme::SPACE_1 + 1.0) * s),
+                    Align2::RIGHT_TOP,
+                    kind_label(node.kind),
+                    font(theme::FONT_SMALL * s, false),
+                    if dim {
+                        theme::TEXT_DISABLED
+                    } else {
+                        group_color
+                    },
+                );
 
-                        let text_color = |c: Color32| {
-                            if dim {
-                                theme::TEXT_DISABLED
-                            } else {
-                                c
-                            }
-                        };
-                        let x = brect.min.x + theme::SPACE_2;
-                        let mut ty = brect.min.y + 20.0;
-                        for f in node.fields.iter().take(FIELD_CAP) {
-                            painter.text(
-                                Pos2::new(x, ty),
-                                Align2::LEFT_TOP,
-                                elide(&format!("{}: {}", f.name, f.type_name), TEXT_CHARS),
-                                font(theme::FONT_SMALL, true),
-                                text_color(theme::TEXT_SECONDARY),
-                            );
-                            ty += LINE_H;
-                        }
-                        if node.fields.len() > FIELD_CAP {
-                            painter.text(
-                                Pos2::new(x, ty),
-                                Align2::LEFT_TOP,
-                                format!("+{} more fields", node.fields.len() - FIELD_CAP),
-                                font(theme::FONT_SMALL, false),
-                                theme::TEXT_MUTED,
-                            );
-                            ty += LINE_H;
-                        }
-                        for m in node.methods.iter().take(METHOD_CAP) {
-                            painter.text(
-                                Pos2::new(x, ty),
-                                Align2::LEFT_TOP,
-                                elide(&format!("{m}()"), TEXT_CHARS),
-                                font(theme::FONT_SMALL, true),
-                                text_color(theme::INFO),
-                            );
-                            ty += LINE_H;
-                        }
-                        if node.methods.len() > METHOD_CAP {
-                            painter.text(
-                                Pos2::new(x, ty),
-                                Align2::LEFT_TOP,
-                                format!("+{} more methods", node.methods.len() - METHOD_CAP),
-                                font(theme::FONT_SMALL, false),
-                                theme::TEXT_MUTED,
-                            );
-                        }
+                let text_color = |c: Color32| {
+                    if dim {
+                        theme::TEXT_DISABLED
+                    } else {
+                        c
                     }
+                };
+                let x = brect.min.x + theme::SPACE_2 * s;
+                let mut ty = brect.min.y + 20.0 * s;
+                let line_h = LINE_H * s;
+                for f in node.fields.iter().take(FIELD_CAP) {
+                    painter.text(
+                        Pos2::new(x, ty),
+                        Align2::LEFT_TOP,
+                        elide(&format!("{}: {}", f.name, f.type_name), TEXT_CHARS),
+                        font(theme::FONT_SMALL * s, true),
+                        text_color(theme::TEXT_SECONDARY),
+                    );
+                    ty += line_h;
+                }
+                if node.fields.len() > FIELD_CAP {
+                    painter.text(
+                        Pos2::new(x, ty),
+                        Align2::LEFT_TOP,
+                        format!("+{} more fields", node.fields.len() - FIELD_CAP),
+                        font(theme::FONT_SMALL * s, false),
+                        theme::TEXT_MUTED,
+                    );
+                    ty += line_h;
+                }
+                for m in node.methods.iter().take(METHOD_CAP) {
+                    painter.text(
+                        Pos2::new(x, ty),
+                        Align2::LEFT_TOP,
+                        elide(&format!("{m}()"), TEXT_CHARS),
+                        font(theme::FONT_SMALL * s, true),
+                        text_color(theme::INFO),
+                    );
+                    ty += line_h;
+                }
+                if node.methods.len() > METHOD_CAP {
+                    painter.text(
+                        Pos2::new(x, ty),
+                        Align2::LEFT_TOP,
+                        format!("+{} more methods", node.methods.len() - METHOD_CAP),
+                        font(theme::FONT_SMALL * s, false),
+                        theme::TEXT_MUTED,
+                    );
+                }
+            }
 
-                    // Click a box → shared selection.
-                    if resp.clicked() {
-                        if let Some(p) = resp.interact_pointer_pos() {
-                            let local = p - origin;
-                            if let Some(b) = lay.boxes.iter().find(|b| {
-                                Rect::from_min_size(b.pos, b.size)
-                                    .contains(Pos2::new(local.x, local.y))
-                            }) {
-                                if let Some(node) = analysis.types.iter().find(|t| t.id == b.id) {
-                                    let target = click_target(app, node);
-                                    app.select(Selection::Symbol(target));
-                                }
-                            }
-                        }
+            // Click a box → shared selection (egui's click-vs-drag threshold
+            // keeps an unmoved click a click; a real drag never selects).
+            if let Some(id) = actions.clicked {
+                if let Some(&bi) = by_id.get(id.as_str()) {
+                    if let Some(node) = analysis.types.iter().find(|t| t.id == lay.boxes[bi].id) {
+                        let target = click_target(app, node);
+                        app.select(Selection::Symbol(target));
                     }
-                });
+                }
+            }
+
+            state.store(ui.ctx(), egui::Id::new(STATE_ID));
         });
 }
 

@@ -1,0 +1,47 @@
+{
+  "id": "B5-02",
+  "title": "gui: make the diagram canvases interactive — drag nodes anywhere, pan the canvas, zoom, positions persist",
+  "phase": "implementation",
+  "skill": "sdlc-maintenance",
+  "status": "done",
+  "assignee": "TL-GRAPH",
+  "description": "User request 2 of the B5 batch (asked 2026-10-17): make the graphs and flow diagrams interactive so the user can move them anywhere they want.\n\nSibling cards: B5-01 (core directory emitter + CLI), B5-03 (flow + graph interactivity, separate files), B5-05 (GUI Directory panel consumes your interact primitive).\nOwner seat: GUI/diagrams (control.rs, types.rs, modules.rs) + a NEW shared file.\n\nDeliverable: one shared interaction primitive and three wired panels.\n  * NEW file `crates/gui/src/diagrams/interact.rs`: a reusable canvas interaction layer: pan by dragging empty space; zoom (Ctrl+wheel so it never fights scrolling, plus plain wheel when hovering the canvas with the modifier-free gesture that today only scrolls); and node dragging (a node follows the pointer while the button is down).\n  * All three existing diagram canvases (Diagrams: Control flow / Types / Modules) behave this way: grabbing a node moves that node; a drag that starts off-node pans the whole layer; wheel zooms the layer about the cursor; a small Reset button in the existing header row (double-click also) puts the deterministic layout back.\n  * Positions persist per view in egui memory (`egui::Id`) keyed by the panel id string, so they survive tab switches within the session. The egui app dies at exit, so no disk file: no schema, no IO.\n  * Keep the deterministic layout math intact and as the source of truth for the initial layout (drag offsets per node applied on top). Extract the offset/scale math into pure functions so it can be unit-tested without a UI (the existing repo pattern).\n  * Graph mode (egui_graphs) is NOT yours (B5-03 covers it): only the three Diagrams canvases.\n\nConstraints: no new dependencies. Panels must still render correctly after drags, on both themes, and the existing hover/click selection semantics must not break: use movement-threshold detection so a click is still a click. Text selection or multi-select if cheap. Never commit/push; hand to t... (line truncated at 2000 chars)",
+  "artifacts": [
+    "crates/gui/src/diagrams/interact.rs",
+    "crates/gui/src/diagrams/control.rs",
+    "crates/gui/src/diagrams/types.rs",
+    "crates/gui/src/diagrams/modules.rs",
+    "crates/gui/src/diagrams/mod.rs (allowed: `pub mod interact;` only)"
+  ],
+  "evidence": {
+    "pure_functions": [
+      "interact::Layer { scale, pan } — to_screen / to_canvas (inverse) / scale_size / pan_by / zoom_at / clamp_scale",
+      "interact::placed_rect(base, offset, layer) — offset then scale (the only place node positions and the transform meet)",
+      "interact::hit_index(pt, placed) — picking order = paint order",
+      "interact::canvas_delta(screen_delta, scale) — screen drag in canvas coordinates",
+      "interact::beyond_tolerance(total_delta, tolerance) — the second half of the movement-threshold (egui's click_and_drag click decision is the first half)",
+      "interact::wheel_factor(scroll_delta_y) — the plain-wheel default zoom gesture (documented choice; Ctrl+wheel/pinch is the modifier-variant path via InputState::zoom_delta, egui never emits both in one frame)",
+      "interact::CanvasState { layer, offsets, dragging_node } — load/store through egui temp memory per panel Id (control-flow additionally keyed by the selected symbol)"
+    ],
+    "tests": "cargo test -p repowalk-gui → `test result: ok. 109 passed; 0 failed` (post-fix), of which `cargo test interact` → `16 passed; 0 failed` pure-function tests in interact.rs: round-trip transform, zoom-anchor invariance + zoom-back-out identity, clamp/no-op factors, pan, placed rect offset-then-scale, first-match hit test, canvas delta vs zoom, 2d tolerance, wheel factor symmetry/composition, egui-memory state round trip (real Context), reset clears layer+offsets+drag",
+    "wiring_grep": "grep -n interact:: control.rs/types.rs → control.rs:267 CanvasState::load, :287 interact::frame, :298 placed_rect; types.rs:362/375/383 same (modules.rs uses the identical three calls; both panels also store() after paint; mod.rs declares `pub mod interact;`)",
+    "gates": [
+      "cargo build -p repowalk-gui → `Finished dev profile` (debug)",
+      "cargo fmt -p repowalk-gui -- --check → PASS (exit 0)",
+      "cargo clippy -p repowalk-gui --all-targets -- -D warnings → PASS (exit 0)",
+      "cargo test -p repowalk-gui → 109 passed; 0 failed",
+      "board tests → python3 board/tests/test_tasks.py OK (8), test_messages.py OK (15)"
+    ],
+    "no_new_deps": "Cargo.toml untouched",
+    "no_manual_click_claim": "No headless click possible; proven by the above tests + wiring grep instead",
+    "per_panel_interactions": [
+      "Control flow: drag a block/branch/loop lozenge and it follows the pointer (edges elbow around it, arrows back attached); drag empty canvas to pan the whole CFG; wheel zooms about the cursor (plain wheel default, Ctrl+wheel identical); hover tooltip still shows kind·lines·label (suppressed while dragging); Reset in the badge strip row restores the deterministic BFS layout; double-click empty canvas = same reset; per-function positions (state Id is symbol-keyed) survive tab switches",
+      "Types: drag a type box and it follows the pointer (inherit/impl/field/variant edges track the dragged box); drag empty canvas pans; wheel zooms (font sizes scale with zoom); click-select unchanged (box → Selection::Symbol, sub-threshold clicks stay clicks); hover/selected/neighbor emphasis + dimming unchanged; Reset in the legend row and double-click both restore the grid; positions survive tab switches",
+      "Modules: drag a crate/dir/module/file node and it follows the pointer (nesting tree and ×N import edges follow); drag empty canvas pans; wheel zooms; click a File node opens it via shared selection; hover accent + cycle ⟳ rings unchanged; Reset in the legend row and double-click both restore the layered layout; positions survive tab switches"
+    ],
+    "bumped_annotation": "Per panel legend line now documents 'wheel zoom · drag pan · drag (box|node) move'",
+    "scroll_note": "The canvases' ScrollArea::both was replaced by the interact layer for exactly the panels (documented in each wiring): pan replaced scrolling inside the canvas so the wheel is free to zoom about the cursor with no painter-coordinates-vs-scroll-rows fight; tooltips/hover/click-select kept"
+  },
+  "created": "2026-10-17T06:10:00Z",
+  "updated": "2026-10-17T09:05:00Z"
+}

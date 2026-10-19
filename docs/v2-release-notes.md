@@ -7,6 +7,16 @@
 > [`v2-plan.md`](v2-plan.md), [`v2-execution-plan.md`](v2-execution-plan.md),
 > [`architecture.md`](architecture.md).
 
+> **Post-release note (2026-10-17):** after tagging `2.0.0` the user asked for one
+> more feature batch — directory diagrams with **real names**, **movable**
+> graphs/flow cards, and a **VS Code-like UI**. It landed as batch **B5** on a
+> new branch **`vscode-ui`** (`prerelease-v2` stays frozen at the release):
+> `graph --scope tree` + the interactive **Diagrams → Directory** canvas, the
+> shared drag/pan/zoom layer across diagram and flow panes, and the shell
+> (activity bar, document tabs, breadcrumbs, `Ctrl+P`, Explorer). See the
+> `[Unreleased]` section of [`../CHANGELOG.md`](../CHANGELOG.md) and the **B5**
+> row of the batch log. The release tree below is untouched by B5.
+
 ## What v2 is
 
 repowalk v2 is the **"complete understanding suite"** (F1–F15): open any

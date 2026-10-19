@@ -1,0 +1,19 @@
+{
+  "id": "B5-05",
+  "title": "gui: Diagrams \u2192 Directory \u2014 an interactive tree diagram of the repo's real directories (integrator; after B5-01 + B5-02)",
+  "phase": "implementation",
+  "skill": "sdlc-maintenance",
+  "status": "done",
+  "assignee": "PMO-01",
+  "description": "User request 1 continued, GUI half: the directory structure as a diagram, not just a sidebar tree; interactive (reuses B5-02's interact primitive), real names, exported from the same core emitter B5-01 adds (so the CLI `graph --scope tree` and the GUI menu cannot drift).\n\nOwner files (exclusive): `crates/gui/src/diagrams/directory.rs` (new), one dispatch line in `diagrams/mod.rs`, and the new Export menu entry in app.rs (coordinated since app.rs is shell-owned too; do it after B5-04 lands or hand over the menu hunk).\n\nDeliverable\n  * A hierarchical canvas: repo root, then directories, then files, all carrying their real names; each dir badged with (files, LOC); entrypoint files marked; optional dotted import edges aggregated between directories (a flag, default off, stated clearly).\n  * Layout deterministic on load (BTreeMap/sorted), then drag/pan/zoom via B5-02's primitive; positions persist per view in egui memory; a Reset button restores the canonical layout.\n  * Clicking a dir/file behaves like the other Diagrams panels (selection + detail row + cross-highlight in the sidebar tree).\n  * `cargo test -p repowalk-gui` green including pure-layout unit tests (do not fork B5-01's core tree builder: call it if accessible, otherwise build the same way from Index::files and say so in the done message).\n\nGATES: fmt/clippy/test gui + workspace.",
+  "artifacts": [
+    "crates/gui/src/diagrams/directory.rs",
+    "crates/gui/src/diagrams/mod.rs",
+    "crates/gui/src/app.rs"
+  ],
+  "created": "2026-10-17T06:10:00Z",
+  "updated": "2026-10-17",
+  "notes": [
+    "Landed: diagrams/directory.rs \u2014 deterministic depth-column pure layout (root + real names, entrypoint \u2605 markers) + interactive canvas via B5-02's interact layer (drag nodes, pan, wheel zoom, Reset/double-click, cap 360 with honest omitted count), file node click opens the file via select(); wired as DiagramsTab::Directory in the tab strip + breadcrumbs label; GUI Export menus gained Directory tree (mermaid/dot/svg, imports:false) on top of B5-01's core emitter."
+  ]
+}

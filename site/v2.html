@@ -25,12 +25,55 @@
       <a class="nav-link" href="index.html#features">Features</a>
       <a class="nav-link" href="index.html#how">How it works</a>
 
-      <p class="nav-group">Docs</p>
-      <a class="nav-link" href="index.html#install">Install &amp; run</a>
-      <a class="nav-link" href="index.html#cli">CLI reference</a>
-      <a class="nav-link" href="index.html#gui">GUI guide</a>
-      <a class="nav-link" href="index.html#shortcuts">Keyboard shortcuts</a>
-      <a class="nav-link" href="index.html#docs">How-to guides</a>
+  <section class="features">
+    <article>
+      <h3>Learn</h3>
+      <p>Walk &rarr; parse &rarr; resolve &rarr; analyze &rarr; cache, with per-phase counts and a per-file incremental cache so a re-learn only re-parses what changed.</p>
+      <p><strong>Status:</strong> working &mdash; <code>learn.rs</code> (walk &rarr; parse &rarr; resolve &rarr; analyze &rarr; cache, per-file incremental stamp cache, module graph in the artifact) and the CLI (<code>repowalk report</code> learns on first use). The onboarding &ldquo;Repo 101&rdquo; panel shipped (card DSN-4).</p>
+      <p><a href="../docs/howto-learn.md">Read the learn how-to &rarr;</a></p>
+    </article>
+    <article>
+      <h3>Inventory</h3>
+      <p>Cyclomatic complexity and max nesting per function, per-file fan-in/out, hotspot ranking, god files and cycles.</p>
+      <p><strong>Status:</strong> working (engine: <code>complexity.rs</code> / <code>metrics.rs</code>; the <code>complexity</code> and <code>report</code> CLI commands render it). The Health v2 panel shipped: module complexity, god files (with the rule that named them), hotspots, unused variables and guardrail findings (card DSN-3).</p>
+    </article>
+    <article>
+      <h3>Control flow</h3>
+      <p>Per-function CFG with Entry/Block/Branch/Loop/Match/Call/Return/Exit nodes and <code>normal|true|false|back</code> edges, plus a cyclomatic badge.</p>
+      <p><strong>Status:</strong> working &mdash; analysis (Rust/Python/TS CFGs pass their goldens) and the <code>graph --scope cfg --symbol &hellip;</code> CLI. The Diagrams &rarr; Control flow view shipped (card GRAPH-2).</p>
+      <p><a href="../docs/howto-control-flow.md">Read the control-flow how-to &rarr;</a></p>
+    </article>
+    <article>
+      <h3>Connections</h3>
+      <p>Graph v2: always-readable real symbol names, clustering by module, layout modes, filters, focus+context dimming, and honest dashed <code>?</code> edges for unresolved calls.</p>
+      <p><strong>Status:</strong> v1 graph working (module colour, fan-in sizing, dashed <code>?</code>), plus the <code>graph --scope call</code> CLI in Mermaid/DOT/SVG. Real-name labels with zoom level-of-detail, module clustering, an &ldquo;exact only&rdquo; confidence filter and search-to-highlight shipped (card GRAPH-4).</p>
+      <p><a href="../docs/howto-graph.md">Read the graph how-to &rarr;</a></p>
+    </article>
+    <article>
+      <h3>Structure</h3>
+      <p>Type diagram (struct/enum/trait/class/interface with fields, methods and containment/impl/inheritance edges) and the modules DAG (crate/dir/module with import edges, cycles tinted).</p>
+      <p><strong>Status:</strong> engines working (<code>types.rs</code>, <code>modules.rs</code>; the <code>graph --scope types|modules</code> CLI emits them). The Types and Modules diagram views shipped (card GRAPH-3), plus a directory-tree scope of its own: <code>graph --scope tree</code> prints the real directory tree in Mermaid/DOT/SVG (B5-01).</p>
+      <p><a href="../docs/howto-structure.md">Read the structure how-to &rarr;</a></p>
+    </article>
+    <article>
+      <h3>Move anything</h3>
+      <p>Every diagram pane is interactive now: drag a node or card anywhere (edges and arrows follow), drag empty canvas to pan, wheel zooms about the cursor, double-click empty canvas or the Reset button restores the deterministic layout (B5-02/03). The new VS Code-like shell adds an activity bar, a document tab strip with dirty dots, breadcrumbs, <code>Ctrl+P</code> quick open and an Explorer sidebar that shows the real directory tree (B5-04), and a Diagrams &rarr; <strong>Directory</strong> canvas you can rearrange like every other pane (B5-05).</p>
+      <p><strong>Status:</strong> working &mdash; all landed on the <code>vscode-ui</code> branch (see the post-2.0.0 sections of <a href="../CHANGELOG.md">CHANGELOG.md</a>).</p>
+    </article>
+    <article>
+      <h3>Usage</h3>
+      <p>Per-file variable table — name, kind, declared type, declaration line, scope, <strong>reads / writes / total uses</strong>, first/last use, enclosing symbol — and find-all-references for any symbol.</p>
+      <p><strong>Status:</strong> working &mdash; variable analysis (Rust 7 vars &middot; Python 7 &middot; TS 13 on the fixtures), the core reference index <code>refs.rs</code> (8 green tests), and the <code>variables</code> / <code>refs</code> CLI commands (table + <code>--json</code>). The variables panel + highlight-all-uses (card TEXT-2) and the refs panel + jump-to-source (card TEXT-3) shipped.</p>
+      <p><a href="../docs/howto-variables.md">Variables how-to &rarr;</a> &middot; <a href="../docs/howto-refs.md">References how-to &rarr;</a></p>
+    </article>
+    <article>
+      <h3>Export</h3>
+      <p>Mermaid, DOT/Graphviz and hand-rolled SVG for every diagram, plus a generated architecture report in self-contained Markdown; PNG stays.</p>
+      <p>Architecture guardrails (F15) ride along: a small <code>rules.json</code> is checked and appended to the report, and an <code>Error</code> finding fails <code>repowalk report</code> with a nonzero exit. <a href="../docs/howto-guardrails.md">Guardrails how-to &rarr;</a></p>
+      <p><strong>Status:</strong> working &mdash; emitters (10 green tests) and the CLI <code>report</code> / <code>graph</code> commands (Markdown report + Mermaid/DOT/SVG, <code>--json</code>; nonzero exit on an <code>Error</code> guardrail). The GUI exports all of them from its <strong>Export &#9662;</strong> menu, alongside PNG and the tour+health Markdown.</p>
+      <p><a href="../docs/howto-export.md">Read the export how-to &rarr;</a></p>
+    </article>
+  </section>
 
       <p class="nav-group">Release notes</p>
       <a class="nav-link" href="index.html#releases">v2.0.0</a>

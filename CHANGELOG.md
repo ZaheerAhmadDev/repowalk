@@ -4,6 +4,82 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog and this project adheres to Semantic Versioning.
 
+## [Unreleased] — branch `vscode-ui` (post-2.0.0 feature batch B5)
+
+Everything below shipped on the `vscode-ui` branch after the `2.0.0` tag; the release
+branch `prerelease-v2` stays frozen at the release. Still
+no AI, no network, no API keys; the `index.json` schema is unchanged.
+
+### Added
+
+- **File-links graph — the whole code base (post-batch B5 user pass).**
+  New Diagrams sub-tab **"File links"**: one mini-view card per real file
+  (its name in the head, its top real symbols as rows, honest LOC/lang
+  footer, ★ entrypoints), one arrow per aggregated file import (`A imports
+  B`, ×N for repeats — read from the same `index.imports` the directory
+  emitter uses; external/unindexed targets are skipped, never invented).
+  Hovering a card lights it plus every file it is linked to in both
+  directions and dims the rest (the **deep** checkbox lights the whole
+  transitive import chain); clicking a card opens the real file; module
+  columns move as one when you drag a card or the module name. Only the
+  `index.json` data is used — the schema stays frozen and no CLI flags
+  change.
+- **Real VS Code icons (post-batch B5 user pass).** The vendored
+  `@vscode/codicons` font (CC BY 4.0, license shipped) drives the activity bar,
+  tab strips and toolbar: file-type icons on document tabs (code / markdown /
+  json), dirty tabs show the filled dot and clean tabs show ×, and the
+  toolbar's text buttons are now icon buttons with shortcut tooltips.
+- **Module-grouped Types diagram (post-batch B5 user pass).** In Diagrams ▸
+  Types, dragging any type box — its module header or the boxes themselves —
+  moves the whole module together, so the name can no longer stay behind
+  while the boxes move. Hovering a box or header answers "what am I looking
+  at" in place.
+- **Graph hover cards + plain-language legends (post-batch B5 user pass).**
+  Hovering a dependency-graph node pops a card saying exactly what it is
+  (symbol / whole file / merged module), where it is defined and what its
+  arrows mean; the legends of the Graph, Types, Modules and Directory views
+  now also carry one-line plain explanations of their encodings.
+- **Draggable FILES panel (post-batch B5 user pass).** The Text-mode file
+  tree (the left "FILES" pane) can be pulled out by dragging its header: it
+  floats as a window, keeps its own collapse state, and re-docks to the left
+  or right from buttons in its header.
+- **Directory-structure diagrams with real names (B5-01).**
+  `repowalk graph --scope tree` prints the actual directory tree
+  (mermaid / dot / svg, `--format` as before): depth-columned nodes made of the
+  real directory and file names, `★` entrypoint markers, `(N LOC)` labels, and
+  dashed import edges with `--imports`. Deterministic — the same command twice
+  produces byte-identical output. The GUI Export ▾ menu exposes the same
+  `Diagram::Directory` emitter.
+- **Interactive diagrams — drag, pan, zoom (B5-02/B5-03).**
+  Every graph-like pane gained the same gesture set: grab a node/ card and move
+  it anywhere (edges and arrows stay attached), drag empty canvas to pan, wheel
+  zooms about the cursor (Ctrl+wheel identical), double-click empty canvas or
+  the Reset button restores the deterministic layout; positions survive tab
+  switches for the session. Covered: Control flow, Types, Modules, the Flow
+  trace, and the call graph (egui_graphs node drag). Clicking still clicks: a
+  6 px movement threshold keeps drags from stealing clicks. All
+  `index.json`/`analysis.json` output is unchanged.
+- **VS Code-like shell (B5-04).** Activity bar (Explorer · Search · Map ·
+  Health · Usage · Notes · Repo 101), Ctrl+B to hide the sidebar, document tab
+  strip with dirty dots / close buttons / Ctrl+Tab cycling / Ctrl+W close,
+  breadcrumbs (path › file › selected symbol), and Ctrl+P quick open with
+  type-ahead ranking. The sidebar's newly promoted **Explorer** panel shows the
+  real directory tree; clicking any file anywhere still routes through the one
+  selection path, so every pane follows. In-memory state only.
+- **Diagrams → Directory panel (B5-05).** The interactive canvas version of the
+  directory tree: drag directories and files anywhere, pan, zoom, reset;
+  entrypoint `★` markers and LOC tooltips; clicking a file opens it. Very large
+  repos are capped at 360 canvas nodes with an honest omitted-count note (the
+  CLI emitter has no cap).
+
+### Unchanged by design
+
+- `index.json` schema, emitter output shapes, CLI `--json` payloads — all
+  byte-compatible with 2.0.0 (new features are additive: the new `tree` scope,
+  new GUI panels, new shortcuts).
+- Themes, budgets and the learning pipeline are untouched except where the
+  shell needed additive theme constants.
+
 ## [2.0.0] - 2026-10-16
 
 The v2 **"complete understanding suite"** — F1–F15 from

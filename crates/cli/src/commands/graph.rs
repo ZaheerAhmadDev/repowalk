@@ -1,10 +1,11 @@
-//! `repowalk graph [--format mermaid|dot|svg] [--scope call|cfg|types|modules] [--symbol <id>] <path>`
+//! `repowalk graph [--format mermaid|dot|svg] [--scope call|cfg|types|modules|tree] [--symbol <id>] <path>`
 //! OWNER: PROD-3.
 //!
 //! Renders one diagram to stdout by delegating to the PROD-2 emitters
 //! (`core::export::{mermaid,dot,svg}`) — no rendering lives in the CLI.
 //! `--scope cfg` requires `--symbol`; an unknown/ambiguous symbol exits nonzero
-//! with a clear message.
+//! with a clear message. `--scope tree` draws the directory tree of the indexed
+//! files (real names, LOC labels, entrypoint markers).
 use crate::commands::artifacts::{self, Artifacts};
 use anyhow::{anyhow, bail};
 use repowalk_core::export::{self, Diagram};
@@ -22,10 +23,16 @@ pub enum GraphFormat {
 /// Which diagram to draw. `--scope` (default `call`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum GraphScope {
+    /// Symbol call graph over the whole index
     Call,
+    /// Control-flow graph of one `--symbol`
     Cfg,
+    /// Type / class diagram
     Types,
+    /// Crate / module structure with import edges
     Modules,
+    /// Directory tree of the really indexed files (real names + LOC)
+    Tree,
 }
 
 pub fn run(
@@ -35,29 +42,46 @@ pub fn run(
     path: &Path,
 ) -> anyhow::Result<()> {
     let art = artifacts::load(path)?;
-    let diagram = match scope {
+    let diagram = diagram_for_scope(scope, symbol, &art.index)?;
+    print!("{}", render(format, &art, &diagram));
+    Ok(())
+}
+
+/// Map a requested scope (and `--symbol`) to a diagram. Kept separate from
+/// `run` so scope policy (`--symbol` rejection, symbol resolution, tree →
+/// `Diagram::Directory`) is testable without a repository on disk.
+pub fn diagram_for_scope(
+    scope: GraphScope,
+    symbol: Option<&str>,
+    index: &Index,
+) -> anyhow::Result<Diagram> {
+    match scope {
         GraphScope::Call => {
             reject_symbol(scope, symbol)?;
-            Diagram::CallGraph
+            Ok(Diagram::CallGraph)
         }
         GraphScope::Types => {
             reject_symbol(scope, symbol)?;
-            Diagram::Types
+            Ok(Diagram::Types)
         }
         GraphScope::Modules => {
             reject_symbol(scope, symbol)?;
-            Diagram::Modules
+            Ok(Diagram::Modules)
+        }
+        GraphScope::Tree => {
+            reject_symbol(scope, symbol)?;
+            // The plain tree: dashed aggregated import edges stay off unless a
+            // caller (GUI export) asks for them explicitly.
+            Ok(Diagram::Directory { imports: false })
         }
         GraphScope::Cfg => {
             let arg = symbol.ok_or_else(|| anyhow!("--scope cfg requires --symbol <id>"))?;
-            let sym = resolve_symbol(&art.index, arg)?;
-            Diagram::Cfg {
+            let sym = resolve_symbol(index, arg)?;
+            Ok(Diagram::Cfg {
                 symbol: sym.id.clone(),
-            }
+            })
         }
-    };
-    print!("{}", render(format, &art, &diagram));
-    Ok(())
+    }
 }
 
 /// `--symbol` only means something for `--scope cfg`; refuse to silently ignore
@@ -190,5 +214,23 @@ mod tests {
         let svg = render(GraphFormat::Svg, &a, &Diagram::CallGraph);
         assert!(svg.contains("<svg"), "{svg}");
         assert!(svg.ends_with('\n'));
+    }
+
+    #[test]
+    fn tree_scope_rejects_symbol_and_maps_to_the_directory_diagram() {
+        // --symbol must be refused for tree, exactly like types/modules/call.
+        let index = Index::new("/tmp/demo");
+        let err = diagram_for_scope(GraphScope::Tree, Some("main"), &index).unwrap_err();
+        assert!(
+            err.to_string().contains("--symbol"),
+            "symbol rejected for tree: {err}"
+        );
+
+        let diagram = diagram_for_scope(GraphScope::Tree, None, &index).unwrap();
+        assert_eq!(
+            diagram,
+            Diagram::Directory { imports: false },
+            "tree maps to Directory with import edges off"
+        );
     }
 }

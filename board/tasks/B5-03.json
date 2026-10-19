@@ -1,0 +1,19 @@
+{
+  "id": "B5-03",
+  "title": "gui: interactivity for Flow and Graph \u2014 draggable cards/nodes, pan, zoom",
+  "phase": "implementation",
+  "skill": "sdlc-maintenance",
+  "status": "done",
+  "assignee": "TL-GRAPH",
+  "description": "User request 2 continued (asked 2026-10-17):\n'make the graphs and flow diagrams interactive so the user can move them anywhere they want'.\n\nSibling cards: B5-02 owns the three Diagrams canvases + the new interact primitive; this card owns Flow and Graph and may depend on that primitive (coordinate on the message log; if you land before B5-02, implement locally first and unify later).\n\nOwner files (exclusive): `crates/gui/src/flow/render.rs` (+ `flow/mod.rs` state if needed) and `crates/gui/src/graph/{render.rs, mod.rs}` (graph mode uses egui_graphs; check `Graph`/`Settings` for existing pan/zoom and node-drag support and enable it rather than reimplementing e it likely already has `delta`/`SettingsInteraction` etc).\n\nDeliverables\n  * Flow: the walkthrough chain (A e B cards on the canvas) supports panning and zoom, and cards can be moved freely; the deterministic chain layout is the initial state, offsets persist in egui memory per view.\n  * Graph: nodes draggable (if the crate may not add drag, then pan/zoom + selection must at minimum remain; post whether node dragging needed a fork in your done message).\n  * Selection semantics survive (click selects, drag moves), movement-threshold disambiguation per pointer event.\n  * Pure-function unit tests for the math; no new dependencies.\n\nGATES: fmt/clippy/test gui. NEVER commit/push e hand over by message.",
+  "artifacts": [
+    "crates/gui/src/flow/render.rs",
+    "crates/gui/src/graph/render.rs",
+    "crates/gui/src/graph/mod.rs"
+  ],
+  "created": "2026-10-17T06:10:00Z",
+  "updated": "2026-10-17",
+  "notes": [
+    "Landed: flow cards drag freely via the shared interact layer (flow/render.rs rework, drag/click coexist via click_and_drag semantics), empty-canvas pan + wheel zoom + Reset/double-click restore; graph/render.rs enables egui_graphs SettingsInteraction node drag on the persisted per-graph layout id. Seat finished silently; integrator verified: crate compiles, 109/109 gui tests, clippy -D warnings clean."
+  ]
+}

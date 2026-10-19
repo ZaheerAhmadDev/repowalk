@@ -87,7 +87,7 @@ pub fn load_with_status(root: &Path) -> (NoteStore, Option<String>) {
             return (
                 NoteStore::default(),
                 Some(format!("could not read {}: {e}", path.display())),
-            )
+            );
         }
     };
     match json::decode(&bytes) {

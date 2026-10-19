@@ -7,6 +7,8 @@ use crate::app::{App, Selection};
 use crate::theme;
 use repowalk_core::model::FileEntry;
 
+use super::FilesDock;
+
 /// One indexed file, already split for rendering.
 struct FileRow {
     name: String,
@@ -45,7 +47,7 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
         return;
     };
 
-    theme::section_header(ui, "FILES");
+    files_header(ui, app);
 
     let root = build_tree(&idx.files);
 
@@ -60,6 +62,71 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
                 dir_ui(ui, app, dir, 0);
             }
         });
+}
+
+/// The FILES heading, and the view's drag story:
+/// * **docked** — the label is a grab handle: dragging it beyond the click
+///   threshold pops the tree out as a floating panel at the cursor;
+/// * **floating** — the title bar already drags the window natively, so this
+///   row carries the re-dock buttons instead.
+///
+/// The tree keeps its collapse memory through all of it (egui memory keyed on
+/// the dir paths, not the container).
+fn files_header(ui: &mut egui::Ui, app: &mut App) {
+    ui.add_space(theme::SPACE_1);
+    ui.horizontal(|ui| {
+        let docked = app.files_dock != FilesDock::Float;
+        if docked {
+            let resp = ui.add(
+                egui::Label::new(
+                    egui::RichText::new("FILES")
+                        .size(theme::FONT_SMALL)
+                        .strong()
+                        .color(theme::TEXT_MUTED),
+                )
+                .sense(egui::Sense::click_and_drag()),
+            );
+            let resp =
+                resp.on_hover_text("drag to pull the file tree out — it floats, then re-docks");
+            let pulled = resp.dragged_by(egui::PointerButton::Primary)
+                && crate::diagrams::interact::beyond_tolerance(
+                    resp.total_drag_delta().unwrap_or(egui::Vec2::ZERO),
+                    crate::diagrams::interact::CLICK_TOLERANCE,
+                );
+            if pulled {
+                app.files_dock = FilesDock::Float;
+                app.files_float_pos = ui
+                    .input(|i| i.pointer.hover_pos())
+                    .map(|p| p - egui::vec2(60.0, 8.0));
+            }
+        } else {
+            ui.label(
+                egui::RichText::new("FILES")
+                    .size(theme::FONT_SMALL)
+                    .strong()
+                    .color(theme::TEXT_MUTED),
+            );
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui
+                    .button("dock right")
+                    .on_hover_text("put the tree into the right side panel")
+                    .clicked()
+                {
+                    app.files_dock = FilesDock::Right;
+                    app.files_float_pos = None;
+                }
+                if ui
+                    .button("dock left")
+                    .on_hover_text("put the tree back into the left side panel")
+                    .clicked()
+                {
+                    app.files_dock = FilesDock::Left;
+                    app.files_float_pos = None;
+                }
+            });
+        }
+    });
+    ui.add_space(theme::SPACE_1);
 }
 
 /// Group repo-relative paths into a directory tree (deterministic: `BTreeMap`).

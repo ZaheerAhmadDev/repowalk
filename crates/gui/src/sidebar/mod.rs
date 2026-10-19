@@ -1,6 +1,8 @@
-//! Sidebar: map · usage · health · notes · onboarding · search.
-//! OWNER of this aggregate: integrator (the tab strip is pre-wired so parallel
-//! panels never share a file); each panel belongs to its own card.
+//! Sidebar: explorer · map · usage · health · notes · onboarding · search.
+//! OWNER of this aggregate: integrator; each panel belongs to its own card.
+//! With B5-04 the selector is an activity (driven by the icon strip in
+//! `app.rs`), so no tab strip is drawn in here.
+pub mod explorer;
 pub mod flow;
 pub mod map;
 pub mod search;
@@ -10,11 +12,14 @@ use eframe::egui;
 
 use crate::theme;
 
-/// Sidebar view selector. `Map` keeps the v1 stacked panels unchanged; the other
-/// tabs are v2 panels, one card each.
+/// Sidebar view selector — one activity = one side-panel section. `Map` keeps
+/// the v1 stacked panels under itself; Explorer and Search are VS Code-shell
+/// additions (B5-04).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Tab {
     #[default]
+    Explorer,
+    Search,
     Map,
     Usage,
     Health,
@@ -22,43 +27,28 @@ pub enum Tab {
     Onboard,
 }
 
-impl Tab {
-    fn label(self) -> &'static str {
-        match self {
-            Tab::Map => "Map",
-            Tab::Usage => "Usage",
-            Tab::Health => "Health",
-            Tab::Notes => "Notes",
-            Tab::Onboard => "101",
-        }
-    }
-}
-
 /// All panels, top to bottom. Each panel owns its own `ScrollArea` sized to
 /// the space that is left, so the sidebar never overflows and long lists
-/// scroll in place.
+/// scroll in place. The selector is the app-level activity (the icon strip in
+/// `app.rs`) — no tab strip is drawn here.
 pub fn ui(ui: &mut egui::Ui, app: &mut crate::app::App) {
     if app.index.is_none() {
         empty_state(ui);
         return;
     }
-    let tabs = [Tab::Map, Tab::Usage, Tab::Health, Tab::Notes, Tab::Onboard];
-    let labels: Vec<(Tab, &str)> = tabs.iter().map(|t| (*t, t.label())).collect();
-    if let Some(tab) = crate::ui_kit::tab_strip(ui, app.sidebar_tab, &labels) {
-        app.sidebar_tab = tab;
-    }
-    theme::separator(ui);
     match app.sidebar_tab {
-        // The v1 stacked panels, unchanged, under one tab.
+        // The v1 stacked panels, unchanged, under one activity.
         Tab::Map => {
             map::ui(ui, app);
             theme::separator(ui);
             tour::ui(ui, app);
             theme::separator(ui);
             flow::ui(ui, app);
-            theme::separator(ui);
-            search::ui(ui, app);
         }
+        // Full-height panels for the two new activities (search used to live
+        // at the bottom of Map; as its own activity it gets the whole panel).
+        Tab::Explorer => explorer::ui(ui, app),
+        Tab::Search => search::ui(ui, app),
         Tab::Usage => crate::usage::ui(ui, app),
         Tab::Health => crate::health::ui(ui, app),
         Tab::Notes => crate::notes::ui(ui, app),
