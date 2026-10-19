@@ -233,8 +233,26 @@ pub fn breadcrumbs(ui: &mut egui::Ui, app: &App) {
         }
     }
 
+    // Dynamic: the joined crumb must respect the pane it lives in — a deep
+    // path collapses its middle (keeps the first segment and the file name,
+    // the two things you actually need) instead of running off the edge.
+    let budget = (ui.available_width() - 2.0 * theme::SPACE_3).max(80.0);
+    let font_id = egui::FontId::new(theme::FONT_SMALL, egui::FontFamily::Proportional);
+    let width_of = |s: &str| {
+        ui.painter()
+            .layout_no_wrap(s.to_owned(), font_id.clone(), theme::TEXT_MUTED)
+            .size()
+            .x
+    };
+    let mut crumb = parts.join(" › ");
+    if parts.len() > 3 && width_of(&crumb) > budget {
+        let first = &parts[0];
+        let last = &parts[parts.len() - 1];
+        crumb = format!("{first} › … › {last}");
+    }
+
     ui.label(
-        egui::RichText::new(parts.join(" › "))
+        egui::RichText::new(crumb)
             .size(theme::FONT_SMALL)
             .color(theme::TEXT_MUTED),
     );

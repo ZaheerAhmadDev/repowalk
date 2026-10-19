@@ -713,23 +713,27 @@ fn header(
                      (transitive affected set), not just direct neighbours",
             );
             ui.vertical(|ui| {
-                ui.label(
-                    egui::RichText::new(
-                        "what you see: one card per real file — the name in its head, \
-                         its actual symbols below, its line count; arrows = A imports B",
-                    )
-                    .size(theme::FONT_SMALL)
-                    .color(theme::TEXT_MUTED),
-                );
-                ui.label(
-                    egui::RichText::new(
-                        "gestures: hover to light the link set · wheel zoom · drag empty \
-                         space pans · drag a card or its module name to move the module \
-                         · click opens the file",
-                    )
-                    .size(theme::FONT_SMALL)
-                    .color(theme::TEXT_MUTED),
-                );
+                // Dynamic: on a narrow pane the two caption rows step aside
+                // (the hover tags carry the same words).
+                if ui.available_width() > 560.0 {
+                    ui.label(
+                        egui::RichText::new(
+                            "what you see: one card per real file — the name in its head, \
+                             its actual symbols below, its line count; arrows = A imports B",
+                        )
+                        .size(theme::FONT_SMALL)
+                        .color(theme::TEXT_MUTED),
+                    );
+                    ui.label(
+                        egui::RichText::new(
+                            "gestures: hover to light the link set · wheel zoom · drag empty \
+                             space pans · drag a card or its module name to move the module \
+                             · click opens the file",
+                        )
+                        .size(theme::FONT_SMALL)
+                        .color(theme::TEXT_MUTED),
+                    );
+                }
             });
         });
     });

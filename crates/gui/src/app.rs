@@ -896,7 +896,7 @@ impl App {
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
-            .default_width(380.0)
+            .default_width((ctx.viewport_rect().width() * 0.9).min(380.0))
             .anchor(egui::Align2::CENTER_CENTER, [0.0, -60.0])
             .show(ctx, |ui| {
                 egui::TextEdit::singleline(&mut self.palette_query)
@@ -960,10 +960,22 @@ impl App {
                     self.show_quick_open = true;
                     self.quick_open_query.clear();
                 }
-                PaletteKind::PanelUsage => self.sidebar_tab = sidebar::Tab::Usage,
-                PaletteKind::PanelHealth => self.sidebar_tab = sidebar::Tab::Health,
-                PaletteKind::PanelNotes => self.sidebar_tab = sidebar::Tab::Notes,
-                PaletteKind::PanelOnboard => self.sidebar_tab = sidebar::Tab::Onboard,
+                PaletteKind::PanelUsage => {
+                    self.sidebar_tab = sidebar::Tab::Usage;
+                    self.show_sidebar = true;
+                }
+                PaletteKind::PanelHealth => {
+                    self.sidebar_tab = sidebar::Tab::Health;
+                    self.show_sidebar = true;
+                }
+                PaletteKind::PanelNotes => {
+                    self.sidebar_tab = sidebar::Tab::Notes;
+                    self.show_sidebar = true;
+                }
+                PaletteKind::PanelOnboard => {
+                    self.sidebar_tab = sidebar::Tab::Onboard;
+                    self.show_sidebar = true;
+                }
                 PaletteKind::FocusSearch => self.search_focus = true,
                 PaletteKind::OpenRepo => self.show_open_popup = true,
                 PaletteKind::ExportPng => self.export_png(ctx),
@@ -1096,13 +1108,17 @@ impl eframe::App for App {
                 activity_bar(self, ui);
             });
 
-        // The side panel itself (Ctrl+B hides it).
+        // The side panel itself (Ctrl+B hides it). Its cap is dynamic: the
+        // panel may never claim more than ~55% of the screen, so on a small
+        // window the central pane keeps a working majority.
         if self.show_sidebar {
+            let screen_w = ctx.viewport_rect().width();
+            let max_side = (screen_w * 0.55).clamp(theme::SIDEBAR_MIN + 40.0, theme::SIDEBAR_MAX);
             egui::Panel::left("sidebar")
                 .resizable(true)
                 .default_size(theme::SIDEBAR_DEFAULT)
                 .min_size(theme::SIDEBAR_MIN)
-                .max_size(theme::SIDEBAR_MAX)
+                .max_size(max_side)
                 .show(ui, |ui| {
                     ui.add_space(theme::SPACE_1);
                     sidebar::ui(ui, self);
@@ -1184,7 +1200,14 @@ fn activity_bar(app: &mut App, ui: &mut egui::Ui) {
                 theme::SPACE_6,
             );
             let (_, resp) = ui.allocate_exact_size(size, egui::Sense::click());
-            let resp = resp.on_hover_text(format!("{name} panel"));
+            let resp = resp.on_hover_text(format!(
+                "{name} panel{}",
+                if active {
+                    " — click again to close"
+                } else {
+                    ""
+                }
+            ));
             if active {
                 let edge = egui::Rect::from_min_max(
                     resp.rect.min,
@@ -1208,7 +1231,15 @@ fn activity_bar(app: &mut App, ui: &mut egui::Ui) {
                 },
             );
             if resp.clicked() {
-                app.sidebar_tab = tab;
+                // Toggle semantics (user request): the icon of the panel that
+                // is already open closes it; clicking any other icon opens
+                // that panel. Ctrl+B stays the global show/hide shortcut.
+                if active && app.show_sidebar {
+                    app.show_sidebar = false;
+                } else {
+                    app.sidebar_tab = tab;
+                    app.show_sidebar = true;
+                }
             }
         }
     });

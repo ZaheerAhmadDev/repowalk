@@ -1058,15 +1058,19 @@ pub fn legend(ui: &mut egui::Ui, app: &mut App) {
                     ui.add_space(theme::SPACE_1);
                 }
 
-                ui.label(hint(
-                    "dots = code (symbols · files · modules) · arrows = \u{201c}uses\u{201d}",
-                ));
-                ui.label(hint("size = fan-in"));
-                ui.label(hint("dashed ? = low confidence"));
-                ui.label(hint("▢ cluster · ◆ god file"));
-                ui.label(hint(
-                    "drag nodes · drag empty space to pan · ctrl+scroll to zoom",
-                ));
+                // Dynamic: the encoding/gesture hints step aside on a narrow
+                // pane — the hover cards carry the same explanations.
+                if ui.available_width() > 640.0 {
+                    ui.label(hint(
+                        "dots = code (symbols · files · modules) · arrows = \u{201c}uses\u{201d}",
+                    ));
+                    ui.label(hint("size = fan-in"));
+                    ui.label(hint("dashed ? = low confidence"));
+                    ui.label(hint("▢ cluster · ◆ god file"));
+                    ui.label(hint(
+                        "drag nodes · drag empty space to pan · ctrl+scroll to zoom",
+                    ));
+                }
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui

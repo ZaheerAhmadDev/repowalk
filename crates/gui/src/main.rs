@@ -21,7 +21,12 @@ mod usage;
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([1280.0, 800.0]),
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([1280.0, 800.0])
+            // Dynamic layout floor: below this the shell collapses its hint
+            // rows and clamps its panels, so a small screen stays usable —
+            // but the window is never allowed to become unusably tiny.
+            .with_min_inner_size([760.0, 480.0]),
         wgpu_options: wgpu_options(),
         ..Default::default()
     };

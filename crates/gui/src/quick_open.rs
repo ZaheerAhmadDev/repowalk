@@ -61,7 +61,7 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
         .open(&mut close)
         .resizable(false)
         .collapsible(false)
-        .default_width(420.0)
+        .default_width((ui.ctx().viewport_rect().width() * 0.9).min(420.0))
         .anchor(Align2::CENTER_TOP, [0.0, 24.0])
         .show(ui.ctx(), |ui| {
             // The input keeps focus for the overlay's lifetime; Esc/Enter are

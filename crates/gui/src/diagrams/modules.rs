@@ -329,15 +329,17 @@ fn header(
             {
                 *reset = true;
             }
-            ui.label(
-                egui::RichText::new(
-                    "box = one module (a folder of the repo) · \
-                     arrows crossing boxes = imports between modules (labelled ×N) · \
-                     tree faint · ⟳ = cycle · wheel zoom · drag pan · drag box move",
-                )
-                .size(theme::FONT_SMALL)
-                .color(theme::TEXT_MUTED),
-            );
+            if ui.available_width() > 560.0 {
+                ui.label(
+                    egui::RichText::new(
+                        "box = one module (a folder of the repo) · \
+                         arrows crossing boxes = imports between modules (labelled ×N) · \
+                         tree faint · ⟳ = cycle · wheel zoom · drag pan · drag box move",
+                    )
+                    .size(theme::FONT_SMALL)
+                    .color(theme::TEXT_MUTED),
+                );
+            }
         });
     });
     theme::separator(ui);

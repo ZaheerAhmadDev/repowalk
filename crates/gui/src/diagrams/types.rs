@@ -297,23 +297,28 @@ fn header(ui: &mut egui::Ui, lay: &TypeLayout, edge_count: usize, reset: &mut bo
                 *reset = true;
             }
             ui.vertical(|ui| {
-                ui.label(
-                    egui::RichText::new(
-                        "what you see: a box = a type learned from the code · \
-                         arrows = how types relate (solid inherits · dashed impl · \
-                         field, variant labelled)",
-                    )
-                    .size(theme::FONT_SMALL)
-                    .color(theme::TEXT_MUTED),
-                );
-                ui.label(
-                    egui::RichText::new(
-                        "gestures: wheel zoom · drag empty space pans · \
-                         drag a box or its module name to move that module together",
-                    )
-                    .size(theme::FONT_SMALL)
-                    .color(theme::TEXT_MUTED),
-                );
+                // Dynamic: the explanatory captions are desktop furniture —
+                // on a narrow pane they get out of the way (the hover tags
+                // carry the same words).
+                if ui.available_width() > 560.0 {
+                    ui.label(
+                        egui::RichText::new(
+                            "what you see: a box = a type learned from the code · \
+                             arrows = how types relate (solid inherits · dashed impl · \
+                             field, variant labelled)",
+                        )
+                        .size(theme::FONT_SMALL)
+                        .color(theme::TEXT_MUTED),
+                    );
+                    ui.label(
+                        egui::RichText::new(
+                            "gestures: wheel zoom · drag empty space pans · \
+                             drag a box or its module name to move that module together",
+                        )
+                        .size(theme::FONT_SMALL)
+                        .color(theme::TEXT_MUTED),
+                    );
+                }
             });
         });
     });
