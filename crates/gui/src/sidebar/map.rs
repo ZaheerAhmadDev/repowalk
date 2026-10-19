@@ -4,7 +4,7 @@ use eframe::egui;
 use crate::app::{App, Selection};
 use crate::sidebar::{data_row, Meta};
 use crate::theme;
-use repowalk_core::metrics::{self, Metrics};
+use repowalk_core::metrics::Metrics;
 use repowalk_core::model::Index;
 
 /// Rows shown per group; the rest collapses to a "+N more" hint.
@@ -16,7 +16,11 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
     let Some(idx) = app.index.clone() else {
         return;
     };
-    let m = metrics::compute(&idx);
+    // Cached once per index (poll_progress) — Tarjan SCC every sidebar
+    // repaint is not a per-frame cost.
+    let Some(m) = app.cached_metrics.clone() else {
+        return;
+    };
 
     theme::section_header(ui, "MAP");
     let cap = (ui.available_height() * 0.5).clamp(theme::ROW_HEIGHT * 4.0, 360.0);

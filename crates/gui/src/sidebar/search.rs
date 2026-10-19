@@ -4,7 +4,6 @@ use eframe::egui;
 use crate::app::{App, Selection, SortBy};
 use crate::sidebar::{data_row, Meta};
 use crate::theme;
-use repowalk_core::metrics;
 use repowalk_core::model::Index;
 use repowalk_core::search;
 
@@ -105,7 +104,10 @@ fn symbols(ui: &mut egui::Ui, app: &mut App, idx: &Index) {
         });
     });
 
-    let m = metrics::compute(idx);
+    // Cached once per index (poll_progress) — not a per-frame recompute.
+    let Some(m) = app.cached_metrics.clone() else {
+        return;
+    };
     let mut rows: Vec<(String, usize)> = idx
         .symbols
         .iter()

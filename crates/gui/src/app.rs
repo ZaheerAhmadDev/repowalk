@@ -88,6 +88,9 @@ pub struct App {
     pub pending_close: Option<usize>,
     /// Native folder-picker thread result (Browse…; polled every frame).
     pub folder_pick: Option<std::sync::mpsc::Receiver<Option<std::path::PathBuf>>>,
+    /// Metrics computed once per adopted index (poll_progress), shared by
+    /// the toolbar strip / Map panel / Search symbol list / Repo 101.
+    pub cached_metrics: Option<Arc<repowalk_core::metrics::Metrics>>,
     pub show_open_popup: bool,
     pub search_focus: bool,
     pub list_cursor: usize,
@@ -154,6 +157,7 @@ impl App {
             palette_cursor: 0,
             pending_close: None,
             folder_pick: None,
+            cached_metrics: None,
             show_open_popup: false,
             search_focus: false,
             list_cursor: 0,
@@ -306,6 +310,11 @@ impl App {
             let mut learned: Option<usize> = None;
             if let Some(idx) = p.index.take() {
                 learned = Some(idx.files.len());
+                // Compute the repo metrics ONCE per index (Tarjan SCC + p99
+                // sorts over the whole graph is not a per-frame cost): the
+                // toolbar strip, Map panel and Search symbol list used to
+                // each recompute it every repaint of the sidebar.
+                self.cached_metrics = Some(Arc::new(repowalk_core::metrics::compute(&idx)));
                 self.index = Some(idx);
             }
             if let Some(a) = p.analysis.take() {
@@ -946,8 +955,9 @@ impl App {
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.weak(repowalk_core::VERSION);
-                if let Some(idx) = &self.index {
-                    let m = repowalk_core::metrics::compute(idx);
+                if let (Some(idx), Some(m)) = (&self.index, &self.cached_metrics) {
+                    // Cached once per index (poll_progress): this strip used
+                    // to recompute SCC + p99 sorts every single frame.
                     ui.weak(format!(
                         "{} files · {} LOC · {} cycles",
                         idx.files.len(),
