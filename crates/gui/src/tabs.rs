@@ -64,6 +64,7 @@ pub fn diagram_label(tab: DiagramsTab) -> &'static str {
         DiagramsTab::Types => "Types",
         DiagramsTab::Modules => "Modules",
         DiagramsTab::Directory => "Directory",
+        DiagramsTab::Files => "File links",
     }
 }
 

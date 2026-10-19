@@ -12,6 +12,18 @@ no AI, no network, no API keys; the `index.json` schema is unchanged.
 
 ### Added
 
+- **File-links graph — the whole code base (post-batch B5 user pass).**
+  New Diagrams sub-tab **"File links"**: one mini-view card per real file
+  (its name in the head, its top real symbols as rows, honest LOC/lang
+  footer, ★ entrypoints), one arrow per aggregated file import (`A imports
+  B`, ×N for repeats — read from the same `index.imports` the directory
+  emitter uses; external/unindexed targets are skipped, never invented).
+  Hovering a card lights it plus every file it is linked to in both
+  directions and dims the rest (the **deep** checkbox lights the whole
+  transitive import chain); clicking a card opens the real file; module
+  columns move as one when you drag a card or the module name. Only the
+  `index.json` data is used — the schema stays frozen and no CLI flags
+  change.
 - **Real VS Code icons (post-batch B5 user pass).** The vendored
   `@vscode/codicons` font (CC BY 4.0, license shipped) drives the activity bar,
   tab strips and toolbar: file-type icons on document tabs (code / markdown /
