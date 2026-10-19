@@ -74,6 +74,18 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
 
     // Text mode's open file wins; otherwise the user picks from the list.
     let mut viewed = app.open_file.clone().or_else(|| state.picked_file.clone());
+    let idx = app.index.clone();
+    // A picked file from the PREVIOUS repo must not survive a re-learn:
+    // validate it against the current index, else reset to the selector.
+    if let Some(file) = &viewed {
+        let known = idx
+            .as_ref()
+            .map(|i| i.files.iter().any(|f| f.path == *file));
+        if known == Some(false) {
+            state.picked_file = None;
+            viewed = None;
+        }
+    }
     if viewed.is_none() {
         if let Some(picked) = file_selector(ui, app, &analysis, &mut state) {
             state.picked_file = Some(picked.clone());
