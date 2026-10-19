@@ -150,6 +150,16 @@ fn open_repository(ui: &mut egui::Ui, app: &mut App) {
                                 app.start_indexing(path);
                             }
                         });
+                        ui.add_space(theme::SPACE_1);
+                        // No path typing required: one click, pick a folder
+                        // in the OS dialog, the index builds itself.
+                        if ui
+                            .button("Browse… — pick a folder")
+                            .on_hover_text("open the OS directory picker instead of typing a path")
+                            .clicked()
+                        {
+                            app.browse_folder();
+                        }
                     });
             });
         });

@@ -780,6 +780,7 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
     let Some(idx) = app.index.clone() else {
         empty_canvas(
             ui,
+            app,
             "No index yet — open a repository to build the call graph.",
         );
         return;
@@ -953,7 +954,10 @@ fn caps_banner(ui: &mut egui::Ui, state: &GraphUiState) {
         });
 }
 
-fn empty_canvas(ui: &mut egui::Ui, msg: &str) {
+/// Empty frame for "no index yet": say why it's empty AND offer the way out
+/// (browsing a folder used to exist only in Text mode — opening a repo now
+/// works from Graph mode too, browser button included).
+fn empty_canvas(ui: &mut egui::Ui, app: &mut App, msg: &str) {
     egui::Frame::new()
         .fill(theme::BG_BASE)
         .stroke(egui::Stroke::new(1.0, theme::BORDER_SUBTLE))
@@ -965,6 +969,14 @@ fn empty_canvas(ui: &mut egui::Ui, msg: &str) {
                         .size(theme::FONT_BODY)
                         .color(theme::TEXT_SECONDARY),
                 );
+                ui.add_space(theme::SPACE_3);
+                if ui
+                    .button("Browse… — pick a codebase folder")
+                    .on_hover_text("open the OS directory picker; the graph builds when it lands")
+                    .clicked()
+                {
+                    app.browse_folder();
+                }
             });
         });
 }

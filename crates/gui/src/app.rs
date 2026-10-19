@@ -86,6 +86,8 @@ pub struct App {
     pub palette_cursor: usize,
     /// Audit fix: a tab close that needs a "discard unsaved edits?" answer.
     pub pending_close: Option<usize>,
+    /// Native folder-picker thread result (Browse…; polled every frame).
+    pub folder_pick: Option<std::sync::mpsc::Receiver<Option<std::path::PathBuf>>>,
     pub show_open_popup: bool,
     pub search_focus: bool,
     pub list_cursor: usize,
@@ -151,6 +153,7 @@ impl App {
             palette_query: String::new(),
             palette_cursor: 0,
             pending_close: None,
+            folder_pick: None,
             show_open_popup: false,
             search_focus: false,
             list_cursor: 0,
@@ -264,6 +267,39 @@ impl App {
     }
 
     /// Poll the background worker; adopt the index when it lands.
+    /// Open the OS directory picker on a worker thread; the result lands in
+    /// `folder_pick` and is adopted next update. The dialog must not block
+    /// the UI thread (egui repaints while it is open — the window stays
+    /// interactive), and rfd's sync dialog is a blocking call.
+    pub fn browse_folder(&mut self) {
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            // rfd's sync pick_folder blocks — that's why it lives on its own
+            // thread and reports back over a channel.
+            let picked = rfd::FileDialog::new()
+                .set_title("Open a codebase folder")
+                .pick_folder()
+                .map(|p| p.to_path_buf());
+            let _ = tx.send(picked);
+        });
+        self.folder_pick = Some(rx);
+    }
+
+    /// Adopt a finished folder-pick: start learning the chosen directory.
+    fn adopt_folder_pick(&mut self) {
+        if let Some(rx) = &self.folder_pick {
+            if let Ok(Some(dir)) = rx.try_recv() {
+                self.folder_pick = None;
+                if dir.as_os_str().is_empty() {
+                    // Cancelled.
+                } else {
+                    self.repo_input = dir.to_string_lossy().to_string();
+                    self.start_indexing(dir);
+                }
+            }
+        }
+    }
+
     pub fn poll_progress(&mut self) {
         let mut p = self.progress.lock().unwrap();
         if p.finished {
@@ -757,10 +793,13 @@ impl App {
                 .add(egui::Button::new(
                     crate::icons::glyph(crate::icons::OPEN, 15.0).color(theme::TEXT_SECONDARY),
                 ))
-                .on_hover_text("Open a repository folder…")
+                .on_hover_text("Browse… — pick a codebase folder (or paste a path in the popup)")
                 .clicked()
             {
-                self.show_open_popup = true;
+                // The promise is now literal: the toolbar button opens the
+                // OS directory picker. Users who prefer pasting a path can
+                // still use the typed-path popup it used to open.
+                self.browse_folder();
             }
             if ui
                 .add(egui::Button::new(
@@ -1007,6 +1046,19 @@ impl App {
                 resp.request_focus();
                 let go = (resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)))
                     || ui.button("Learn").clicked();
+                ui.horizontal(|ui| {
+                    // The other way in — no pasting local paths by hand:
+                    // the native OS folder dialog.
+                    if ui
+                        .button("Browse…")
+                        .on_hover_text("pick a folder with the OS dialog")
+                        .clicked()
+                    {
+                        self.browse_folder();
+                        self.show_open_popup = false;
+                    }
+                    ui.weak("or paste a local path and hit ↵");
+                });
                 if go {
                     let path = PathBuf::from(self.repo_input.trim());
                     if !path.as_os_str().is_empty() {
@@ -1253,6 +1305,7 @@ impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         self.poll_progress();
+        self.adopt_folder_pick();
         self.handle_keyboard(&ctx);
         self.consume_screenshot_event(&ctx);
 

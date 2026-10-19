@@ -18,3 +18,4 @@ egui-wgpu = "0.36"
 petgraph = "0.8"
 repowalk-core = { path = "../core" }
 serde = { version = "1", features = ["derive"] }
+rfd = "0.15"
