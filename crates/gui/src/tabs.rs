@@ -132,90 +132,105 @@ impl App {
 /// an accent line on top, unsaved edits show a dirty dot, and every tab is one
 /// click target.
 pub fn tab_strip(ui: &mut egui::Ui, app: &mut App) {
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = theme::SPACE_1;
-        ui.set_min_height(theme::TAB_HEIGHT);
-        let tabs = app.tabs.clone();
-        for (i, tab) in tabs.iter().enumerate() {
-            let active = i == app.active_tab;
-            let dirty = tab
-                .file
-                .as_deref()
-                .is_some_and(|f| app.dirty_edits.contains(f));
-            let title = tab.title();
-            let name_color = if active {
-                theme::TEXT_PRIMARY
-            } else {
-                theme::TEXT_SECONDARY
-            };
+    // Dynamic: with more tabs than fit, the strip scrolls sideways instead of
+    // pushing tabs off the window edge where they can't be reached.
+    egui::ScrollArea::horizontal()
+        .auto_shrink(false)
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = theme::SPACE_1;
+                ui.set_min_height(theme::TAB_HEIGHT);
+                let tabs = app.tabs.clone();
+                for (i, tab) in tabs.iter().enumerate() {
+                    let active = i == app.active_tab;
+                    let dirty = tab
+                        .file
+                        .as_deref()
+                        .is_some_and(|f| app.dirty_edits.contains(f));
+                    let title = tab.title();
+                    let name_color = if active {
+                        theme::TEXT_PRIMARY
+                    } else {
+                        theme::TEXT_SECONDARY
+                    };
 
-            // File-type icon, then the title, then the close affordance —
-            // dirty shows the filled dot (VS Code swaps × ↔ dot), not a
-            // "*" suffix. Every part is its own hover+click target.
-            let icon = match &tab.file {
-                Some(f) => crate::icons::file_icon(f),
-                None => match tab.mode {
-                    crate::app::Mode::Graph => crate::icons::GRAPH,
-                    crate::app::Mode::Flow => crate::icons::ARROW_RIGHT,
-                    crate::app::Mode::Diagrams => crate::icons::BEAKER,
-                    crate::app::Mode::Text => crate::icons::FILE,
-                },
-            };
-            ui.label(crate::icons::glyph(icon, 13.0).color(if active {
-                theme::ACCENT
-            } else {
-                theme::TEXT_MUTED
-            }));
+                    // File-type icon, then the title, then the close affordance —
+                    // dirty shows the filled dot (VS Code swaps × ↔ dot), not a
+                    // "*" suffix. Every part is its own hover+click target.
+                    let icon = match &tab.file {
+                        Some(f) => crate::icons::file_icon(f),
+                        None => match tab.mode {
+                            crate::app::Mode::Graph => crate::icons::GRAPH,
+                            crate::app::Mode::Flow => crate::icons::ARROW_RIGHT,
+                            crate::app::Mode::Diagrams => crate::icons::BEAKER,
+                            crate::app::Mode::Text => crate::icons::FILE,
+                        },
+                    };
+                    ui.label(crate::icons::glyph(icon, 13.0).color(if active {
+                        theme::ACCENT
+                    } else {
+                        theme::TEXT_MUTED
+                    }));
 
-            let text = if active {
-                egui::RichText::new(&title).color(name_color).strong()
-            } else {
-                egui::RichText::new(&title).color(name_color)
-            };
-            let resp = ui.add(egui::Button::new(text).frame(false)).on_hover_text(
-                match (&tab.file, dirty) {
-                    (Some(f), true) => format!("{f} (unsaved edits)"),
-                    (Some(f), false) => f.clone(),
-                    (None, _) => title.clone(),
-                },
-            );
-            if resp.clicked() {
-                app.activate_tab(i);
-            }
+                    let text = if active {
+                        egui::RichText::new(&title).color(name_color).strong()
+                    } else {
+                        egui::RichText::new(&title).color(name_color)
+                    };
+                    let resp = ui.add(egui::Button::new(text).frame(false)).on_hover_text(
+                        match (&tab.file, dirty) {
+                            (Some(f), true) => format!("{f} (unsaved edits)"),
+                            (Some(f), false) => f.clone(),
+                            (None, _) => title.clone(),
+                        },
+                    );
+                    if resp.clicked() {
+                        app.activate_tab(i);
+                    }
+                    // Keep the active tab reachable: scroll it into view when it
+                    // changes (scroll_to_me is a no-op when it's already visible).
+                    if active {
+                        resp.scroll_to_me(Some(egui::Align::Center));
+                    }
 
-            if tab.file.is_some() || dirty {
-                let (mark, hover) = if dirty {
-                    (
-                        crate::icons::CIRCLE_FILLED,
-                        format!("{title} — unsaved edits"),
-                    )
-                } else {
-                    (crate::icons::CLOSE, format!("Close {title}"))
-                };
-                let close = ui
-                    .add(
-                        egui::Button::new(crate::icons::glyph(mark, 11.0).color(if dirty {
-                            theme::ACCENT
+                    if tab.file.is_some() || dirty {
+                        let (mark, hover) = if dirty {
+                            (
+                                crate::icons::CIRCLE_FILLED,
+                                format!("{title} — unsaved edits"),
+                            )
                         } else {
-                            theme::TEXT_MUTED
-                        }))
-                        .frame(false),
-                    )
-                    .on_hover_text(hover);
-                if close.clicked() {
-                    app.close_tab(i);
-                }
-            }
+                            (crate::icons::CLOSE, format!("Close {title}"))
+                        };
+                        let close = ui
+                            .add(
+                                egui::Button::new(crate::icons::glyph(mark, 11.0).color(
+                                    if dirty {
+                                        theme::ACCENT
+                                    } else {
+                                        theme::TEXT_MUTED
+                                    },
+                                ))
+                                .frame(false),
+                            )
+                            .on_hover_text(hover);
+                        if close.clicked() {
+                            app.close_tab(i);
+                        }
+                    }
 
-            if active {
-                let rect = resp.rect;
-                let top =
-                    egui::Rect::from_min_max(rect.min, egui::pos2(rect.max.x, rect.min.y + 2.0));
-                ui.painter()
-                    .rect_filled(top, egui::CornerRadius::ZERO, theme::ACCENT);
-            }
-        }
-    });
+                    if active {
+                        let rect = resp.rect;
+                        let top = egui::Rect::from_min_max(
+                            rect.min,
+                            egui::pos2(rect.max.x, rect.min.y + 2.0),
+                        );
+                        ui.painter()
+                            .rect_filled(top, egui::CornerRadius::ZERO, theme::ACCENT);
+                    }
+                }
+            });
+        });
     theme::separator(ui);
 }
 
