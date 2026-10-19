@@ -3,40 +3,27 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="repowalk v2.0.0 — the complete understanding suite: learn, inventory, control flow, connections, structure, usage and export.">
+<meta name="color-scheme" content="light dark">
 <title>repowalk v2 — complete understanding suite</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
-<body>
-<header>
-  <nav>
-    <h1><a href="index.html">repowalk</a></h1>
-    <ul>
-      <li><a href="v2.html">v2 tour</a></li>
-      <li><a href="tutorial.html">Add HTML/CSS/JS</a></li>
-      <li><a href="https://github.com/ZaheerAhmadDev/repowalk">GitHub</a></li>
-    </ul>
-  </nav>
-</header>
-<main>
-  <section class="hero">
-    <h2>Open any codebase. Understand all of it.</h2>
-    <p>v2 is the <strong>complete understanding suite</strong>: repowalk learns the repo once, then answers the whole set of questions in seven moves — <strong>learn &rarr; inventory &rarr; control flow &rarr; connections &rarr; structure &rarr; usage &rarr; export</strong>. Still pure static analysis: no AI, no network, no keys.</p>
-    <p>This page is honest about what runs today. Each group below carries a status line; nothing is advertised that you cannot point at in the code at this release (<code>v2.0.0</code>, 2026-10-16).</p>
-  </section>
+<body class="site">
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="shell">
+  <aside class="sidebar">
+    <a class="brand" href="index.html">
+      <span class="brand-mark" aria-hidden="true">rw</span>
+      <span>repowalk</span>
+    </a>
+    <p class="tagline">The v2 complete understanding suite — seven moves over one model of the code.</p>
 
-  <section class="tutorial">
-    <h2>The suite at a glance</h2>
-    <ol>
-      <li><strong>Learn</strong> — index the repo and cache the analysis (<a href="../docs/howto-learn.md">how-to</a>).</li>
-      <li><strong>Inventory</strong> — LOC, languages, entrypoints, complexity, hotspots, god files, cycles.</li>
-      <li><strong>Control flow</strong> — a CFG per function: branches, loops, match arms, cyclomatic badge (<a href="../docs/howto-control-flow.md">how-to</a>).</li>
-      <li><strong>Connections</strong> — the call/import graph with real names, clusters and filters (<a href="../docs/howto-graph.md">how-to</a>).</li>
-      <li><strong>Structure</strong> — type diagrams (structs/enums/traits/classes) and the module DAG (<a href="../docs/howto-structure.md">how-to</a>).</li>
-      <li><strong>Usage</strong> — per-file variables with read/write counts and highlight-all-uses (<a href="../docs/howto-variables.md">how-to</a>), plus find-all-references (<a href="../docs/howto-refs.md">how-to</a>).</li>
-      <li><strong>Export</strong> — Mermaid / DOT / SVG and a self-contained Markdown report (<a href="../docs/howto-export.md">how-to</a>).</li>
-      <li><strong>Health, Notes and 101</strong> — guardrail findings, bookmarks that travel with the checkout, and a thirty-second orientation card (<a href="../docs/howto-panels.md">how-to</a>).</li>
-    </ol>
-  </section>
+    <nav aria-label="Site sections">
+      <p class="nav-group">About the project</p>
+      <a class="nav-link" href="index.html#about">What is repowalk?</a>
+      <a class="nav-link" href="index.html#why">Why it exists</a>
+      <a class="nav-link" href="index.html#features">Features</a>
+      <a class="nav-link" href="index.html#how">How it works</a>
 
   <section class="features">
     <article>
@@ -88,14 +75,104 @@
     </article>
   </section>
 
-  <section class="tutorial">
-    <h2>Deliberately not in v2, and the honest limits</h2>
-    <p><strong>Non-goals</strong> (from <a href="../docs/v2-plan.md">docs/v2-plan.md</a>): no AI or LLM summaries, no refactoring or automatic edits, no git-diff / watch mode, no Tauri or web port, and no network use at all &mdash; the binary contains no HTTP client and no telemetry.</p>
-    <p><strong>Known limits:</strong> an edge the analyzer cannot resolve is drawn dashed with a <code>?</code>, and a cross-file reference is listed as <em>name-only</em> rather than presented as confirmed; a graph stops at 400 nodes and says what it hid instead of drawing a blank canvas; and the idle-UI cost is the one budget not independently measured headlessly &mdash; see <a href="../board/docs/verification-v2.md">the verification report</a> for the measurement a human with a display should run.</p>
-    <p>The feature list is <a href="../docs/v2-plan.md">F1&ndash;F15</a>; the batch/ownership map is in the <a href="../docs/v2-execution-plan.md">execution plan</a>; the full walkthrough is in the <a href="../docs/demo.md">demo runbook</a>.</p>
-  </section>
-</main>
-<footer><p>&copy; 2026 repowalk contributors &mdash; Apache-2.0</p></footer>
-<script src="js/app.js"></script>
+      <p class="nav-group">Release notes</p>
+      <a class="nav-link" href="index.html#releases">v2.0.0</a>
+      <a class="nav-link" href="index.html#v1">v0.1.0</a>
+      <a class="nav-link" href="index.html#limits">Known limits</a>
+
+      <p class="nav-group">Links</p>
+      <a class="nav-link is-active" href="v2.html">v2 tour</a>
+      <a class="nav-link" href="tutorial.html">Web tutorial</a>
+      <a class="nav-link" href="https://github.com/ZaheerAhmadDev/repowalk">GitHub</a>
+      <a class="nav-link" href="https://github.com/ZaheerAhmadDev/repowalk/releases">Releases</a>
+    </nav>
+
+    <p class="sidebar-note">Every status line on this page is traceable to code at this release (<code>v2.0.0</code>, 2026-10-16).</p>
+  </aside>
+
+  <main class="content" id="main">
+
+    <header class="page-hero">
+      <p class="eyebrow">v2 · complete understanding suite</p>
+      <h1>Open any codebase. Understand all of it.</h1>
+      <p class="lede">v2 learns the repo once, then answers the whole set of questions in seven moves — <strong>learn → inventory → control flow → connections → structure → usage → export</strong>. Still pure static analysis: no AI, no network, no keys.</p>
+    </header>
+
+    <section class="section prose" id="glance">
+      <h2>The suite at a glance</h2>
+      <ol class="steps">
+        <li><strong>Learn</strong> — index the repo and cache the analysis.</li>
+        <li><strong>Inventory</strong> — LOC, languages, entrypoints, complexity, hotspots, god files, cycles.</li>
+        <li><strong>Control flow</strong> — a CFG per function: branches, loops, match arms, cyclomatic badge.</li>
+        <li><strong>Connections</strong> — the call/import graph with real names, clusters and filters.</li>
+        <li><strong>Structure</strong> — type diagrams (structs/enums/traits/classes) and the module DAG.</li>
+        <li><strong>Usage</strong> — per-file variables with read/write counts and highlight-all-uses, plus find-all-references.</li>
+        <li><strong>Export</strong> — Mermaid / DOT / SVG and a self-contained Markdown report.</li>
+        <li><strong>Health, Notes &amp; 101</strong> — guardrail findings, bookmarks that travel with the checkout, and a thirty-second orientation card.</li>
+      </ol>
+    </section>
+
+    <section class="section" id="capabilities">
+      <h2>Capabilities in detail</h2>
+      <p class="section-intro">Engine and surface, with what shipped.</p>
+      <div class="card-grid">
+        <article class="card">
+          <h3>Learn</h3>
+          <p>Walk → parse → resolve → analyze → cache, with per-phase counts and a per-file incremental cache so a re-learn only re-parses what changed.</p>
+          <p class="feature-note">Working — <code>learn.rs</code> plus the CLI; the Repo 101 panel shipped.</p>
+        </article>
+        <article class="card">
+          <h3>Inventory</h3>
+          <p>Cyclomatic complexity and max nesting per function, per-file fan-in/out, hotspot ranking, god files and cycles.</p>
+          <p class="feature-note">Working — <code>complexity.rs</code> / <code>metrics.rs</code>; Health v2 panel shipped.</p>
+        </article>
+        <article class="card">
+          <h3>Control flow</h3>
+          <p>Per-function CFG with Entry/Block/Branch/Loop/Match/Call/Return/Exit nodes and <code>normal|true|false|back</code> edges, plus a cyclomatic badge.</p>
+          <p class="feature-note">Working — Rust/Python/TS CFGs pass their goldens; Diagrams → Control flow shipped.</p>
+        </article>
+        <article class="card">
+          <h3>Connections</h3>
+          <p>Graph v2: readable real symbol names, clustering by module, layout modes, filters, focus+context dimming, and honest dashed <code>?</code> edges for unresolved calls.</p>
+          <p class="feature-note">Working — real-name labels with zoom level-of-detail, clustering, and an “exact only” filter shipped.</p>
+        </article>
+        <article class="card">
+          <h3>Structure</h3>
+          <p>Type diagram (struct/enum/trait/class with fields, methods and containment/impl/inheritance edges) and the modules DAG (crate/dir/module with import edges, cycles tinted).</p>
+          <p class="feature-note">Working — <code>types.rs</code>, <code>modules.rs</code>; Types and Modules diagram views shipped.</p>
+        </article>
+        <article class="card">
+          <h3>Usage</h3>
+          <p>Per-file variable table — name, kind, declared type, declaration line, scope, <strong>reads / writes / uses</strong>, first/last use, enclosing symbol — and find-all-references for any symbol.</p>
+          <p class="feature-note">Working — variables panel + highlight-all-uses, refs panel + jump-to-source shipped.</p>
+        </article>
+        <article class="card">
+          <h3>Export</h3>
+          <p>Mermaid, DOT/Graphviz and hand-rolled SVG for every diagram, plus a generated architecture report in self-contained Markdown; PNG stays.</p>
+          <p class="feature-note">Working — one shared emitter model used by both GUI and CLI, so outputs cannot drift.</p>
+        </article>
+        <article class="card">
+          <h3>Guardrails (F15)</h3>
+          <p>A small <code>rules.json</code> is checked and appended to the report; an <code>Error</code> finding fails <code>repowalk report</code> with a nonzero exit, so it drops into CI.</p>
+          <p class="feature-note">Working — <code>rules.rs</code> with the four rule kinds (forbid imports, cycles, max cyclomatic, max file LOC).</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section prose" id="not-in-v2">
+      <h2>Deliberately not in v2, and the honest limits</h2>
+      <p><strong>Non-goals:</strong> no AI or LLM summaries, no refactoring or automatic edits, no git-diff / watch mode, no Tauri or web port, and no network use at all — the binary contains no HTTP client and no telemetry.</p>
+      <p><strong>Known limits:</strong> an edge the analyzer cannot resolve is drawn dashed with a <code>?</code>, and a cross-file reference is listed as <em>name-only</em> rather than presented as confirmed; a graph stops at 400 nodes and says what it hid instead of drawing a blank canvas.</p>
+      <p>The full feature list is F1–F15; see the repository <code>docs/</code> for the plan, the execution map and the demo runbook.</p>
+      <p><a href="index.html#releases">Back to the release notes →</a></p>
+    </section>
+
+    <footer class="site-footer">
+      <p>repowalk — offline codebase understanding. Licensed under Apache-2.0.</p>
+      <p>© 2026 repowalk contributors · <a href="https://github.com/ZaheerAhmadDev/repowalk">GitHub</a></p>
+    </footer>
+
+  </main>
+</div>
 </body>
 </html>
