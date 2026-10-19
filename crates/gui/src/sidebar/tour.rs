@@ -25,7 +25,7 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
         return;
     }
 
-    let cap = (ui.available_height() * 0.45).clamp(theme::ROW_HEIGHT * 3.0, 260.0);
+    let cap = ui.available_height().clamp(theme::ROW_HEIGHT * 3.0, 320.0);
     egui::ScrollArea::vertical()
         .id_salt("sidebar-tour")
         .max_height(cap)

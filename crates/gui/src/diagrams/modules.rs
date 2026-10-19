@@ -374,7 +374,14 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
     header(
         ui,
         &lay,
-        analysis.module_edges.len(),
+        // Cap banner compares against IMPORT edges only — the canvas draws
+        // `.filter(Import).take(EDGE_CAP)`, so counting tree edges too used
+        // to announce a false "capped at N imports".
+        analysis
+            .module_edges
+            .iter()
+            .filter(|e| e.kind == ModuleEdgeKind::Import)
+            .count(),
         &cycles,
         &mut reset_requested,
     );

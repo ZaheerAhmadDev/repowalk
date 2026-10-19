@@ -23,7 +23,10 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
     };
 
     theme::section_header(ui, "MAP");
-    let cap = (ui.available_height() * 0.5).clamp(theme::ROW_HEIGHT * 4.0, 360.0);
+    // Per-section cap stays as a soft RL cap, but the WHOLE stack scrolls
+    // (sidebar/mod.rs wraps Map+Tour+Flow in one scroll), so sections stay
+    // reachable on short windows instead of being clipped.
+    let cap = ui.available_height().clamp(theme::ROW_HEIGHT * 4.0, 420.0);
     egui::ScrollArea::vertical()
         .id_salt("sidebar-map")
         .max_height(cap)
@@ -34,7 +37,7 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
             top_files(ui, app, &m);
             theme::separator(ui);
             theme::section_header(ui, "Hottest symbols");
-            hottest(ui, app, &m);
+            hottest(ui, app, &idx, &m);
             theme::separator(ui);
             health(ui, app, &idx, &m);
         });
@@ -122,7 +125,7 @@ fn top_files(ui: &mut egui::Ui, app: &mut App, m: &Metrics) {
 }
 
 /// Highest fan-in symbols (call-count hotspots), clickable into the editor.
-fn hottest(ui: &mut egui::Ui, app: &mut App, m: &Metrics) {
+fn hottest(ui: &mut egui::Ui, app: &mut App, idx: &Index, m: &Metrics) {
     if m.fan_in.is_empty() {
         muted(ui, "no call edges");
         return;
@@ -131,6 +134,14 @@ fn hottest(ui: &mut egui::Ui, app: &mut App, m: &Metrics) {
         let id = sym.clone();
         let selected = app.selection.as_ref() == Some(&Selection::Symbol(id.clone()));
         let callers = format!("{n} caller{}", if *n == 1 { "" } else { "s" });
+        let marker = if idx.symbols.iter().any(|s| s.id == *sym) {
+            ""
+        } else {
+            // Unresolved hotspot: fan-in counts RAW callee names from
+            // un-resolved edges; such a row used to click-select an id that
+            // matches no symbol — a dead click. Marked "not indexed".
+            " · not fully indexed"
+        };
         let resp = data_row(
             ui,
             selected,
@@ -139,8 +150,28 @@ fn hottest(ui: &mut egui::Ui, app: &mut App, m: &Metrics) {
             Some(Meta::muted(&callers)),
         );
         if resp.clicked() {
-            app.select(Selection::Symbol(id));
+            // No exact symbol id? Fall back to a unique NAME match so raw
+            // callee names (unresolved edges) still navigate to the real
+            // definition; a genuinely unknown name says so instead of
+            // silently storing a dead selection.
+            if idx.symbols.iter().any(|s| s.id == *sym) {
+                app.select(Selection::Symbol(id));
+            } else {
+                let by_name: Vec<_> = idx
+                    .symbols
+                    .iter()
+                    .filter(|s| s.name == base_name(sym))
+                    .collect();
+                if let [only] = by_name.as_slice() {
+                    app.select(Selection::Symbol(only.id.clone()));
+                } else {
+                    app.status = format!(
+                        "{sym} is referenced by unresolved call edges — no single indexed symbol maps to it"
+                    );
+                }
+            }
         }
+        resp.on_hover_text(format!("{callers}{marker}"));
     }
     more(ui, m.fan_in.len(), ROWS_PER_GROUP, "symbols");
 }

@@ -154,7 +154,9 @@ fn contains_open(app: &App, dir: &DirNode) -> bool {
 
 fn file_ui(ui: &mut egui::Ui, app: &mut App, row: &FileRow, depth: usize) {
     let path = row.path.clone();
-    ui.add_space((depth as f32 - 1.0) * 12.0);
+    // Root-level rows (depth 0) must not pull the cursor UP by 12px — a
+    // negative add_space advanced/overlapped rows. Clamp at zero.
+    ui.add_space((((depth as f32) - 1.0).max(0.0)) * 12.0);
     let loc = row.lines.to_string();
     let resp = crate::sidebar::data_row(
         ui,
