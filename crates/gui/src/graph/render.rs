@@ -567,6 +567,25 @@ struct RawInfo {
     god: bool,
 }
 
+/// Call-edge callers are keyed by the enclosing NAME in the index; the graph
+/// must key nodes on canonical symbol ids. Without this, a name-keyed caller
+/// that is also a live symbol drew as a second GHOST node ("(root)" module) —
+/// the same function appearing twice. Mirrors core::flow::CallGraph::caller_key:
+/// ids round-trip; a unique same-name symbol whose range contains the call line
+/// wins; anything ambiguous stays raw (honest partial resolution, no guessing).
+fn canonical_caller(sym_of: &BTreeMap<&str, &Symbol>, raw: &str, line: usize) -> String {
+    if sym_of.contains_key(raw) {
+        return raw.to_owned();
+    }
+    let mut cands = sym_of
+        .values()
+        .filter(|s| s.name == raw && s.start_line <= line && line <= s.end_line);
+    match (cands.next(), cands.next()) {
+        (Some(hit), None) => hit.id.clone(),
+        _ => raw.to_owned(),
+    }
+}
+
 fn raw_info(
     raw: &str,
     sym_of: &BTreeMap<&str, &Symbol>,
@@ -672,14 +691,15 @@ pub fn build_graph(idx: &Index, p: &BuildParams) -> BuiltGraph {
         if !p.confidence.keeps(e.confidence) {
             continue;
         }
-        let a_info = raw_info(&e.caller, &sym_of, &entry_files, p.god_files);
+        let caller = canonical_caller(&sym_of, &e.caller, e.line);
+        let a_info = raw_info(&caller, &sym_of, &entry_files, p.god_files);
         let b_info = raw_info(&e.callee, &sym_of, &entry_files, p.god_files);
         if let Some(m) = p.module {
             if a_info.module != m || b_info.module != m {
                 continue;
             }
         }
-        let a = ensure_node(&e.caller, &a_info, p.collapsed, &mut meta, &mut members);
+        let a = ensure_node(&caller, &a_info, p.collapsed, &mut meta, &mut members);
         let b = ensure_node(&e.callee, &b_info, p.collapsed, &mut meta, &mut members);
         if a == b {
             continue;
@@ -853,6 +873,7 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
             // canvas (pan/zoom), so a scroller would double-handle wheel
             // events and clip nothing that the viewer doesn't clip itself.
             let mut toggle_cluster: Option<String> = None;
+            let mut relayed_click: Option<String> = None;
             if let Some((_, g)) = app.graph_state.as_mut() {
                 let mut interacted = false;
                 let response = egui_graphs::GraphView::<
@@ -881,6 +902,14 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
                             if let Some(n) = g.node(*node) {
                                 if n.payload().is_cluster {
                                     toggle_cluster = Some(n.payload().module.clone());
+                                } else {
+                                    // Relay GENUINE click events to the
+                                    // interaction layer (`handle` runs one
+                                    // frame ahead of the widget). The crate's
+                                    // persistent node selection used to be
+                                    // the input, which re-fired every frame
+                                    // and broke the A→B trace picker.
+                                    relayed_click = Some(n.payload().id.clone());
                                 }
                             }
                         }
@@ -930,6 +959,12 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
                     st.collapsed.insert(module);
                 }
                 save_state(ui.ctx(), st);
+            }
+            if let Some(id) = relayed_click {
+                // Handed to `interaction::handle` next frame (it runs before
+                // the widget, so this frame's click lands one frame later).
+                ui.ctx()
+                    .data_mut(|d| d.insert_temp(egui::Id::new("graph-node-clicked"), id));
             }
         });
 }
@@ -1098,8 +1133,16 @@ pub fn legend(ui: &mut egui::Ui, app: &mut App) {
                         )
                         .clicked()
                     {
-                        app.trace_pick = TracePick::PickA;
-                        app.pending_trace_a = None;
+                        // Toggle, not unconditional restart: pressing the
+                        // button mid-pick used to wipe the pending endpoint
+                        // with no feedback.
+                        if !matches!(app.trace_pick, TracePick::None) {
+                            app.trace_pick = TracePick::None;
+                            app.pending_trace_a = None;
+                        } else {
+                            app.trace_pick = TracePick::PickA;
+                            app.pending_trace_a = None;
+                        }
                     }
                     legend_toggle(ui, &mut app.edge_imports, "imports");
                     legend_toggle(ui, &mut app.edge_calls, "calls");

@@ -620,22 +620,29 @@ impl App {
         let Some(idx) = &self.index else {
             return Vec::new();
         };
+        // While a search query is live, the j/k/Enter cursor walks THE
+        // RESULT LIST — the one the panel draws — not "tour files, then
+        // hits"; cursor 0 used to select tour[0] no matter what you typed,
+        // and file-path hits were pushed as symbol ids that never opened.
+        if !self.query.trim().is_empty() {
+            return repowalk_core::search::search(idx, &self.query, 10)
+                .into_iter()
+                .map(|h| match idx.symbols.iter().find(|s| s.id == h.target) {
+                    Some(_) => Selection::Symbol(h.target.clone()),
+                    None => Selection::File(h.path.clone()),
+                })
+                .collect();
+        }
         let mut entries: Vec<Selection> = repowalk_core::tour::tour(idx, 20)
             .into_iter()
             .map(|t| Selection::File(t.path))
             .collect();
-        if !self.query.trim().is_empty() {
-            for h in repowalk_core::search::search(idx, &self.query, 10) {
-                entries.push(Selection::Symbol(h.target));
-            }
-        } else {
-            entries.extend(
-                idx.symbols
-                    .iter()
-                    .take(30)
-                    .map(|s| Selection::Symbol(s.id.clone())),
-            );
-        }
+        entries.extend(
+            idx.symbols
+                .iter()
+                .take(30)
+                .map(|s| Selection::Symbol(s.id.clone())),
+        );
         entries
     }
 
