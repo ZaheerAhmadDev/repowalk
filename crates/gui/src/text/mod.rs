@@ -70,11 +70,15 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
                 FilesDock::Right => eframe::egui::Panel::right("text-files-r"),
                 FilesDock::Float => unreachable!("handled above"),
             };
+            // Same dynamic cap as the main sidebar: a narrow screen keeps the
+            // majority of the window for the document itself.
+            let max_files = (ui.ctx().viewport_rect().width() * 0.45)
+                .clamp(theme::SIDEBAR_MIN, theme::SIDEBAR_MAX);
             panel
                 .resizable(true)
                 .default_size(240.0)
                 .min_size(180.0)
-                .max_size(theme::SIDEBAR_MAX)
+                .max_size(max_files)
                 .show(ui, |ui| {
                     eframe::egui::Frame::new()
                         .inner_margin(egui::Margin::symmetric(

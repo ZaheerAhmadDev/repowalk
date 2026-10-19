@@ -841,7 +841,16 @@ impl App {
                     self.error = None;
                 }
             } else if !self.status.is_empty() {
-                ui.colored_label(theme::TEXT_SECONDARY, &self.status);
+                // Dynamic: a long status truncates in its leftover width
+                // instead of pushing the "?"-shortcuts affordance off the
+                // edge; the full text stays on hover.
+                ui.add(
+                    egui::Label::new(
+                        egui::RichText::new(&self.status).color(theme::TEXT_SECONDARY),
+                    )
+                    .truncate(),
+                )
+                .on_hover_text(&self.status);
             } else {
                 ui.colored_label(theme::TEXT_MUTED, "ready");
             }
