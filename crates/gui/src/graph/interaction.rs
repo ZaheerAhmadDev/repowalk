@@ -397,6 +397,25 @@ pub fn handle(ui: &mut egui::Ui, app: &mut App) {
             }
         }
 
+        // Idle graph — no focus, no search: clear the crate-side selection
+        // too. Esc used to clear only app.selection while the crate kept the
+        // node selected, so the selection ring + dim snapped straight back
+        // the next frame ("Esc cleaves selection" broken in Graph mode).
+        if keep.is_none() && !search_active {
+            let nodes: Vec<_> = g.g().node_indices().collect();
+            for i in nodes {
+                if let Some(n) = g.g_mut().node_weight_mut(i) {
+                    n.set_selected(false);
+                }
+            }
+            let edges: Vec<_> = g.g().edge_indices().collect();
+            for i in edges {
+                if let Some(e) = g.g_mut().edge_weight_mut(i) {
+                    e.set_selected(false);
+                }
+            }
+        }
+
         // Edge dim pass (above: nodes). While a trace is resolved, edges on
         // the path light up accent; everything else fades.
         if !trace_edges.is_empty() {
