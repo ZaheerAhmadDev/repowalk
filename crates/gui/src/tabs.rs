@@ -119,6 +119,17 @@ impl App {
     /// Close a tab; the neighbour tab (or the last remaining one) becomes
     /// active, so the reader never lands on an empty strip.
     pub fn close_tab(&mut self, idx: usize) {
+        if self.tabs.is_empty() {
+            return;
+        }
+        if self.tabs.len() == 1 {
+            // The strip never empties: closing the last tab restores the
+            // default repository view the app starts with (this used to
+            // index an empty Vec and panic).
+            self.tabs[0] = TabView::default();
+            self.activate_tab(0);
+            return;
+        }
         if idx >= self.tabs.len() {
             return;
         }
@@ -215,7 +226,8 @@ pub fn tab_strip(ui: &mut egui::Ui, app: &mut App) {
                             )
                             .on_hover_text(hover);
                         if close.clicked() {
-                            app.close_tab(i);
+                            // Dirty tabs must survive the trip: ask first.
+                            app.request_close_tab(i);
                         }
                     }
 

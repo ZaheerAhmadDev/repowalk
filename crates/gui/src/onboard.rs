@@ -317,9 +317,11 @@ fn where_risk(ui: &mut egui::Ui, app: &mut App, idx: &Index, analysis: Option<&A
             Some(Meta::muted(&format!("L{}", v.decl_line))),
         );
         if resp.clicked() {
+            // One navigation path: opens a tab too, so the tab strip
+            // follows the editor instead of showing the previous file.
             let file = v.file.clone();
             let line = v.decl_line;
-            app.open_file_with(file, Some(line));
+            app.goto_file(file, Some(line), None);
         }
         resp.on_hover_text(format!("{}:{}:{}", v.file, v.decl_line, v.name));
     }
@@ -355,7 +357,7 @@ fn where_risk(ui: &mut egui::Ui, app: &mut App, idx: &Index, analysis: Option<&A
             if let Some(first) = cyc.first() {
                 let (file, line) = complexity::parse_symbol_id(first);
                 if idx.files.iter().any(|f| f.path == file) {
-                    app.open_file_with(file, (line > 0).then_some(line));
+                    app.goto_file(file, (line > 0).then_some(line), None);
                 }
             }
         }

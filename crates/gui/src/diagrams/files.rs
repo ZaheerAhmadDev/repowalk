@@ -380,7 +380,8 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
                 ui.allocate_exact_size(ui.available_size(), egui::Sense::click_and_drag());
             let painter = ui.painter_at(rect);
             let origin = rect.min;
-            let mut state = interact::CanvasState::load(ui.ctx(), egui::Id::new(STATE_ID));
+            let key = interact::canvas_key(STATE_ID, app.index.as_deref());
+            let mut state = interact::CanvasState::load(ui.ctx(), key);
             if reset_requested {
                 state.reset();
             }
@@ -430,9 +431,39 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
                 })
                 .collect();
 
-            // What the pointer lights up: hover overrides selection.
+            // What the pointer lights up: hover overrides selection. A
+            // module header is not a file: hovering (or selecting) it lights
+            // the module's whole card set. It used to feed the "hdr:…" dis-
+            // play id straight into focus_sets, which matches no link — so
+            // hovering a module name dimmed the ENTIRE canvas, the module's
+            // own cards included.
             let focus_now = hovered.clone().or_else(|| selected.clone());
-            let focus = focus_sets(focus_now.as_deref(), &link_list, deep);
+            let focus = match focus_now
+                .as_deref()
+                .and_then(|id| id.strip_prefix("hdr:"))
+                .map(str::to_owned)
+            {
+                Some(group) => {
+                    let lit: BTreeSet<String> = lay
+                        .cards
+                        .iter()
+                        .filter(|c| c.group == group)
+                        .map(|c| c.id.clone())
+                        .collect();
+                    let mut lit_links = BTreeSet::new();
+                    for l in &link_list {
+                        if lit.contains(&l.from) && lit.contains(&l.to) {
+                            lit_links.insert((l.from.clone(), l.to.clone()));
+                        }
+                    }
+                    Focus {
+                        lit,
+                        lit_links,
+                        ..Focus::default()
+                    }
+                }
+                None => focus_sets(focus_now.as_deref(), &link_list, deep),
+            };
             let is_lit = |id: &str| focus.lit.contains(id);
 
             // Module headers ride their group; dim when no card of the module
@@ -604,6 +635,11 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
             if let Some(id) = actions.clicked {
                 if lay.cards.iter().any(|c| c.id == id) {
                     app.select(Selection::File(id));
+                    // The selection used to open the file "behind" the
+                    // diagrams pane — visible only as a tab-title flicker.
+                    // The gesture promises "click opens the file": switch
+                    // the reading view along with it.
+                    app.set_mode(crate::app::Mode::Text);
                 }
             }
 
@@ -655,7 +691,7 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
                 }
             }
 
-            state.store(ui.ctx(), egui::Id::new(STATE_ID));
+            state.store(ui.ctx(), key);
         });
 }
 

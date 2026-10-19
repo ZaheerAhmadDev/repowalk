@@ -248,7 +248,7 @@ pub(crate) fn ui(ui: &mut egui::Ui, app: &mut crate::app::App) {
     // No ScrollArea (B5-02): pan — dragging empty canvas — replaced scrolling
     // inside the canvas, so the plain wheel is free to zoom about the cursor.
     let (resp, painter) = ui.allocate_painter(ui.available_size(), egui::Sense::click_and_drag());
-    let state_id = egui::Id::new(STATE_ID);
+    let state_id = interact::canvas_key(STATE_ID, app.index.as_deref());
     let mut state = interact::CanvasState::load(ui.ctx(), state_id);
     if reset_requested {
         state.reset();

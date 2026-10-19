@@ -401,7 +401,9 @@ fn site_row(ui: &mut egui::Ui, app: &mut App, file: &str, index: usize, row: &Re
     if resp.clicked() {
         // Jump to the site but keep `app.selection` on the target, so the
         // references stay up and one selection still drives every pane.
-        app.open_file_with(site.file.clone(), Some(site.line));
+        // The tab strip now follows the navigation (goto_file), so it no
+        // longer disagrees with the editor.
+        app.goto_file(site.file.clone(), Some(site.line), None);
     }
     let hover = if row.name_only {
         format!(

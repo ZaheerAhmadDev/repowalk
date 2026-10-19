@@ -399,7 +399,8 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
                 ui.allocate_exact_size(ui.available_size(), egui::Sense::click_and_drag());
             let painter = ui.painter_at(rect);
             let origin = rect.min;
-            let mut state = interact::CanvasState::load(ui.ctx(), egui::Id::new(STATE_ID));
+            let key = interact::canvas_key(STATE_ID, app.index.as_deref());
+            let mut state = interact::CanvasState::load(ui.ctx(), key);
             if reset_requested {
                 state.reset();
             }
@@ -550,7 +551,7 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
                 }
             }
 
-            state.store(ui.ctx(), egui::Id::new(STATE_ID));
+            state.store(ui.ctx(), key);
         });
 }
 

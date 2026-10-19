@@ -14,7 +14,7 @@
 //! one colour everywhere.
 use eframe::egui;
 
-use crate::app::{App, Selection};
+use crate::app::App;
 use crate::sidebar::{data_row, Meta};
 use crate::theme;
 use crate::ui_kit;
@@ -206,9 +206,10 @@ fn variable_row(ui: &mut egui::Ui, app: &mut App, state: &mut ViewState, v: &Var
     );
     if resp.clicked() {
         state.selected_var = Some(v.id.clone());
-        let file = v.file.clone();
-        app.open_file_with(file.clone(), Some(v.decl_line));
-        app.selection = Some(Selection::File(file));
+        // Keep the shared selection (usually a symbol) alive: clobbering it
+        // with the file used to blank out the References tab the user was
+        // just using, and the jump previously bypassed the tab strip too.
+        app.goto_file(v.file.clone(), Some(v.decl_line), None);
     }
     resp.on_hover_text(format!(
         "{} ({}) · {} reads, {} writes, {} uses · declared on line {}",

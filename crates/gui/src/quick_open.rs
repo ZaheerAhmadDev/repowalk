@@ -111,7 +111,11 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
                 egui::RichText::new("↵ open best match · esc close").size(theme::FONT_SMALL),
             );
 
-            if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+            if ui.input(|i| i.key_pressed(egui::Key::Enter))
+                // With an empty query the "best match" is just walk-order
+                // luck — Enter should not open a file you didn't ask for.
+                && !app.quick_open_query.trim().is_empty()
+            {
                 picked = shown.first().cloned();
             }
         });

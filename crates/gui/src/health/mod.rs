@@ -628,9 +628,11 @@ fn short_path(path: &str) -> String {
 
 /// Navigate to a file (and line) in Text mode via the shared selection.
 fn goto(app: &mut App, file: String, line: Option<usize>) {
-    app.mode = Mode::Text;
-    app.open_file_with(file.clone(), line);
-    app.selection = Some(Selection::File(file));
+    app.set_mode(Mode::Text);
+    // One navigation path for every sidebar jump: open/activate a tab too,
+    // so the tab strip and breadcrumbs agree with the editor (they used to
+    // disagree, and clicking the stale tab silently reverted the editor).
+    app.goto_file(file.clone(), line, Some(Selection::File(file)));
 }
 
 fn module_widget(m: &ModuleComplexity) -> egui::text::LayoutJob {

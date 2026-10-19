@@ -358,9 +358,14 @@ pub fn handle(ui: &mut egui::Ui, app: &mut App) {
             TracePick::None => {}
         }
         if let Some(sym) = idx.symbols.iter().find(|s| s.id == id) {
-            app.select(Selection::Symbol(sym.id.clone()));
+            // Canvas click: keep the graph on screen — the highlight inside
+            // the view is the visible effect. `select` here used to reuse
+            // the repo tab as a text tab, yanking the reader out of Graph
+            // mode so the highlight could only be seen after navigating
+            // back.
+            app.select_in_view(Selection::Symbol(sym.id.clone()));
         } else if let Some(path) = id.strip_prefix("file:") {
-            app.select(Selection::File(path.to_string()));
+            app.select_in_view(Selection::File(path.to_string()));
         }
     }
 

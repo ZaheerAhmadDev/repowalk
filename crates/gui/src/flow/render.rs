@@ -145,6 +145,8 @@ pub fn transport(ui: &mut egui::Ui, flow: &mut FlowState, steps: usize) {
 // ── Shared canvas plumbing (B5-03, atop diagrams::interact) ────────────────
 
 /// egui-id of the persisted canvas state (layer + per-item offsets) per view.
+/// Callers fold the repo + learn signature in (`canvas_input`), so offsets
+/// from a previous repo or a pre-re-learn layout can't leak across.
 fn canvas_id(tab: FlowTab) -> egui::Id {
     let name = match tab {
         FlowTab::Trace => "trace",
@@ -183,9 +185,15 @@ fn tooltip_for(tab: FlowTab, key: &str) -> String {
 fn canvas_input(
     ui: &mut egui::Ui,
     tab: FlowTab,
+    sig: Option<(&str, &str)>,
     items: &[(String, egui::Rect)],
 ) -> (interact::CanvasState, egui::Rect, Option<String>) {
-    let id = canvas_id(tab);
+    let mut id = canvas_id(tab);
+    if let Some((repo, indexed_at)) = sig {
+        // Repo + learn signature: drag/pan/zoom from another repo or a
+        // pre-re-learn layout must not inherit here.
+        id = id.with(repo).with(indexed_at);
+    }
     let memo = hover_memo_id(tab);
     let ctx = ui.ctx().clone();
     let mut reset = false;
@@ -279,7 +287,8 @@ pub fn stage_strip(
         })
         .collect();
 
-    let (state, rect, clicked) = canvas_input(ui, tab, &items);
+    let (state, rect, clicked) =
+        canvas_input(ui, tab, Some((&idx.repo_root, &idx.indexed_at)), &items);
     let layer = state.layer;
     let scale = layer.scale;
     let painter = ui.painter().with_clip_rect(rect);
@@ -485,7 +494,8 @@ pub fn wave_view(
         layer_y += last_row + CHIP_H + LAYER_GAP;
     }
 
-    let (state, rect, clicked) = canvas_input(ui, tab, &items);
+    let (state, rect, clicked) =
+        canvas_input(ui, tab, Some((&idx.repo_root, &idx.indexed_at)), &items);
     let layer_transform = state.layer;
     let painter = ui.painter().with_clip_rect(rect);
     // Screen rect of one placed chip (offsets + transform applied once).
