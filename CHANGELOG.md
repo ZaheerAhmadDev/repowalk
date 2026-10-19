@@ -12,6 +12,25 @@ no AI, no network, no API keys; the `index.json` schema is unchanged.
 
 ### Added
 
+- **Real VS Code icons (post-batch B5 user pass).** The vendored
+  `@vscode/codicons` font (CC BY 4.0, license shipped) drives the activity bar,
+  tab strips and toolbar: file-type icons on document tabs (code / markdown /
+  json), dirty tabs show the filled dot and clean tabs show ×, and the
+  toolbar's text buttons are now icon buttons with shortcut tooltips.
+- **Module-grouped Types diagram (post-batch B5 user pass).** In Diagrams ▸
+  Types, dragging any type box — its module header or the boxes themselves —
+  moves the whole module together, so the name can no longer stay behind
+  while the boxes move. Hovering a box or header answers "what am I looking
+  at" in place.
+- **Graph hover cards + plain-language legends (post-batch B5 user pass).**
+  Hovering a dependency-graph node pops a card saying exactly what it is
+  (symbol / whole file / merged module), where it is defined and what its
+  arrows mean; the legends of the Graph, Types, Modules and Directory views
+  now also carry one-line plain explanations of their encodings.
+- **Draggable FILES panel (post-batch B5 user pass).** The Text-mode file
+  tree (the left "FILES" pane) can be pulled out by dragging its header: it
+  floats as a window, keeps its own collapse state, and re-docks to the left
+  or right from buttons in its header.
 - **Directory-structure diagrams with real names (B5-01).**
   `repowalk graph --scope tree` prints the actual directory tree
   (mermaid / dot / svg, `--format` as before): depth-columned nodes made of the

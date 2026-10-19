@@ -175,6 +175,18 @@ fn kind_label(kind: TypeKind) -> &'static str {
     }
 }
 
+/// Canvas item id of one module group header ("hdr:" keeps it disjoint from
+/// any `file:name` type id).
+fn header_id(group: &str) -> String {
+    format!("hdr:{group}")
+}
+
+/// The interact-layer group key of a module — every header and every one of
+/// its type boxes share it, so any single drag moves the module as a block.
+fn group_id(group: &str) -> String {
+    format!("g:{group}")
+}
+
 /// Honest empty state: `Some(reason)` when the pipeline produced no types.
 pub fn empty_notice(a: &Analysis) -> Option<String> {
     a.types.is_empty().then(|| {
@@ -284,14 +296,25 @@ fn header(ui: &mut egui::Ui, lay: &TypeLayout, edge_count: usize, reset: &mut bo
             {
                 *reset = true;
             }
-            ui.label(
-                egui::RichText::new(
-                    "Inherit solid · Impl dashed · Field/Variant labelled · \
-                     wheel zoom · drag pan · drag box move",
-                )
-                .size(theme::FONT_SMALL)
-                .color(theme::TEXT_MUTED),
-            );
+            ui.vertical(|ui| {
+                ui.label(
+                    egui::RichText::new(
+                        "what you see: a box = a type learned from the code · \
+                         arrows = how types relate (solid inherits · dashed impl · \
+                         field, variant labelled)",
+                    )
+                    .size(theme::FONT_SMALL)
+                    .color(theme::TEXT_MUTED),
+                );
+                ui.label(
+                    egui::RichText::new(
+                        "gestures: wheel zoom · drag empty space pans · \
+                         drag a box or its module name to move that module together",
+                    )
+                    .size(theme::FONT_SMALL)
+                    .color(theme::TEXT_MUTED),
+                );
+            });
         });
     });
     theme::separator(ui);
@@ -365,14 +388,33 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
             }
             let s = state.layer.scale;
 
-            // Base grid items for the interact layer; canonical layout applies
-            // drags/pan/zoom strictly on top of `layout`.
+            // Base items for the interact layer: module headers then type
+            // boxes, in paint order. Every item belongs to its module group,
+            // so dragging a box — or the module name itself — moves the whole
+            // module together, name and all (user-reported mismatch: names
+            // used to stay behind while only boxes moved).
             let items: Vec<(String, Rect)> = lay
-                .boxes
+                .headers
                 .iter()
-                .map(|b| (b.id.clone(), Rect::from_min_size(b.pos, b.size)))
+                .map(|(group, pos)| {
+                    (
+                        header_id(group),
+                        Rect::from_min_size(*pos, Vec2::new(lay.width, GROUP_HEAD_H)),
+                    )
+                })
+                .chain(
+                    lay.boxes
+                        .iter()
+                        .map(|b| (b.id.clone(), Rect::from_min_size(b.pos, b.size))),
+                )
                 .collect();
-            let (hovered, actions) = interact::frame(&resp, &mut state, &items);
+            let member_of: std::collections::BTreeMap<String, String> = lay
+                .headers
+                .iter()
+                .map(|(group, _)| (header_id(group), group_id(group)))
+                .chain(lay.boxes.iter().map(|b| (b.id.clone(), group_id(&b.group))))
+                .collect();
+            let (hovered, actions) = interact::frame_with(&resp, &mut state, &items, &member_of);
             if actions.double_clicked_empty {
                 state.reset();
             }
@@ -382,7 +424,7 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
                 .map(|b| {
                     interact::placed_rect(
                         Rect::from_min_size(b.pos, b.size),
-                        state.node_offset(&b.id),
+                        state.node_offset(&b.id) + state.group_offset(&group_id(&b.group)),
                         state.layer,
                     )
                     .translate(origin.to_vec2())
@@ -395,15 +437,59 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
                 |id: &str| focus.is_some_and(|f| adjacency.get(f).is_some_and(|v| v.contains(&id)));
             let is_dim = |id: &str| focus.is_some() && !is_focus(id) && !is_nb(id);
 
-            // Group headers (moved by the layer transform, not by node drags).
+            // Group headers ride their module group: a box drag (or a header
+            // drag) carries the name with it — own + group offsets then the
+            // layer transform, exactly the box placement math.
             for (group, pos) in &lay.headers {
                 painter.text(
-                    state.layer.to_screen(*pos) + origin.to_vec2(),
+                    state.layer.to_screen(
+                        *pos + state.node_offset(&header_id(group))
+                            + state.group_offset(&group_id(group)),
+                    ) + origin.to_vec2(),
                     Align2::LEFT_TOP,
                     elide(group, 44),
                     font(theme::FONT_SMALL * s, false),
                     theme::module_color(group),
                 );
+            }
+
+            // Plain-language answers to "what am I looking at": hover a box or
+            // a module header (suppressed while the pointer is dragging).
+            if !state.is_dragging() {
+                if let Some(pos) = resp.hover_pos() {
+                    let tag = match hovered.as_deref() {
+                        Some(h) if h.starts_with("hdr:") => {
+                            let group = h.trim_start_matches("hdr:");
+                            Some((
+                                format!("module {group}"),
+                                vec![
+                                    "drag it — or any of its type boxes —".to_string(),
+                                    "to move the module together, name included".to_string(),
+                                ],
+                            ))
+                        }
+                        Some(h) => analysis.types.iter().find(|t| t.id == *h).map(|node| {
+                            (
+                                format!("{} {}", kind_label(node.kind), node.name),
+                                vec![
+                                    format!(
+                                        "{} fields · {} methods · defined at {}:{}",
+                                        node.fields.len(),
+                                        node.methods.len(),
+                                        node.file,
+                                        node.line
+                                    ),
+                                    "arrows = how it relates to other types".to_string(),
+                                    "(solid inherits · dashed impl · field, variant)".to_string(),
+                                ],
+                            )
+                        }),
+                        None => None,
+                    };
+                    if let Some((title, lines)) = tag {
+                        interact::hover_tag(&painter, pos, &title, &lines);
+                    }
+                }
             }
 
             // Edges first, so boxes sit on top. Endpoints follow dragged boxes.

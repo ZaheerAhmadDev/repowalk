@@ -329,17 +329,25 @@ pub(crate) fn ui(ui: &mut egui::Ui, app: &mut crate::app::App) {
     }
 
     // Hover guidance: node details over a node, the gesture cheat-sheet over
-    // empty canvas.
+    // empty canvas — with the one-line "what am I looking at" sentence.
     let tip = match &hovered_id {
         Some(id) if id.starts_with('f') => {
             let path = &id[1..];
             match idx.files.iter().find(|f| f.path == *path) {
-                Some(f) => format!("{} — {} · {} lines", f.path, f.lang, f.lines),
+                Some(f) => format!(
+                    "file {path} — {} · {} lines\ndrag the box to move it",
+                    f.lang, f.lines
+                ),
                 None => path.to_string(),
             }
         }
-        Some(id) => format!("{}/ (drag to move)", id.trim_start_matches('d')),
-        None => "drag empty canvas to pan · wheel to zoom · double-click to reset".to_string(),
+        Some(id) => format!(
+            "folder {}/ — the files inside sit below it\ndrag to move the folder",
+            id.trim_start_matches('d')
+        ),
+        None => "each box = a real folder or file on disk · drag empty canvas to pan · \
+                 wheel to zoom · double-click to reset"
+            .to_string(),
     };
     resp.on_hover_text(tip);
 }

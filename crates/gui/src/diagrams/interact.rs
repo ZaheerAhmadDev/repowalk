@@ -36,6 +36,8 @@ use std::collections::BTreeMap;
 use eframe::egui;
 use egui::{Pos2, Rect, Vec2};
 
+use crate::theme;
+
 // ── Tuning knobs ────────────────────────────────────────────────────────────
 
 /// Zoom clamp (screen px per canvas px). Wid enough to read to the per-node
@@ -182,8 +184,20 @@ pub struct CanvasState {
     pub layer: Layer,
     /// node id → drag offset in canvas coordinates.
     offsets: BTreeMap<String, Vec2>,
-    /// The id of the node grabbed by the drag in progress, if any grabs.
-    dragging_node: Option<String>,
+    /// group key → shared offset in canvas coordinates. Members of a group are
+    /// dragged together — one gesture writes the group offset and every
+    /// member's placed rect includes it (e.g. a Types-diagram module moving
+    /// with its header and all of its boxes).
+    group_offsets: BTreeMap<String, Vec2>,
+    /// What a drag in progress moves: an individual node or a whole group.
+    dragging: Option<DragTarget>,
+}
+
+/// What the pointer currently grabs.
+#[derive(Clone, Debug, PartialEq)]
+pub enum DragTarget {
+    Node(String),
+    Group(String),
 }
 
 /// What the drivers ask the panel to react to this frame.
@@ -211,17 +225,24 @@ impl CanvasState {
         self.offsets.get(node_id).copied().unwrap_or(Vec2::ZERO)
     }
 
+    /// The persisted shared offset of one group (canvas coordinates); `ZERO`
+    /// when the group has never been moved.
+    pub fn group_offset(&self, group: &str) -> Vec2 {
+        self.group_offsets.get(group).copied().unwrap_or(Vec2::ZERO)
+    }
+
     /// Node drag offsets are private so that only the driver can write them;
     /// readers can query membership with this.
     pub fn is_dragging(&self) -> bool {
-        self.dragging_node.is_some()
+        self.dragging.is_some()
     }
 
-    /// Back to the canonical layout: layer identity and every node offset.
+    /// Back to the canonical layout: layer identity and every offset.
     pub fn reset(&mut self) {
         self.layer = Layer::default();
         self.offsets.clear();
-        self.dragging_node = None;
+        self.group_offsets.clear();
+        self.dragging = None;
     }
 }
 
@@ -232,20 +253,51 @@ impl CanvasState {
 /// canvas-space rects, in the panel's paint order (picking order for
 /// [`hit_index`]). Offsets and the layer transform are applied here, so
 /// hover-picking agrees exactly with what is on screen.
+///
+/// Group-aware panels call [`frame_with`] instead; this plain variant keeps
+/// per-node drags only.
 pub fn frame(
     resp: &egui::Response,
     state: &mut CanvasState,
     items: &[(String, Rect)],
 ) -> (Option<String>, CanvasActions) {
+    frame_with(resp, state, items, &BTreeMap::new())
+}
+
+/// The group-aware variant. `member_of` maps an item id to a group key:
+///
+/// * **Placement** — every member's placed position is its own offset *plus*
+///   `[CanvasState::group_offset]` of its group, so hover-picking inside this
+///   driver stays in exact lockstep with what painting shows.
+/// * **Dragging** — a press that starts on a member grabs the *whole group*:
+///   the drag delta lands on the shared offset and every member moves together
+///   (a module name travelling with all of its type boxes). Nodes absent from
+///   the map keep the individual-drag behaviour of [`frame`].
+pub fn frame_with(
+    resp: &egui::Response,
+    state: &mut CanvasState,
+    items: &[(String, Rect)],
+    member_of: &BTreeMap<String, String>,
+) -> (Option<String>, CanvasActions) {
     let mut actions = CanvasActions::default();
     let to_local = |p: Pos2| p - resp.rect.min.to_vec2();
+
+    // Offsets are pure reads here (writes happen below); the map keeps every
+    // downstream hit-test on the same table the painter uses.
+    let total = |state: &CanvasState, id: &str| -> Vec2 {
+        let mut d = state.node_offset(id);
+        if let Some(group) = member_of.get(id) {
+            d += state.group_offset(group);
+        }
+        d
+    };
 
     // Hit-testing runs in canvas space (through the inverse transform), so it
     // is exactly the mirrored arithmetic of what painting does with
     // [`placed_rect`]; same iteration order, same picking order.
     let placed: Vec<Rect> = items
         .iter()
-        .map(|(id, base)| base.translate(state.node_offset(id)))
+        .map(|(id, base)| base.translate(total(state, id)))
         .collect();
 
     let hovered = resp
@@ -272,28 +324,36 @@ pub fn frame(
         }
     }
 
-    // Drag classification: a press that starts on a node grabs that node; a
-    // press on empty canvas pans the whole layer.
+    // Drag classification: a member grabs its whole group, any other node
+    // grabs itself; a press on empty canvas pans the whole layer.
     if resp.drag_started_by(egui::PointerButton::Primary) {
-        state.dragging_node = None;
+        state.dragging = None;
         if let Some(press) = resp
             .interact_pointer_pos()
             .map(&to_local)
             .map(|q| state.layer.to_canvas(q.to_vec2()))
             .and_then(|canvas_pt| hit_index(canvas_pt, &placed))
         {
-            state.dragging_node = Some(items[press].0.clone());
+            let id = &items[press].0;
+            state.dragging = Some(match member_of.get(id) {
+                Some(group) => DragTarget::Group(group.clone()),
+                None => DragTarget::Node(id.clone()),
+            });
         }
     }
 
     if resp.dragged_by(egui::PointerButton::Primary) {
-        let total = resp.total_drag_delta().unwrap_or(Vec2::ZERO);
-        if beyond_tolerance(total, CLICK_TOLERANCE) {
+        let total_delta = resp.total_drag_delta().unwrap_or(Vec2::ZERO);
+        if beyond_tolerance(total_delta, CLICK_TOLERANCE) {
             let delta = resp.drag_delta();
-            match state.dragging_node.clone() {
-                Some(id) => {
+            match state.dragging.clone() {
+                Some(DragTarget::Node(id)) => {
                     let moved = state.node_offset(&id) + canvas_delta(delta, state.layer.scale);
                     state.offsets.insert(id, moved);
+                }
+                Some(DragTarget::Group(group)) => {
+                    let moved = state.group_offset(&group) + canvas_delta(delta, state.layer.scale);
+                    state.group_offsets.insert(group, moved);
                 }
                 None => {
                     state.layer = state.layer.pan_by(delta);
@@ -314,10 +374,82 @@ pub fn frame(
 
     // The gesture is over (or was never a drag): forget the grab.
     if !resp.is_pointer_button_down_on() {
-        state.dragging_node = None;
+        state.dragging = None;
     }
 
     (hovered, actions)
+}
+
+// ── Canvas-side hover tags ───────────────────────────────────────────────────
+
+/// A small near-cursor hint tag for painter canvases — the in-canvas stand-in
+/// for egui's tooltip (which needs a widget response; these canvases paint
+/// with the painter). One `title` line plus muted detail lines, drawn beside
+/// the cursor and flipped/clamped so it stays inside its clip rect. Painting
+/// only: no memory, no interaction, nothing to persist.
+pub fn hover_tag(painter: &egui::Painter, anchor: Pos2, title: &str, lines: &[String]) {
+    if title.is_empty() {
+        return;
+    }
+    let title_font = egui::FontId::proportional(theme::FONT_BODY);
+    let line_font = egui::FontId::proportional(theme::FONT_SMALL);
+    let title_gal = painter.layout_no_wrap(title.to_owned(), title_font, theme::TEXT_PRIMARY);
+    let mut width = title_gal.size().x;
+    let mut height = title_gal.size().y + theme::SPACE_2;
+    let mut line_galleys = Vec::with_capacity(lines.len());
+    for line in lines {
+        let gal = painter.layout_no_wrap(line.clone(), line_font.clone(), theme::TEXT_SECONDARY);
+        width = width.max(gal.size().x);
+        height += gal.size().y + 2.0;
+        line_galleys.push(gal);
+    }
+
+    const PAD: f32 = 6.0;
+    const LEAD: Vec2 = Vec2::new(14.0, 16.0);
+    let size = Vec2::new(width + 2.0 * PAD, height + 2.0 * PAD);
+    let clip = painter.clip_rect();
+    let mut min = anchor + LEAD;
+    if min.x + size.x > clip.max.x {
+        min.x = anchor.x - LEAD.x + 2.0 - size.x;
+    }
+    if min.x < clip.min.x + PAD {
+        min.x = clip.min.x + PAD;
+    }
+    if min.y + size.y > clip.max.y {
+        min.y = anchor.y - LEAD.y + 2.0 - size.y;
+    }
+    if min.y < clip.min.y + PAD {
+        min.y = clip.min.y + PAD;
+    }
+
+    let rect = Rect::from_min_size(min, size);
+    painter.rect_filled(
+        rect,
+        egui::CornerRadius::same(theme::CORNER_SM),
+        theme::SURFACE_E3,
+    );
+    painter.rect_stroke(
+        rect,
+        egui::CornerRadius::same(theme::CORNER_SM),
+        egui::Stroke::new(1.0, theme::BORDER_SUBTLE),
+        egui::StrokeKind::Middle,
+    );
+
+    let mut y = min.y + PAD;
+    painter.galley(
+        Pos2::new(min.x + PAD, y),
+        title_gal.clone(),
+        theme::TEXT_PRIMARY,
+    );
+    y += title_gal.size().y + theme::SPACE_2;
+    for gal in &line_galleys {
+        painter.galley(
+            Pos2::new(min.x + PAD, y),
+            gal.clone(),
+            theme::TEXT_SECONDARY,
+        );
+        y += gal.size().y + 2.0;
+    }
 }
 
 // ── Tests (pure math; no UI, no window) ─────────────────────────────────────
@@ -507,7 +639,8 @@ mod tests {
                 pan: vec2(9.0, -3.0),
             },
             offsets: state.clone(),
-            dragging_node: None,
+            group_offsets: BTreeMap::from([("grp".to_owned(), vec2(4.0, 5.0))]),
+            dragging: None,
         };
         canvas.store(&ctx, id);
         let loaded = CanvasState::load(&ctx, id);
@@ -518,12 +651,19 @@ mod tests {
             Vec2::ZERO,
             "unmoved nodes read as zero"
         );
+        assert_eq!(
+            loaded.group_offset("grp"),
+            vec2(4.0, 5.0),
+            "group offsets persist beside node offsets"
+        );
+        assert_eq!(loaded.group_offset("never"), Vec2::ZERO);
         // A different id is untouched state (per-panel separation).
         assert_eq!(
             CanvasState {
                 layer: Layer::default(),
                 offsets: BTreeMap::new(),
-                dragging_node: None,
+                group_offsets: BTreeMap::new(),
+                dragging: None,
             },
             CanvasState::load(&ctx, egui::Id::new("diagrams-interact-test-other"))
         );
@@ -537,13 +677,19 @@ mod tests {
                 pan: vec2(80.0, 40.0),
             },
             offsets: BTreeMap::new(),
-            dragging_node: None,
+            group_offsets: BTreeMap::new(),
+            dragging: None,
         };
         state.offsets.insert("n1".into(), vec2(12.0, 6.0));
-        state.dragging_node = Some("n1".into());
+        state.group_offsets.insert("g1".into(), vec2(3.0, 3.0));
+        state.dragging = Some(DragTarget::Group("g1".into()));
         state.reset();
         assert_eq!(state.layer, Layer::default());
         assert!(state.offsets.is_empty(), "no stale offsets survive a reset");
+        assert!(
+            state.group_offsets.is_empty(),
+            "no stale group offsets survive a reset"
+        );
         assert!(!state.is_dragging());
     }
 }

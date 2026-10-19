@@ -1058,6 +1058,9 @@ pub fn legend(ui: &mut egui::Ui, app: &mut App) {
                     ui.add_space(theme::SPACE_1);
                 }
 
+                ui.label(hint(
+                    "dots = code (symbols · files · modules) · arrows = \u{201c}uses\u{201d}",
+                ));
                 ui.label(hint("size = fan-in"));
                 ui.label(hint("dashed ? = low confidence"));
                 ui.label(hint("▢ cluster · ◆ god file"));

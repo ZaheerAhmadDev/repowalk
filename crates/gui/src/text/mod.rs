@@ -9,6 +9,18 @@ use crate::theme;
 pub mod editor;
 pub mod tree;
 
+/// Where the Text-mode FILES tree sits. The default is docked left like the
+/// original layout; the header is the grab handle that pulls it out to a
+/// floating panel (VS Code-style view dragging), and buttons in the floating
+/// header re-dock either side.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FilesDock {
+    #[default]
+    Left,
+    Right,
+    Float,
+}
+
 /// Empty-state card metrics — the content is fixed, so a pre-measured height is
 /// enough to center it without a second layout pass.
 const CARD_WIDTH: f32 = 440.0;
@@ -20,20 +32,59 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
         return;
     }
 
-    // Left: file tree. Full height, hairline edge (panel separator) to the editor.
-    egui::Panel::left("text-files")
-        .resizable(true)
-        .default_size(240.0)
-        .min_size(180.0)
-        .max_size(theme::SIDEBAR_MAX)
-        .show(ui, |ui| {
-            egui::Frame::new()
-                .inner_margin(egui::Margin::symmetric(
-                    theme::SPACE_3 as i8,
-                    theme::SPACE_3 as i8,
-                ))
-                .show(ui, |ui| tree::ui(ui, app));
-        });
+    // FILES tree: docked side panel or floating window, per the drag handle.
+    match app.files_dock {
+        FilesDock::Float => {
+            let mut float = egui::Window::new("FILES")
+                .id(egui::Id::new("text-files-float"))
+                .resizable(true)
+                .collapsible(false)
+                .default_width(280.0)
+                .default_height(420.0)
+                .max_width(440.0)
+                .min_width(200.0)
+                .frame(
+                    eframe::egui::Frame::new()
+                        .fill(theme::SURFACE_E2)
+                        .stroke(egui::Stroke::new(1.0, theme::BORDER_SUBTLE))
+                        .corner_radius(egui::CornerRadius::same(theme::CORNER_MD))
+                        .inner_margin(egui::Margin::symmetric(
+                            theme::SPACE_3 as i8,
+                            theme::SPACE_3 as i8,
+                        )),
+                );
+            if let Some(pos) = app.files_float_pos {
+                // Consume the undock position once: after this frame the egui
+                // window owns its position in memory and native title-drag
+                // moves it freely.
+                float = float.current_pos(pos);
+                app.files_float_pos = None;
+            }
+            float.show(ui, |ui| {
+                tree::ui(ui, app);
+            });
+        }
+        dock => {
+            let panel = match dock {
+                FilesDock::Left => eframe::egui::Panel::left("text-files"),
+                FilesDock::Right => eframe::egui::Panel::right("text-files-r"),
+                FilesDock::Float => unreachable!("handled above"),
+            };
+            panel
+                .resizable(true)
+                .default_size(240.0)
+                .min_size(180.0)
+                .max_size(theme::SIDEBAR_MAX)
+                .show(ui, |ui| {
+                    eframe::egui::Frame::new()
+                        .inner_margin(egui::Margin::symmetric(
+                            theme::SPACE_3 as i8,
+                            theme::SPACE_3 as i8,
+                        ))
+                        .show(ui, |ui| tree::ui(ui, app));
+                });
+        }
+    }
 
     // Bottom: explain strip. Auto-expands when a symbol lands, collapses on demand.
     explain_strip(ui, app);

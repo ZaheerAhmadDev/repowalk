@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use crate::app::{App, Selection, TracePick};
 use crate::graph::filter;
-use crate::graph::render::load_state;
+use crate::graph::render::{load_state, NodeInfo};
 use crate::theme;
 
 /// BFS shortest call path from `a` to `b` over resolved call edges.
@@ -90,6 +90,57 @@ fn strip_button(ui: &mut egui::Ui, label: &str, color: egui::Color32) -> bool {
         .corner_radius(egui::CornerRadius::same(theme::CORNER_SM)),
     )
     .clicked()
+}
+
+/// What the node under the cursor IS, in plain words — title + detail lines
+/// for the hover card. The semantics are the index contract: symbols, whole
+/// files or merged modules; arrows are calls (or file imports) the analysis
+/// resolved, thicker/bigger when more code points in (fan-in).
+fn node_tag(idx: &Index, id: &str, info: &NodeInfo) -> (String, Vec<String>) {
+    if let Some(module) = id.strip_prefix("cluster:") {
+        (
+            format!("module {module}"),
+            vec![
+                format!(
+                    "a collapsed box: the {} symbol(s) of this module, merged",
+                    info.cluster_size.max(1)
+                ),
+                "click to expand it into its symbols".to_string(),
+                "arrows crossing it = imports/calls to or from other modules".to_string(),
+            ],
+        )
+    } else if let Some(s) = idx.symbols.iter().find(|s| s.id == id) {
+        let mut lines = vec![
+            format!(
+                "defined at {}:{} (module {})",
+                s.file, s.start_line, info.module
+            ),
+            format!(
+                "{} incoming arrow{} = code that calls or uses it",
+                info.fan_in,
+                if info.fan_in == 1 { "" } else { "s" }
+            ),
+            "arrows out = what it calls/imports · dashed = guessed by name".to_string(),
+        ];
+        if !s.signature.is_empty() {
+            lines.push(s.signature.clone());
+        }
+        (format!("{:?} {}", s.kind, s.name), lines)
+    } else {
+        let path = id.strip_prefix("file:").unwrap_or(id);
+        (
+            format!("file {path}"),
+            vec![
+                "a whole file: all of its symbols merged into one dot".to_string(),
+                format!(
+                    "{} incoming arrow{} = other code importing it",
+                    info.fan_in,
+                    if info.fan_in == 1 { "" } else { "s" }
+                ),
+                "click in Explorer or the file tree to drill into the file".to_string(),
+            ],
+        )
+    }
 }
 
 pub fn handle(ui: &mut egui::Ui, app: &mut App) {
@@ -189,11 +240,13 @@ pub fn handle(ui: &mut egui::Ui, app: &mut App) {
     }
 
     // Hover preview strip (under the legend): signature in CODE + file:line.
-    let hovered_id: Option<String> = app.graph_state.as_ref().and_then(|(_, g)| {
-        g.hovered_node()
-            .and_then(|h| g.node(h))
-            .map(|node| node.payload().id.clone())
+    let hovered: Option<(String, NodeInfo)> = app.graph_state.as_ref().and_then(|(_, g)| {
+        g.hovered_node().and_then(|h| g.node(h)).map(|node| {
+            let payload = node.payload();
+            (payload.id.clone(), payload.clone())
+        })
     });
+    let hovered_id: Option<String> = hovered.as_ref().map(|(id, _)| id.clone());
     if let Some(hovered) = hovered_id {
         egui::Frame::new()
             .fill(theme::SURFACE_E2)
@@ -247,6 +300,36 @@ pub fn handle(ui: &mut egui::Ui, app: &mut App) {
                     }
                 });
             });
+    }
+
+    // Plain-language hover card at the cursor — the understanding pass: what
+    // this node IS, what its arrows mean (the strip above stays the technical
+    // view: name in code face, file:line, id).
+    if let Some((id, info)) = hovered {
+        let (title, lines) = node_tag(&idx, &id, &info);
+        egui::Popup::new(
+            egui::Id::new("graph-hover-card"),
+            ui.ctx().clone(),
+            egui::PopupAnchor::Pointer,
+            egui::LayerId::new(egui::Order::Tooltip, egui::Id::new("graph-hover-card")),
+        )
+        .kind(egui::PopupKind::Tooltip)
+        .sense(egui::Sense::hover())
+        .interactable(false)
+        .show(|ui| {
+            ui.label(
+                egui::RichText::new(&title)
+                    .strong()
+                    .color(theme::TEXT_PRIMARY),
+            );
+            for line in lines {
+                ui.label(
+                    egui::RichText::new(line)
+                        .size(theme::FONT_SMALL)
+                        .color(theme::TEXT_SECONDARY),
+                );
+            }
+        });
     }
 
     // Node click: trace picking first, else selection sync. Cluster nodes are

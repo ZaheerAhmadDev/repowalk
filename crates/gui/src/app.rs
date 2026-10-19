@@ -110,6 +110,11 @@ pub struct App {
     pub diagrams: diagrams::DiagramsState,
     /// Dark (default) or light palette, switchable at runtime (DSN-2 / F13).
     pub theme_mode: theme::ThemeMode,
+    /// Text-mode FILES tree dock: default docked left (VS Code side panel;
+    /// the sidebar Explorer stays untouched), drag its header to pull it out.
+    pub files_dock: text::FilesDock,
+    /// The floating FILES panel's current screen position (undock target).
+    pub files_float_pos: Option<egui::Pos2>,
 }
 
 /// The egui context handle used by the indexing thread to request repaints.
@@ -163,6 +168,8 @@ impl App {
             usage: Default::default(),
             diagrams: Default::default(),
             theme_mode: theme::ThemeMode::Dark,
+            files_dock: text::FilesDock::default(),
+            files_float_pos: None,
         };
         if let Some(repo) = repo {
             app.start_indexing(repo);
@@ -785,7 +792,8 @@ impl App {
                     });
                 },
             );
-            export.response
+            export
+                .response
                 .on_hover_text("Export — PNG, Markdown reports, diagrams");
 
             // F13: the palette is switchable at runtime; the choice applies

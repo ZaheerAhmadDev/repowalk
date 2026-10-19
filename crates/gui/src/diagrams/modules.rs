@@ -331,8 +331,9 @@ fn header(
             }
             ui.label(
                 egui::RichText::new(
-                    "tree faint · imports labelled ×N · ⟳ = cycle · \
-                     wheel zoom · drag pan · drag node move",
+                    "box = one module (a folder of the repo) · \
+                     arrows crossing boxes = imports between modules (labelled ×N) · \
+                     tree faint · ⟳ = cycle · wheel zoom · drag pan · drag box move",
                 )
                 .size(theme::FONT_SMALL)
                 .color(theme::TEXT_MUTED),
