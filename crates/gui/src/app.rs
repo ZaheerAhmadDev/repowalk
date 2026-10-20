@@ -438,9 +438,12 @@ impl App {
     }
 
     pub fn open_file_with(&mut self, path: String, line: Option<usize>) {
-        if self.open_file.as_deref() != Some(path.as_str())
-            && !self.editor_buffers.contains_key(&path)
-        {
+        // Load whenever the buffer is missing. This used to also require
+        // `open_file != path`, but `activate_tab` (called by `open_in_tabs`
+        // just before this) already points `open_file` at the file — so the
+        // guard skipped the read and the editor showed its empty hint while
+        // the tab claimed the file was open.
+        if !self.editor_buffers.contains_key(&path) {
             if let Some(repo) = &self.repo {
                 match std::fs::read_to_string(repo.join(&path)) {
                     Ok(text) => {
@@ -653,6 +656,61 @@ impl App {
                 .map(|s| Selection::Symbol(s.id.clone())),
         );
         entries
+    }
+
+    /// Dev helper: with `REPOWALK_AUTOSHOT=/path.png` set, capture the REAL
+    /// window once the index has landed. Lets the agent look at what the user
+    /// actually sees (headless probes can't show layout/paint problems).
+    /// `REPOWALK_AUTOSHOT_MODE=text|graph|flow|diagrams` and
+    /// `REPOWALK_AUTOSHOT_FILE=<repo-relative path>` select what to show,
+    /// `REPOWALK_AUTOSHOT_DELAY=<frames>` waits for animations (the graph's
+    /// force layout starts wide and only fits after a few frames).
+    fn maybe_autoshot(&mut self, ctx: &egui::Context) {
+        static DONE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        static SETUP: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        static FRAMES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        if DONE.load(std::sync::atomic::Ordering::Relaxed) {
+            return;
+        }
+        let Ok(path) = std::env::var("REPOWALK_AUTOSHOT") else {
+            return;
+        };
+        if self.index.is_none() {
+            return;
+        }
+        if !SETUP.swap(true, std::sync::atomic::Ordering::Relaxed) {
+            // Select the file FIRST: `select` opens it in a Text tab and
+            // activates that tab, which would otherwise clobber a mode set
+            // beforehand — the capture then showed the editor while claiming
+            // to be the graph.
+            if let Ok(file) = std::env::var("REPOWALK_AUTOSHOT_FILE") {
+                self.select(Selection::File(file));
+            }
+            if let Ok(mode) = std::env::var("REPOWALK_AUTOSHOT_MODE") {
+                let mode = match mode.as_str() {
+                    "graph" => Some(Mode::Graph),
+                    "flow" => Some(Mode::Flow),
+                    "diagrams" => Some(Mode::Diagrams),
+                    "text" => Some(Mode::Text),
+                    _ => None,
+                };
+                if let Some(mode) = mode {
+                    self.set_mode(mode);
+                }
+            }
+        }
+        let delay = std::env::var("REPOWALK_AUTOSHOT_DELAY")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(120);
+        let frame = FRAMES.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+        if frame < delay {
+            ctx.request_repaint();
+            return;
+        }
+        DONE.store(true, std::sync::atomic::Ordering::Relaxed);
+        self.pending_screenshot = Some((0, PathBuf::from(path)));
+        crate::export::png::request_screenshot(ctx, 0);
     }
 
     /// Drain `Event::Screenshot` for a pending export and write the PNG (RSK-23).
@@ -1325,6 +1383,7 @@ impl eframe::App for App {
         self.adopt_folder_pick();
         self.handle_keyboard(&ctx);
         self.consume_screenshot_event(&ctx);
+        self.maybe_autoshot(&ctx);
 
         // Top toolbar strip (the VS Code title/menu row).
         egui::Frame::new()
@@ -1670,3 +1729,7 @@ fn palette_actions(_app: &App) -> Vec<PaletteAction> {
         },
     ]
 }
+
+#[cfg(test)]
+#[path = "shell_probe.rs"]
+mod shell_probe;

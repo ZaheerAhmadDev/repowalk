@@ -108,7 +108,14 @@ impl App {
         let tab = self.tabs[idx].clone();
         self.mode = tab.mode;
         if tab.mode == Mode::Text {
-            self.open_file = tab.file.clone();
+            // Route through `open_file_with`: setting the pointer alone left
+            // the buffer unloaded, so switching to a file tab showed the
+            // editor's empty hint.
+            if let Some(file) = tab.file.clone() {
+                self.open_file_with(file, None);
+            } else {
+                self.open_file = None;
+            }
         }
         if tab.mode == Mode::Diagrams {
             self.diagrams.tab = tab.diagrams;
@@ -145,8 +152,15 @@ impl App {
 pub fn tab_strip(ui: &mut egui::Ui, app: &mut App) {
     // Dynamic: with more tabs than fit, the strip scrolls sideways instead of
     // pushing tabs off the window edge where they can't be reached.
+    //
+    // `auto_shrink([false, true])`: fill the width, but NEVER take more height
+    // than the tabs themselves. A bare `.auto_shrink(false)` here made the
+    // strip claim the whole central pane's height, pushing FILES/editor/
+    // EXPLAIN — and every other mode's view — below the clip rect (the
+    // "nothing shows up in the view area" bug).
     egui::ScrollArea::horizontal()
-        .auto_shrink(false)
+        .auto_shrink([false, true])
+        .max_height(theme::TAB_HEIGHT)
         .show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = theme::SPACE_1;
