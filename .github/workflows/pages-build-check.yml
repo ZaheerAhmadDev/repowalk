@@ -14,7 +14,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Configure GitHub Pages for non-fork PRs
         if: ${{ github.event.pull_request.head.repo.fork == false }}
