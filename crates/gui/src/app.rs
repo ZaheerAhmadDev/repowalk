@@ -698,6 +698,21 @@ impl App {
                     self.set_mode(mode);
                 }
             }
+            // `REPOWALK_AUTOSHOT_LAYOUT=force|layered` picks the graph layout
+            // (it lives in egui temp memory, not `App`, so it is set through
+            // the graph module's own state store).
+            if let Ok(layout) = std::env::var("REPOWALK_AUTOSHOT_LAYOUT") {
+                let picked = match layout.as_str() {
+                    "layered" => Some(crate::graph::filter::GraphLayout::Layered),
+                    "force" => Some(crate::graph::filter::GraphLayout::Force),
+                    _ => None,
+                };
+                if let Some(picked) = picked {
+                    let mut state = crate::graph::render::load_state(ctx);
+                    state.layout = picked;
+                    crate::graph::render::save_state(ctx, state);
+                }
+            }
         }
         let delay = std::env::var("REPOWALK_AUTOSHOT_DELAY")
             .ok()

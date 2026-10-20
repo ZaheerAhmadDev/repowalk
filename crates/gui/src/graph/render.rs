@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::app::{App, TracePick};
-use crate::graph::filter::{self, BuildSig, ConfidenceFilter, GraphUiState, NODE_CAP};
+use crate::graph::filter::{self, BuildSig, ConfidenceFilter, GraphLayout, GraphUiState, NODE_CAP};
 use crate::theme;
 
 /// Node payload: everything the custom shape needs to draw honestly.
@@ -285,6 +285,9 @@ const ZOOM_SHORT: f32 = 0.55;
 /// egui_graphs custom id: keys the persisted layout state and (pan/zoom)
 /// metadata for the one graph view in the app. Keep in sync with `with_id`.
 const GRAPH_ID: &str = "repowalk-graph";
+/// The layered view keeps its own crate id, so its layout/pan/zoom state never
+/// clobbers the force view's — switching layouts restores the framing you left.
+const GRAPH_ID_LAYERED: &str = "repowalk-graph-layered";
 
 // ── Interaction knobs (B5-03) ───────────────────────────────────────────────
 //
@@ -325,6 +328,7 @@ pub fn layout_should_freeze(steps: u64, avg_displacement: Option<f32>) -> bool {
 /// Pure fit-to-rect transform using the crate's metadata semantics
 /// (`screen = pan + canvas·zoom`): `screen = pan + canvas_pos·zoom`. Returns
 /// `None` for empty/invalid input (never a wild zoom).
+#[cfg(test)]
 pub fn fit_pan_zoom(
     bounds: egui::Rect,
     canvas: egui::Vec2,
@@ -348,25 +352,6 @@ pub fn fit_pan_zoom(
         return None;
     }
     Some((zoom, canvas * 0.5 - bounds.center().to_vec2() * zoom))
-}
-
-/// Perspective bounds of all nodes (position ± node half-extents + a label
-/// allowance below, so labels aren't clipped by a tight fit).
-fn node_bounds(g: &WalkGraph) -> egui::Rect {
-    let mut r = egui::Rect::NOTHING;
-    for n in g.g().node_weights() {
-        let d = n.display();
-        let (hx, hy) = if d.is_cluster {
-            (d.radius * 1.1, d.radius * 0.75)
-        } else {
-            (d.radius, d.radius)
-        };
-        r.min.x = r.min.x.min(d.pos.x - hx);
-        r.min.y = r.min.y.min(d.pos.y - hy);
-        r.max.x = r.max.x.max(d.pos.x + hx);
-        r.max.y = r.max.y.max(d.pos.y + hy + 34.0);
-    }
-    r
 }
 
 /// Whether the user has manually panned/zoomed/moved a node since the last
@@ -428,8 +413,76 @@ pub fn seed_positions(g: &mut WalkGraph) {
     }
 }
 
-/// Once the force layout freezes, pull the settled positions into the canvas
-/// so the view can stay at zoom 1.
+/// Extremes of node **centers** plus the fixed per-side allowances (node
+/// radius, cluster half-extent, and the label strip below a node).
+///
+/// The allowances do not scale with the positions, which is why a plain
+/// fit on the node bounds left the outermost labels a few pixels outside the
+/// canvas.
+fn node_extents(g: &WalkGraph) -> Option<(egui::Rect, egui::Vec2, egui::Vec2)> {
+    if g.g().node_count() == 0 {
+        return None;
+    }
+    let mut pos = egui::Rect::NOTHING;
+    let mut extra_min = egui::Vec2::ZERO;
+    let mut extra_max = egui::Vec2::ZERO;
+    for n in g.g().node_weights() {
+        let d = n.display();
+        let (hx, hy) = if d.is_cluster {
+            (d.radius * 1.1, d.radius * 0.75)
+        } else {
+            (d.radius, d.radius)
+        };
+        pos.min.x = pos.min.x.min(d.pos.x);
+        pos.min.y = pos.min.y.min(d.pos.y);
+        pos.max.x = pos.max.x.max(d.pos.x);
+        pos.max.y = pos.max.y.max(d.pos.y);
+        extra_min.x = extra_min.x.max(hx);
+        extra_min.y = extra_min.y.max(hy);
+        extra_max.x = extra_max.x.max(hx);
+        // Label allowance is below the node only (see `frame_positions`).
+        extra_max.y = extra_max.y.max(hy + 34.0);
+    }
+    Some((pos, extra_min, extra_max))
+}
+
+/// Scale and offset that place node **centers** so the node bounds — the
+/// centers' span plus the fixed radius/label allowances — fit inside `canvas`
+/// with padding and end up centered there.
+///
+/// Returns `None` for degenerate input. A zero span keeps scale 1 (a lone node
+/// should not be blown up to fill the viewport).
+fn frame_positions(
+    span: egui::Vec2,
+    extra_min: egui::Vec2,
+    extra_max: egui::Vec2,
+    canvas: egui::Vec2,
+) -> Option<(f32, egui::Vec2)> {
+    if !canvas.x.is_finite() || !canvas.y.is_finite() || canvas.x <= 0.0 || canvas.y <= 0.0 {
+        return None;
+    }
+    const PADDING: f32 = 0.08;
+    let room = canvas / (1.0 + PADDING) - extra_min - extra_max;
+    // A column (or row) of stacked nodes has no span on one axis; keep design
+    // scale for that axis instead of dividing by zero.
+    let fits = |room: f32, span: f32| (room > 0.0 && span > 0.0).then(|| room / span);
+    let scale = match (fits(room.x, span.x), fits(room.y, span.y)) {
+        (Some(x), Some(y)) => x.min(y),
+        (Some(x), None) => x,
+        (None, Some(y)) => y,
+        (None, None) => 1.0,
+    };
+    if !scale.is_finite() || scale <= 0.0 {
+        return None;
+    }
+    // Offset is the canvas-space image of the span's center. Center the
+    // *node bounds* (including the label allowance), not just the centers.
+    let offset = canvas * 0.5 - (extra_max - extra_min) * 0.5;
+    Some((scale, offset))
+}
+
+/// Once a layout settles, pull the settled positions into the canvas so the
+/// view can stay at zoom 1.
 ///
 /// egui_graphs' force layout works at its own scale (hundreds of units even
 /// for a dozen nodes). Fitting that literally zooms to ~0.4, which shrinks
@@ -437,31 +490,46 @@ pub fn seed_positions(g: &mut WalkGraph) {
 /// threshold. Rescaling the *positions* instead keeps nodes at their designed
 /// size, with readable labels, inside the viewport. Manual pan/zoom wins: the
 /// caller only normalizes when the user has not taken over.
-fn normalize_positions(ui: &mut egui::Ui, g: &mut WalkGraph, canvas: egui::Vec2) {
-    let bounds = node_bounds(g);
-    // Same guard/padding semantics as a literal fit — but the factor scales
-    // positions instead of the camera, so node sizes and label LOD stay at
-    // their designed scale.
-    let Some((scale, _)) = fit_pan_zoom(bounds, canvas, 0.08) else {
+///
+/// The fit accounts for the non-scaling node/label allowances exactly, so the
+/// outermost labels stay inside the canvas instead of peeking off the edge.
+fn normalize_positions(ui: &mut egui::Ui, g: &mut WalkGraph, canvas: egui::Vec2, id: &str) {
+    let Some((pos, extra_min, extra_max)) = node_extents(g) else {
         return;
     };
-    let center = bounds.center();
+    let Some((scale, offset)) = frame_positions(pos.size(), extra_min, extra_max, canvas) else {
+        return;
+    };
+    let center = pos.center();
     let indices: Vec<_> = g.g().node_indices().collect();
     for idx in indices {
         if let Some(node) = g.node_mut(idx) {
             let p = node.location();
             node.set_location(egui::pos2(
-                canvas.x * 0.5 + (p.x - center.x) * scale,
-                canvas.y * 0.5 + (p.y - center.y) * scale,
+                offset.x + (p.x - center.x) * scale,
+                offset.y + (p.y - center.y) * scale,
             ));
         }
     }
     // Positions are now canvas-space; reset the camera so the next frame draws
     // them at 1:1 instead of re-fitting the old scale.
-    let mut meta = egui_graphs::MetadataFrame::new(Some(GRAPH_ID.to_string())).load(ui);
+    let mut meta = egui_graphs::MetadataFrame::new(Some(id.to_string())).load(ui);
     meta.zoom = 1.0;
     meta.pan = egui::Vec2::ZERO;
     meta.save(ui);
+}
+
+fn framed_size_id(id: &str) -> egui::Id {
+    egui::Id::new(("repowalk_graph_framed", id))
+}
+
+fn framed_size(ui: &egui::Ui, id: &str) -> Option<egui::Vec2> {
+    ui.ctx().data(|d| d.get_temp(framed_size_id(id)))
+}
+
+fn set_framed_size(ui: &egui::Ui, id: &str, size: egui::Vec2) {
+    ui.ctx()
+        .data_mut(|d| d.insert_temp(framed_size_id(id), size));
 }
 
 /// Point the persisted force-layout state at a fresh, running simulation
@@ -480,6 +548,36 @@ pub fn arm_layout(ui: &mut egui::Ui) {
         Some(GRAPH_ID.to_string()),
     );
     save_nav_flags(ui, NavFlags::default());
+}
+
+/// (Re)run the layered/hierarchical pass. The crate's tree layout places nodes
+/// once per `triggered = false`, so this is both "switch to layered" and
+/// "relayout" for that view. Row/column spacing is set for our node radii
+/// (5–26px), not the crate's tight defaults.
+pub fn arm_layered(ui: &mut egui::Ui) {
+    let mut st = egui_graphs::get_layout_state::<egui_graphs::LayoutStateHierarchical>(
+        ui,
+        Some(GRAPH_ID_LAYERED.to_string()),
+    );
+    st.triggered = false;
+    st.orientation = egui_graphs::LayoutHierarchicalOrientation::TopDown;
+    st.row_dist = 96.0;
+    st.col_dist = 120.0;
+    st.center_parent = true;
+    egui_graphs::set_layout_state::<egui_graphs::LayoutStateHierarchical>(
+        ui,
+        st,
+        Some(GRAPH_ID_LAYERED.to_string()),
+    );
+    save_nav_flags(ui, NavFlags::default());
+}
+
+/// Arm whichever layout the reader picked.
+pub fn arm_layout_for(ui: &mut egui::Ui, layout: GraphLayout) {
+    match layout {
+        GraphLayout::Force => arm_layout(ui),
+        GraphLayout::Layered => arm_layered(ui),
+    }
 }
 
 /// Straight edge; dashed + `?` badge when the resolver was not Exact.
@@ -925,8 +1023,8 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
             ),
             graph,
         ));
-        // Fresh graph, fresh positions: re-run (and re-fit) the force layout.
-        arm_layout(ui);
+        // Fresh graph, fresh positions: re-run (and re-fit) the chosen layout.
+        arm_layout_for(ui, state.layout);
         save_state(ui.ctx(), state.clone());
     }
 
@@ -948,26 +1046,56 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
             let mut relayed_click: Option<String> = None;
             if let Some((_, g)) = app.graph_state.as_mut() {
                 let mut interacted = false;
-                let response = egui_graphs::GraphView::<
-                    egui_graphs::FruchtermanReingoldState,
-                    egui_graphs::LayoutForceDirected<egui_graphs::FruchtermanReingold>,
-                >::new()
-                .with_id(Some(GRAPH_ID.to_string()))
-                .with_interactions(
-                    &egui_graphs::SettingsInteraction::new()
-                        .with_dragging_enabled(true)
-                        .with_node_selection_enabled(true),
-                )
-                .with_navigations(
-                    &egui_graphs::SettingsNavigation::new()
-                        .with_zoom_and_pan_enabled(true)
-                        // Per-frame refit by the crate would cancel user
-                        // pan/zoom after every gesture; the crate still fits
-                        // on the first frame, and the app keeps the settled
-                        // graph framed by normalizing positions instead.
-                        .with_fit_to_screen_enabled(false),
-                )
-                .show(ui, g);
+                let interactions = egui_graphs::SettingsInteraction::new()
+                    .with_dragging_enabled(true)
+                    .with_node_selection_enabled(true);
+                let navigations = egui_graphs::SettingsNavigation::new()
+                    .with_zoom_and_pan_enabled(true)
+                    // Per-frame refit by the crate would cancel user pan/zoom
+                    // after every gesture; the crate still fits on the first
+                    // frame, and the app keeps the settled graph framed by
+                    // normalizing positions instead.
+                    .with_fit_to_screen_enabled(false);
+                let response = if state.layout == GraphLayout::Layered {
+                    let tree_was_pending = !egui_graphs::get_layout_state::<
+                        egui_graphs::LayoutStateHierarchical,
+                    >(
+                        ui, Some(GRAPH_ID_LAYERED.to_string())
+                    )
+                    .triggered;
+                    let response = egui_graphs::GraphView::<
+                        egui_graphs::LayoutStateHierarchical,
+                        egui_graphs::LayoutHierarchical,
+                    >::new()
+                    .with_id(Some(GRAPH_ID_LAYERED.to_string()))
+                    .with_interactions(&interactions)
+                    .with_navigations(&navigations)
+                    .show(ui, g);
+                    // The tree pass ran inside `show` (it lays every node out
+                    // once). Pull the result into view at design scale — the
+                    // same treatment the force layout gets while it runs.
+                    //
+                    // The canvas height also changes on the first frames (the
+                    // legend grows a row once the graph exists), and the crate
+                    // keeps *screen* position when the widget moves. Reframe
+                    // whenever the canvas settles at a new size, otherwise the
+                    // tree stays glued to the old, smaller viewport.
+                    let size = response.response.rect.size();
+                    if tree_was_pending || framed_size(ui, GRAPH_ID_LAYERED) != Some(size) {
+                        normalize_positions(ui, g, size, GRAPH_ID_LAYERED);
+                        set_framed_size(ui, GRAPH_ID_LAYERED, size);
+                    }
+                    response
+                } else {
+                    egui_graphs::GraphView::<
+                        egui_graphs::FruchtermanReingoldState,
+                        egui_graphs::LayoutForceDirected<egui_graphs::FruchtermanReingold>,
+                    >::new()
+                    .with_id(Some(GRAPH_ID.to_string()))
+                    .with_interactions(&interactions)
+                    .with_navigations(&navigations)
+                    .show(ui, g)
+                };
                 for change in &response.changes {
                     if let egui_graphs::GraphChange::NodeClicked { node } = change {
                         if let Some(n) = g.node(*node) {
@@ -1016,16 +1144,20 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
                     ui,
                     Some(GRAPH_ID.to_string()),
                 );
-                if settle.is_running {
-                    if !flags.user_adjusted {
-                        // The crate's force layout has no centering force, so a
-                        // sparse graph keeps drifting outward instead of
-                        // settling (and a literal fit keeps zooming out until
-                        // the nodes are sub-pixel). Keep the *positions*
-                        // canvassed while it runs.
-                        normalize_positions(ui, g, response.response.rect.size());
+                if state.layout == GraphLayout::Force {
+                    let size = response.response.rect.size();
+                    // Keep the *positions* canvassed while it runs, and
+                    // reframe once more if the canvas settles at a new size
+                    // after the freeze.
+                    let refit = !flags.user_adjusted
+                        && (settle.is_running || framed_size(ui, GRAPH_ID) != Some(size));
+                    if refit {
+                        normalize_positions(ui, g, size, GRAPH_ID);
+                        set_framed_size(ui, GRAPH_ID, size);
                     }
-                    if layout_should_freeze(settle.step_count, settle.last_avg_displacement) {
+                    if settle.is_running
+                        && layout_should_freeze(settle.step_count, settle.last_avg_displacement)
+                    {
                         let mut st = settle;
                         st.is_running = false;
                         egui_graphs::set_layout_state::<egui_graphs::FruchtermanReingoldState>(
@@ -1322,14 +1454,32 @@ pub fn legend(ui: &mut egui::Ui, app: &mut App) {
                     ui.label(hint(&counts));
                 }
                 ui.add_space(theme::SPACE_2);
-                // Re-run the force layout from scratch; it re-fits while it
-                // settles, then freezes — user drags survive after that.
+                // Layout picker: force for hubs/cycles, layered for direction.
+                ui.label(hint("layout"));
+                let mut force_on = state.layout == GraphLayout::Force;
+                let mut layered_on = state.layout == GraphLayout::Layered;
+                legend_toggle(ui, &mut force_on, "force");
+                legend_toggle(ui, &mut layered_on, "layered");
+                let layout_changed =
+                    filter::resolve_layout_pick(state.layout, force_on, layered_on);
+                if let Some(layout) = layout_changed {
+                    state.layout = layout;
+                }
+
+                // Re-run the active layout from scratch.
+                let relayout_label = match state.layout {
+                    GraphLayout::Force => "relayout",
+                    GraphLayout::Layered => "re-tree",
+                };
                 if ui
-                    .button(egui::RichText::new("relayout").size(theme::FONT_SMALL))
-                    .on_hover_text("Restart the force layout and re-fit the view")
+                    .button(egui::RichText::new(relayout_label).size(theme::FONT_SMALL))
+                    .on_hover_text("Restart the layout and re-fit the view")
                     .clicked()
                 {
-                    arm_layout(ui);
+                    arm_layout_for(ui, state.layout);
+                }
+                if let Some(layout) = layout_changed {
+                    arm_layout_for(ui, layout);
                 }
             });
         });
@@ -1618,6 +1768,54 @@ mod tests {
             egui::Rect::from_min_size(pos2(0.0, 0.0), vec2(f32::NAN, 3.0)),
             canvas,
             0.1
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn framing_keeps_labels_inside_the_canvas() {
+        use eframe::egui::vec2;
+        let span = vec2(494.0, 336.0);
+        let extra_min = vec2(26.0, 26.0);
+        // Labels hang below a node, so the bottom allowance is taller.
+        let extra_max = vec2(26.0, 60.0);
+        let canvas = vec2(642.0, 392.0);
+        let (scale, offset) = frame_positions(span, extra_min, extra_max, canvas).unwrap();
+        assert!(scale.is_finite() && scale > 0.0);
+        let min = offset - span * 0.5 * scale - extra_min;
+        let max = offset + span * 0.5 * scale + extra_max;
+        assert!(min.x >= 0.0 && min.y >= 0.0, "{min:?} escapes the canvas");
+        assert!(
+            max.x <= canvas.x && max.y <= canvas.y,
+            "{max:?} escapes the canvas"
+        );
+        // Centered on the node bounds, label strip included.
+        let mid = (min + max) * 0.5;
+        assert!(
+            (mid - canvas * 0.5).length() < 1e-3,
+            "{mid:?} is off-center"
+        );
+    }
+
+    #[test]
+    fn framing_a_single_node_keeps_design_scale_and_centers_it() {
+        use eframe::egui::vec2;
+        let (scale, offset) = frame_positions(
+            vec2(0.0, 0.0),
+            vec2(5.0, 5.0),
+            vec2(5.0, 39.0),
+            vec2(300.0, 200.0),
+        )
+        .unwrap();
+        assert_eq!(scale, 1.0);
+        // Canvas center, shifted up by half the asymmetric label allowance.
+        assert!((offset - vec2(150.0, 83.0)).length() < 1e-3, "{offset:?}");
+        // Degenerate canvas: no wild transform.
+        assert!(frame_positions(
+            vec2(1.0, 1.0),
+            vec2(1.0, 1.0),
+            vec2(1.0, 1.0),
+            vec2(0.0, 0.0)
         )
         .is_none());
     }

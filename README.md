@@ -184,10 +184,10 @@ cargo clippy -- -D warnings
 
 ## Roadmap
 
-Shipped in 2.0: TypeScript / JavaScript, SVG graph export, control-flow / types / modules diagrams, usage and reference panels, notes, light theme, repo 101 and CI guardrails.
+Shipped in 2.0: TypeScript / JavaScript, SVG graph export, control-flow / types / modules diagrams, usage and reference panels, notes, light theme, repo 101, a force ⇄ layered graph layout toggle, and CI guardrails.
 
 Next, in rough order:
-- Layered / hierarchical graph layout with focus-zoom into clusters and breadcrumbs
+- Focus-zoom into clusters and breadcrumbs in the layered graph view
 - Better syntax highlighting and gutter caller markers
 - A single "explain this file" reading view that stitches tour + usage + diagram
 
