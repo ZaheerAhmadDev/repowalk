@@ -18,7 +18,7 @@ jobs:
 
       - name: Configure GitHub Pages for non-fork PRs
         if: ${{ github.event.pull_request.head.repo.fork == false }}
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
         with:
           enablement: true
 
