@@ -62,7 +62,7 @@ jobs:
           find .deploy_root -maxdepth 2 -type f | sort
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: .deploy_root
 
