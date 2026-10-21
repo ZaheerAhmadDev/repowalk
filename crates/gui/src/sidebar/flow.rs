@@ -2,7 +2,6 @@
 //! transport mirror, and the current-step readout. OWNER: TL-GRAPH (GRAPH-1).
 use eframe::egui;
 use repowalk_core::model::Index;
-use repowalk_core::search;
 
 use crate::app::{App, TracePick};
 use crate::flow::{self, playback, render};
@@ -102,48 +101,35 @@ fn pick_hits(ui: &mut egui::Ui, app: &mut App, idx: &Index) {
         .desired_width(ui.available_width())
         .show(ui);
 
-    let hits = search::search(idx, &app.flow.pick_query, MAX_PICK_HITS);
+    let hits = flow::picker_hits(idx, &app.flow.pick_query, MAX_PICK_HITS);
     if hits.is_empty() {
         ui.label(
-            egui::RichText::new("no symbols match")
-                .size(theme::FONT_SMALL)
-                .color(theme::TEXT_MUTED),
+            egui::RichText::new(if app.flow.pick_query.trim().is_empty() {
+                "no functions in this repository"
+            } else {
+                "no symbols match"
+            })
+            .size(theme::FONT_SMALL)
+            .color(theme::TEXT_MUTED),
         );
         return;
     }
-    for hit in &hits {
+    for (target, path) in &hits {
         let name = idx
             .symbols
             .iter()
-            .find(|s| s.id == hit.target)
+            .find(|s| s.id == *target)
             .map(|s| s.name.clone())
-            .unwrap_or_else(|| hit.target.clone());
+            .unwrap_or_else(|| target.clone());
         let resp = data_row(
             ui,
             false,
-            ("flow-pick-hit", &hit.target),
+            ("flow-pick-hit", target),
             name,
-            Some(Meta::muted(&hit.path)),
+            Some(Meta::muted(path)),
         );
         if resp.clicked() {
-            assign(app, hit.target.clone());
+            crate::flow::assign_endpoint(app, target.clone());
         }
-    }
-}
-
-/// Fill the armed slot; a resolved pair also becomes `app.trace`, mirroring
-/// the graph trace picker so both modes agree.
-fn assign(app: &mut App, id: String) {
-    match app.flow.pick {
-        TracePick::PickA => app.flow.trace_a = id,
-        TracePick::PickB => app.flow.trace_b = id,
-        TracePick::None => return,
-    }
-    app.flow.pick = TracePick::None;
-    app.flow.pick_query.clear();
-    app.flow.detail = None;
-    app.flow.playback.playhead = 0.0;
-    if !app.flow.trace_a.is_empty() && !app.flow.trace_b.is_empty() {
-        app.trace = Some((app.flow.trace_a.clone(), app.flow.trace_b.clone()));
     }
 }

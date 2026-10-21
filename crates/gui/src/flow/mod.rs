@@ -7,9 +7,11 @@ pub mod playback;
 pub mod render;
 
 use eframe::egui;
-use repowalk_core::model::{Confidence, EdgeKind, Index};
+use repowalk_core::model::{Confidence, EdgeKind, Index, SymbolKind};
+use repowalk_core::search;
 
 use crate::app::{App, Selection, TracePick};
+use crate::sidebar::{data_row, Meta};
 use crate::theme;
 
 use playback::Playback;
@@ -49,6 +51,9 @@ pub struct FlowState {
     pub pick: TracePick,
     /// Fuzzy query for the armed endpoint slot.
     pub pick_query: String,
+    /// Whether the Waves tab's entrypoint search is open (the entrypoint is
+    /// set from the Flow view itself, not from a trip through Search).
+    pub wave_pick: bool,
     /// Explicit detail pick (card/chip click); falls back to the current step.
     pub detail: Option<String>,
     /// Last values adopted from the app, so seeding rewinds only on change.
@@ -70,6 +75,7 @@ impl Default for FlowState {
             playback: Playback::default(),
             pick: TracePick::default(),
             pick_query: String::new(),
+            wave_pick: false,
             detail: None,
             seeded_trace: None,
             seeded_symbol: None,
@@ -206,10 +212,16 @@ pub fn ui(ctx: &egui::Context, ui: &mut egui::Ui, app: &mut App) {
     app.flow.sync(&app.trace, app.selection.as_ref());
 
     sub_tabs(ui, &mut app.flow);
-    if app.flow.tab == FlowTab::Feature {
-        feature::picker(ui, &mut app.flow, &idx);
-        ui.add_space(theme::SPACE_2);
+    ui.add_space(theme::SPACE_2);
+    // The chooser lives where the empty canvas is, not in a sidebar section
+    // the reader has to find first: the old hint pointed at a "sidebar Flow
+    // panel" that only exists nested inside the Map activity.
+    match app.flow.tab {
+        FlowTab::Trace => endpoints_card(ui, app, &idx),
+        FlowTab::Waves => waves_card(ui, app, &idx),
+        FlowTab::Feature => feature::picker(ui, &mut app.flow, &idx),
     }
+    ui.add_space(theme::SPACE_2);
 
     let seq = sequence(&idx, &app.flow);
     let steps = seq.step_count();
@@ -259,24 +271,33 @@ pub fn ui(ctx: &egui::Context, ui: &mut egui::Ui, app: &mut App) {
                     feature::FeaturePick::Step(i, id) => {
                         app.flow.playback.goto_step(i, steps);
                         app.flow.detail = Some(id.clone());
-                        app.select(Selection::Symbol(id));
+                        // In-view selection: clicking a slice step moves the
+                        // playhead and highlights the step, it must not open
+                        // a Text tab and hide the flow being read.
+                        app.select_in_view(Selection::Symbol(id));
                     }
                     feature::FeaturePick::Symbol(id) => {
                         app.flow.detail = Some(id.clone());
-                        app.select(Selection::Symbol(id));
+                        app.select_in_view(Selection::Symbol(id));
                     }
                 }
             }
         }
         Sequence::PickEndpoints => match app.flow.tab {
-            FlowTab::Trace => hint(ui, "pick A and B in the sidebar Flow panel"),
-            FlowTab::Waves => hint(ui, "click a symbol in Search to set the entrypoint"),
-            FlowTab::Feature => hint(ui, "pick a feature entrypoint above"),
+            FlowTab::Trace => hint(
+                ui,
+                "Pick a start (A) and an end (B) in the trace card above to draw the call path.",
+            ),
+            FlowTab::Waves => hint(
+                ui,
+                "Pick an entrypoint in the card above; the waves fan out from it.",
+            ),
+            FlowTab::Feature => hint(ui, "Search for a feature entrypoint in the picker above."),
         },
         Sequence::NoPath => hint(
             ui,
             format!(
-                "no call path from {} to {}",
+                "no call path from {} to {} — try swap in the trace card above",
                 render::display_name(&idx, &app.flow.trace_a),
                 render::display_name(&idx, &app.flow.trace_b)
             ),
@@ -306,6 +327,335 @@ pub fn ui(ctx: &egui::Context, ui: &mut egui::Ui, app: &mut App) {
             open_source(app, &idx, &open_id);
         }
     }
+}
+
+/// The Trace tab's endpoint chooser: two labelled slots with their own fuzzy
+/// search, right where the empty canvas is. Picking A moves straight on to B
+/// so the two-step gesture is visible instead of hidden behind a sidebar.
+fn endpoints_card(ui: &mut egui::Ui, app: &mut App, idx: &Index) {
+    let both = !app.flow.trace_a.is_empty() && !app.flow.trace_b.is_empty();
+    egui::Frame::new()
+        .fill(theme::SURFACE_E1)
+        .stroke(egui::Stroke::new(1.0, theme::BORDER_SUBTLE))
+        .corner_radius(theme::CORNER_MD)
+        .inner_margin(egui::Margin::symmetric(
+            theme::SPACE_3 as i8,
+            theme::SPACE_2 as i8,
+        ))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new("Trace a call path")
+                        .strong()
+                        .color(theme::TEXT_PRIMARY),
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if both
+                        && ui
+                            .small_button("swap")
+                            .on_hover_text("Swap the start and end functions")
+                            .clicked()
+                    {
+                        std::mem::swap(&mut app.flow.trace_a, &mut app.flow.trace_b);
+                        app.trace = Some((
+                            app.flow.trace_a.clone(),
+                            app.flow.trace_b.clone(),
+                        ));
+                        app.flow.detail = None;
+                        app.flow.playback.playhead = 0.0;
+                    }
+                });
+            });
+            ui.label(
+                egui::RichText::new(
+                    "Choose where to start (A) and where to end (B) — the storyboard follows the shortest call path between them.",
+                )
+                .size(theme::FONT_SMALL)
+                .color(theme::TEXT_MUTED),
+            );
+            ui.add_space(theme::SPACE_1);
+            endpoint_row(ui, app, idx, "A", "Start (A)", TracePick::PickA);
+            endpoint_row(ui, app, idx, "B", "End (B)", TracePick::PickB);
+            if !matches!(app.flow.pick, TracePick::None) {
+                ui.add_space(theme::SPACE_1);
+                let slot = if app.flow.pick == TracePick::PickA {
+                    "A"
+                } else {
+                    "B"
+                };
+                let what = if slot == "A" { "start" } else { "end" };
+                picker_search(
+                    ui,
+                    app,
+                    idx,
+                    slot,
+                    format!("search functions for the {what} ({slot})…"),
+                    assign_endpoint,
+                );
+            }
+            if both {
+                ui.label(
+                    egui::RichText::new(
+                        "Shortest path ready — Space plays it; the left/right arrow keys step through it.",
+                    )
+                    .size(theme::FONT_SMALL)
+                    .color(theme::TEXT_MUTED),
+                );
+            }
+        });
+}
+
+/// One labelled endpoint slot: current function or "not set", plus a button
+/// that arms the fuzzy search below it.
+fn endpoint_row(
+    ui: &mut egui::Ui,
+    app: &mut App,
+    idx: &Index,
+    slot: &str,
+    label: &str,
+    pick: TracePick,
+) {
+    let armed = app.flow.pick == pick;
+    let value = if slot == "A" {
+        app.flow.trace_a.clone()
+    } else {
+        app.flow.trace_b.clone()
+    };
+    ui.horizontal(|ui| {
+        ui.add_sized(
+            [74.0, 20.0],
+            egui::Label::new(
+                egui::RichText::new(label)
+                    .size(theme::FONT_SMALL)
+                    .color(if armed {
+                        theme::ACCENT
+                    } else {
+                        theme::TEXT_MUTED
+                    }),
+            ),
+        );
+        if value.is_empty() {
+            ui.label(
+                egui::RichText::new("not set")
+                    .size(theme::FONT_SMALL)
+                    .color(theme::TEXT_MUTED),
+            );
+        } else {
+            ui.label(egui::RichText::new(render::display_name(idx, &value)).strong());
+            ui.label(
+                egui::RichText::new(render::file_of(&value))
+                    .size(theme::FONT_SMALL)
+                    .color(theme::TEXT_MUTED),
+            );
+        }
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let text = if armed {
+                "cancel"
+            } else if value.is_empty() {
+                "choose…"
+            } else {
+                "change"
+            };
+            if ui.small_button(text).clicked() {
+                app.flow.pick = if armed { TracePick::None } else { pick };
+                app.flow.pick_query.clear();
+            }
+        });
+    });
+}
+
+/// The Waves tab's entrypoint chooser. Selecting here keeps the reader in
+/// Flow; the old hint sent them to Search, whose rows navigate to Text.
+fn waves_card(ui: &mut egui::Ui, app: &mut App, idx: &Index) {
+    let value = app.flow.wave_source.clone();
+    let show_search = app.flow.wave_pick || value.is_empty();
+    egui::Frame::new()
+        .fill(theme::SURFACE_E1)
+        .stroke(egui::Stroke::new(1.0, theme::BORDER_SUBTLE))
+        .corner_radius(theme::CORNER_MD)
+        .inner_margin(egui::Margin::symmetric(
+            theme::SPACE_3 as i8,
+            theme::SPACE_2 as i8,
+        ))
+        .show(ui, |ui| {
+            ui.label(
+                egui::RichText::new("Entrypoint waves")
+                    .strong()
+                    .color(theme::TEXT_PRIMARY),
+            );
+            ui.label(
+                egui::RichText::new(
+                    "Pick one function; each ring is one call hop outward from it.",
+                )
+                .size(theme::FONT_SMALL)
+                .color(theme::TEXT_MUTED),
+            );
+            ui.add_space(theme::SPACE_1);
+            ui.horizontal(|ui| {
+                ui.add_sized(
+                    [74.0, 20.0],
+                    egui::Label::new(
+                        egui::RichText::new("Entrypoint")
+                            .size(theme::FONT_SMALL)
+                            .color(theme::TEXT_MUTED),
+                    ),
+                );
+                if value.is_empty() {
+                    ui.label(
+                        egui::RichText::new("not set")
+                            .size(theme::FONT_SMALL)
+                            .color(theme::TEXT_MUTED),
+                    );
+                } else {
+                    ui.label(egui::RichText::new(render::display_name(idx, &value)).strong());
+                    ui.label(
+                        egui::RichText::new(render::file_of(&value))
+                            .size(theme::FONT_SMALL)
+                            .color(theme::TEXT_MUTED),
+                    );
+                }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let text = if app.flow.wave_pick {
+                        "cancel"
+                    } else if value.is_empty() {
+                        "choose…"
+                    } else {
+                        "change"
+                    };
+                    if ui.small_button(text).clicked() {
+                        app.flow.wave_pick = !app.flow.wave_pick;
+                        app.flow.pick_query.clear();
+                    }
+                });
+            });
+            if show_search {
+                ui.add_space(theme::SPACE_1);
+                picker_search(
+                    ui,
+                    app,
+                    idx,
+                    "wave",
+                    "search functions for the entrypoint…".to_string(),
+                    assign_wave,
+                );
+            }
+        });
+}
+
+/// What the endpoint pickers offer: the first functions for an empty query
+/// (a freshly opened picker must not read as "no matches"), fuzzy hits
+/// otherwise. Shared by the in-canvas Flow cards and the sidebar mirror.
+pub(crate) fn picker_hits(idx: &Index, query: &str, limit: usize) -> Vec<(String, String)> {
+    if query.trim().is_empty() {
+        idx.symbols
+            .iter()
+            .filter(|s| matches!(s.kind, SymbolKind::Function | SymbolKind::Method))
+            .take(limit)
+            .map(|s| (s.id.clone(), s.file.clone()))
+            .collect()
+    } else {
+        search::search(idx, query, limit)
+            .into_iter()
+            .map(|h| (h.target, h.path))
+            .collect()
+    }
+}
+
+/// Shared fuzzy picker for both Flow cards: one text field, up to six hits,
+/// clicking a hit hands its id to `on_pick`. Unique egui ids per `salt` keep
+/// the two cards (and the sidebar picker) from fighting over focus.
+fn picker_search(
+    ui: &mut egui::Ui,
+    app: &mut App,
+    idx: &Index,
+    salt: &str,
+    hint: String,
+    mut on_pick: impl FnMut(&mut App, String),
+) {
+    ui.add(
+        egui::TextEdit::singleline(&mut app.flow.pick_query)
+            .id(egui::Id::new(("flow-picker-query", salt)))
+            .hint_text(hint)
+            .desired_width(f32::INFINITY),
+    );
+    let hits = picker_hits(idx, &app.flow.pick_query, 6);
+    if hits.is_empty() {
+        let message = if app.flow.pick_query.trim().is_empty() {
+            "no functions in this repository"
+        } else {
+            "no functions match — try a shorter query"
+        };
+        ui.label(
+            egui::RichText::new(message)
+                .size(theme::FONT_SMALL)
+                .color(theme::TEXT_MUTED),
+        );
+        return;
+    }
+    // Cap the picker at a few rows: the Flow canvas below still needs room,
+    // especially on the small windows the shell has to survive.
+    egui::ScrollArea::vertical()
+        .id_salt(("flow-picker-hits", salt))
+        .max_height(theme::ROW_HEIGHT * 3.5)
+        .auto_shrink([false, true])
+        .show(ui, |ui| {
+            for (id, path) in &hits {
+                let name = idx
+                    .symbols
+                    .iter()
+                    .find(|s| s.id == *id)
+                    .map(|s| s.name.clone())
+                    .unwrap_or_else(|| id.clone());
+                let row = data_row(
+                    ui,
+                    false,
+                    ("flow-picker-hit", salt, id),
+                    name,
+                    Some(Meta::muted(path)),
+                );
+                if row.clicked() {
+                    on_pick(app, id.clone());
+                }
+            }
+        });
+}
+
+/// Fill the armed trace slot. Picking A when B is still empty moves straight
+/// on to B — the two-step gesture is guided instead of left implicit. Also
+/// used by the sidebar Flow panel so both pickers behave identically.
+pub(crate) fn assign_endpoint(app: &mut App, id: String) {
+    match app.flow.pick {
+        TracePick::PickA => {
+            app.flow.trace_a = id;
+            app.flow.pick = if app.flow.trace_b.is_empty() {
+                TracePick::PickB
+            } else {
+                TracePick::None
+            };
+        }
+        TracePick::PickB => {
+            app.flow.trace_b = id;
+            app.flow.pick = TracePick::None;
+        }
+        TracePick::None => return,
+    }
+    app.flow.pick_query.clear();
+    app.flow.detail = None;
+    app.flow.playback.playhead = 0.0;
+    app.flow.playback.playing = false;
+    if !app.flow.trace_a.is_empty() && !app.flow.trace_b.is_empty() {
+        app.trace = Some((app.flow.trace_a.clone(), app.flow.trace_b.clone()));
+    }
+}
+
+/// Set the Waves entrypoint without leaving Flow.
+fn assign_wave(app: &mut App, id: String) {
+    app.flow.wave_source = id;
+    app.flow.wave_pick = false;
+    app.flow.pick_query.clear();
+    app.flow.detail = None;
+    app.flow.playback.playhead = 0.0;
+    app.flow.playback.playing = false;
 }
 
 /// Confidence of the edge feeding the current step — the previous trace hop, a
@@ -352,13 +702,16 @@ fn find_call(idx: &Index, callee: &str, callers: &[String]) -> Option<(String, C
         .map(|e| (render::display_name(idx, &e.caller), e.confidence))
 }
 
-/// Resolve a symbol id to file:line and jump the text pane there.
+/// Resolve a symbol id to file:line and jump the text pane there. The button
+/// promises "open source", so it must actually leave Flow and land on the
+/// line — `open_file_with` alone loaded the buffer invisibly behind the flow
+/// canvas and looked like a dead control.
 fn open_source(app: &mut App, idx: &Index, id: &str) {
     let (file, line) = match idx.symbols.iter().find(|s| s.id == id) {
         Some(sym) => (sym.file.clone(), Some(sym.start_line)),
         None => (render::file_of(id).to_string(), Some(render::line_of(id))),
     };
-    app.open_file_with(file, line);
+    app.goto_file(file, line, Some(Selection::Symbol(id.to_string())));
 }
 
 /// Sub-tab strip: A→B trace / entrypoint waves / feature slice. Clicking a tab
@@ -367,7 +720,7 @@ fn sub_tabs(ui: &mut egui::Ui, flow: &mut FlowState) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = theme::SPACE_2;
         if ui
-            .selectable_value(&mut flow.tab, FlowTab::Trace, "A→B trace")
+            .selectable_value(&mut flow.tab, FlowTab::Trace, "A to B trace")
             .clicked()
         {
             flow.playback.playhead = 0.0;
@@ -375,6 +728,9 @@ fn sub_tabs(ui: &mut egui::Ui, flow: &mut FlowState) {
             // tabs rewinds AND pauses (the new tab otherwise auto-plays from
             // the old tab's timeline).
             flow.playback.playing = false;
+            flow.pick = TracePick::None;
+            flow.pick_query.clear();
+            flow.wave_pick = false;
         }
         if ui
             .selectable_value(&mut flow.tab, FlowTab::Waves, "Entrypoint waves")
@@ -382,6 +738,9 @@ fn sub_tabs(ui: &mut egui::Ui, flow: &mut FlowState) {
         {
             flow.playback.playhead = 0.0;
             flow.playback.playing = false;
+            flow.pick = TracePick::None;
+            flow.pick_query.clear();
+            flow.wave_pick = false;
         }
         if ui
             .selectable_value(&mut flow.tab, FlowTab::Feature, "Feature")
@@ -390,6 +749,9 @@ fn sub_tabs(ui: &mut egui::Ui, flow: &mut FlowState) {
         {
             flow.playback.playhead = 0.0;
             flow.playback.playing = false;
+            flow.pick = TracePick::None;
+            flow.pick_query.clear();
+            flow.wave_pick = false;
         }
     });
 }

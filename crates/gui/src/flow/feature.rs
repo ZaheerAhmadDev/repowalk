@@ -138,16 +138,16 @@ pub fn picker(ui: &mut egui::Ui, flow: &mut FlowState, idx: &Index) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = theme::SPACE_2;
         ui.label(
-            egui::RichText::new("entry")
+            egui::RichText::new("entrypoint")
                 .size(theme::FONT_SMALL)
                 .strong()
                 .color(theme::TEXT_MUTED),
         );
         if flow.feature_entry.is_empty() {
             ui.label(
-                egui::RichText::new("pick an entrypoint below")
+                egui::RichText::new("not set — pick a shortcut or search below")
                     .size(theme::FONT_SMALL)
-                    .color(theme::TEXT_DISABLED),
+                    .color(theme::TEXT_MUTED),
             );
         } else {
             ui.label(
@@ -192,7 +192,7 @@ pub fn picker(ui: &mut egui::Ui, flow: &mut FlowState, idx: &Index) {
 
     egui::TextEdit::singleline(&mut flow.feature_query)
         .id(egui::Id::new("flow-feature-pick"))
-        .hint_text("…or search any symbol")
+        .hint_text("search any symbol for the entrypoint…")
         .desired_width(ui.available_width())
         .show(ui);
     if flow.feature_query.is_empty() {
