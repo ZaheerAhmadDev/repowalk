@@ -27,8 +27,6 @@ python3 -m unittest discover -s board/tests
 | Workflow | Name | Trigger | Validates | Reproduce locally |
 |---|---|---|---|---|
 | `rust.yml` | CI | push (all), PR→main, dispatch | fmt · clippy `-D warnings` · build · test (workspace, `--locked`) | the first three gate lines above |
-| `ci.yml` | CI | push, PR→main, dispatch | duplicate of `rust.yml` | same |
-| `html5validator.yml` | CI | push, PR→main | **a third copy of the Rust CI — not HTML** (see traps) | same |
 | `format-check.yml` | Format Check (explicit) | push, PR→main | `cargo fmt --all -- --check` | `cargo fmt --all -- --check` |
 | `cargofmt.yml` | Cargo fmt (extra) | push, PR→main | `cargo fmt --all --check` | `cargo fmt --all --check` |
 | `clippy-check.yml` | Clippy Check (explicit) | push, PR→main | `clippy --workspace --all-targets --locked -- -D warnings` | same |
@@ -72,7 +70,7 @@ surface a backlog of debt.
 |---|---|---|
 | `.markdownlint.json` | markdownlint workflow, super-linter (copied into `.github/linters/`) | root copy; `MD013`/`MD012`/`MD024` etc. disabled |
 | `.github/linters/.markdownlint.json` | super-linter | must stay byte-identical to the root copy |
-| `_typos.toml` | spellcheck | excludes `vendor/`, `target/`, `andrej-karpathy-skills-main/`; allows `ratatui`, `unparseable`, `FoO`, `Fo` |
+| `_typos.toml` | spellcheck | excludes `vendor/`, `target/`, `andrej-karpathy-skills-main/`; allows `ratatui`, `unparseable`, `FoO`, `Fo`, `LOD`, `mis`, identifier `nd`; ignores 7–40 char hex/commit tokens |
 | `.yamllint` | yamllint workflow | ignores `vendor/`, `target/`, `andrej-karpathy-skills-main/`, `node_modules/`; `line-length` warning at 120; `truthy` allows `true/false/on/off` |
 | `.stylelintrc.json` | css-lint | extends `stylelint-config-standard` |
 | `.github/auto_assign.yml` | auto-assign | `reviewers: [ZaheerAhmadDev]` |
@@ -85,8 +83,7 @@ surface a backlog of debt.
 | **super-linter config path** | `MARKDOWN_CONFIG_FILE: .markdownlint.json` is resolved **inside `LINTER_RULES_PATH`** (`.github/linters/` by default), so a root-only file is not found | keep `.github/linters/.markdownlint.json` in sync with the root copy |
 | **yamllint trailing newline** | yamllint's `new-line-at-end-of-file` (from `extends: default`) fails any YAML without a final newline | end every `.yml`/`.yaml` (and ideally every text file) with exactly one newline |
 | **lychee dead links** | lychee fails the build on any 4xx/5xx in `*.md` or `site/**/*.html` | run `lychee` locally; verify new URLs return 200; drop or replace dead ones |
-| **Misnamed workflow** | `html5validator.yml` is not an HTML validator — its `name: CI` job runs `cargo fmt/clippy/test` | validate HTML with `npx --yes html-validate site` (or vnu); see the note below |
-| **Duplicate `name: CI`** | `rust.yml`, `ci.yml` and `html5validator.yml` all report the check name "CI" | disambiguate by workflow file / job when reading status, not by name |
+| **Misnamed/duplicate `CI` workflows (fixed)** | `ci.yml` and `html5validator.yml` duplicated `rust.yml`; all three expanded to the same `name: CI` concurrency group, so one run cancelled another. `html5validator.yml` never validated HTML. | Both removed; `rust.yml` is the single Rust gate. If you add another workflow, give it a unique `name` or a literal concurrency group. |
 | **No `.editorconfig`** | `editorconfig-check.yml` runs `editorconfig-checker`, but the repo has no `.editorconfig` at root | the tool falls back to built-in defaults (final newline, trailing whitespace, tabs); add a real `.editorconfig` if rules are intended |
 | **`@master`/`@main` actions** | `ludeeus/action-shellcheck@master` and `editorconfig-checker/action-editorconfig-checker@main` are unpinned | acceptable today, but prefer a tag/sha when touching those workflows |
 
@@ -95,7 +92,7 @@ surface a backlog of debt.
 1. **Trigger narrowly.** `push` + `pull_request: branches: ["main"]`, add `paths:` when the job only cares about `site/**` or docs.
 2. **Pin the action.** Use a released major (`actions/checkout@v4`, `dtolnay/rust-toolchain@stable`), never an unpinned branch.
 3. **Declare permissions least-privilege.** Every existing workflow sets `permissions:`; start from `contents: read` and add only what the job needs (`pages: write`, `id-token: write`, `security-events: write`, …).
-4. **Cancel superseded runs** with a `concurrency: { group: ${{ github.workflow }}-${{ github.ref }}, cancel-in-progress: true }` block.
+4. **Cancel superseded runs** with a `concurrency: { group: ${{ github.workflow }}-${{ github.ref }}, cancel-in-progress: true }` block, and keep workflow `name:` values unique because the group expands `github.workflow`.
 5. **Make it fail closed.** Do not append `|| true` unless the check is explicitly advisory (and say so in a comment).
 6. **Validate before pushing.** Run `actionlint` and `yamllint -c .yamllint .github/workflows/your.yml`; end the file with a newline.
 

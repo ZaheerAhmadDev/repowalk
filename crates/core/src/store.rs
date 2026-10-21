@@ -88,9 +88,9 @@ pub fn save(root: &Path, idx: &Index) -> anyhow::Result<()> {
         files: idx.files.iter().map(|f| stamp_of(root, &f.path)).collect(),
     };
     let hdest = header_path(root);
-    let htmp = dir.join("cache-header.json.tmp");
-    std::fs::write(&htmp, serde_json::to_vec(&header)?)?;
-    std::fs::rename(&htmp, &hdest)?;
+    let header_tmp = dir.join("cache-header.json.tmp");
+    std::fs::write(&header_tmp, serde_json::to_vec(&header)?)?;
+    std::fs::rename(&header_tmp, &hdest)?;
     Ok(())
 }
 

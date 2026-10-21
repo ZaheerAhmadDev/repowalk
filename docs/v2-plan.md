@@ -95,8 +95,7 @@ clones of the whole index; virtualized lists).
   10k-LOC cold learn <5 s.
 
 ### F11 — Reading workflow
-Bookmarks and per-file/symbol **notes** persisted to `.repowalk/notes.json`; reading progress
-+ "continue where I left off"; guided **tour v2** (ordered steps, next/prev, per-step why).
+Bookmarks and per-file/symbol **notes** persisted to `.repowalk/notes.json`; reading progress + "continue where I left off"; guided **tour v2** (ordered steps, next/prev, per-step why).
 - **Accept:** notes survive restart; resume returns to the exact file/line/symbol.
 
 ### F12 — Search & navigation

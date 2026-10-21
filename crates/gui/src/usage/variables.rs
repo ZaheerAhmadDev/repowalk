@@ -524,7 +524,7 @@ mod tests {
         );
 
         // Name filter is a case-insensitive substring.
-        let g = visible_variables(&all, "GAM", false);
+        let g = visible_variables(&all, "AMM", false);
         assert_eq!(
             g.iter().map(|v| v.name.as_str()).collect::<Vec<_>>(),
             vec!["gamma"]

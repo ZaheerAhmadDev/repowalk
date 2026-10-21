@@ -3,9 +3,10 @@
 
 :root {
   color-scheme: light dark;
+
   --bg: #f6f7fb;
-  --bg-elev: #ffffff;
-  --surface: #ffffff;
+  --bg-elev: #fff;
+  --surface: #fff;
   --surface-2: #eef1f8;
   --text: #131826;
   --muted: #59617a;
@@ -701,7 +702,7 @@ td code {
 
 /* ---------- Responsive ---------- */
 
-@media (max-width: 900px) {
+@media (width <= 900px) {
   .shell {
     grid-template-columns: 1fr;
   }
