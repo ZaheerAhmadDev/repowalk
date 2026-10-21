@@ -182,20 +182,24 @@ pub fn tab_strip(ui: &mut egui::Ui, app: &mut App) {
                     // File-type icon, then the title, then the close affordance —
                     // dirty shows the filled dot (VS Code swaps × ↔ dot), not a
                     // "*" suffix. Every part is its own hover+click target.
-                    let icon = match &tab.file {
-                        Some(f) => crate::icons::file_icon(f),
-                        None => match tab.mode {
-                            crate::app::Mode::Graph => crate::icons::GRAPH,
-                            crate::app::Mode::Flow => crate::icons::ARROW_RIGHT,
-                            crate::app::Mode::Diagrams => crate::icons::BEAKER,
-                            crate::app::Mode::Text => crate::icons::FILE,
-                        },
-                    };
-                    ui.label(crate::icons::glyph(icon, 13.0).color(if active {
-                        theme::ACCENT
-                    } else {
-                        theme::TEXT_MUTED
-                    }));
+                    match &tab.file {
+                        Some(f) => {
+                            crate::icons::file_mark(ui, f, 13.0);
+                        }
+                        None => {
+                            let icon = match tab.mode {
+                                crate::app::Mode::Graph => crate::icons::GRAPH,
+                                crate::app::Mode::Flow => crate::icons::ARROW_RIGHT,
+                                crate::app::Mode::Diagrams => crate::icons::BEAKER,
+                                crate::app::Mode::Text => crate::icons::FILE,
+                            };
+                            ui.label(crate::icons::glyph(icon, 13.0).color(if active {
+                                theme::ACCENT
+                            } else {
+                                theme::TEXT_MUTED
+                            }));
+                        }
+                    }
 
                     let text = if active {
                         egui::RichText::new(&title).color(name_color).strong()
