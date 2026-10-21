@@ -14,7 +14,7 @@
 //! one colour everywhere.
 use eframe::egui;
 
-use crate::app::{App, Selection};
+use crate::app::App;
 use crate::sidebar::{data_row, Meta};
 use crate::theme;
 use crate::ui_kit;
@@ -74,6 +74,18 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
 
     // Text mode's open file wins; otherwise the user picks from the list.
     let mut viewed = app.open_file.clone().or_else(|| state.picked_file.clone());
+    let idx = app.index.clone();
+    // A picked file from the PREVIOUS repo must not survive a re-learn:
+    // validate it against the current index, else reset to the selector.
+    if let Some(file) = &viewed {
+        let known = idx
+            .as_ref()
+            .map(|i| i.files.iter().any(|f| f.path == *file));
+        if known == Some(false) {
+            state.picked_file = None;
+            viewed = None;
+        }
+    }
     if viewed.is_none() {
         if let Some(picked) = file_selector(ui, app, &analysis, &mut state) {
             state.picked_file = Some(picked.clone());
@@ -206,9 +218,10 @@ fn variable_row(ui: &mut egui::Ui, app: &mut App, state: &mut ViewState, v: &Var
     );
     if resp.clicked() {
         state.selected_var = Some(v.id.clone());
-        let file = v.file.clone();
-        app.open_file_with(file.clone(), Some(v.decl_line));
-        app.selection = Some(Selection::File(file));
+        // Keep the shared selection (usually a symbol) alive: clobbering it
+        // with the file used to blank out the References tab the user was
+        // just using, and the jump previously bypassed the tab strip too.
+        app.goto_file(v.file.clone(), Some(v.decl_line), None);
     }
     resp.on_hover_text(format!(
         "{} ({}) · {} reads, {} writes, {} uses · declared on line {}",

@@ -317,9 +317,11 @@ fn where_risk(ui: &mut egui::Ui, app: &mut App, idx: &Index, analysis: Option<&A
             Some(Meta::muted(&format!("L{}", v.decl_line))),
         );
         if resp.clicked() {
+            // One navigation path: opens a tab too, so the tab strip
+            // follows the editor instead of showing the previous file.
             let file = v.file.clone();
             let line = v.decl_line;
-            app.open_file_with(file, Some(line));
+            app.goto_file(file, Some(line), None);
         }
         resp.on_hover_text(format!("{}:{}:{}", v.file, v.decl_line, v.name));
     }
@@ -328,7 +330,7 @@ fn where_risk(ui: &mut egui::Ui, app: &mut App, idx: &Index, analysis: Option<&A
     }
 
     // Import cycles.
-    let cycles = cycle_groups(idx, a);
+    let cycles = cycle_groups(idx, a, app.cached_metrics.as_deref());
     muted(
         ui,
         &format!(
@@ -355,7 +357,7 @@ fn where_risk(ui: &mut egui::Ui, app: &mut App, idx: &Index, analysis: Option<&A
             if let Some(first) = cyc.first() {
                 let (file, line) = complexity::parse_symbol_id(first);
                 if idx.files.iter().any(|f| f.path == file) {
-                    app.open_file_with(file, (line > 0).then_some(line));
+                    app.goto_file(file, (line > 0).then_some(line), None);
                 }
             }
         }
@@ -552,12 +554,19 @@ pub(crate) fn risk(analysis: &Analysis) -> Risk {
 }
 
 /// Import cycles: module-level when the module tree is populated, else the v1
-/// symbol-level cycles from `metrics::compute`. Always read from core.
-pub(crate) fn cycle_groups(idx: &Index, analysis: &Analysis) -> Vec<Vec<String>> {
-    if analysis.modules.is_empty() {
-        metrics::compute(idx).cycles
-    } else {
+/// symbol-level cycles from `metrics::compute`. Always read from core; the
+/// optional `cached` metrics short-circuits the per-frame SCC recompute.
+pub(crate) fn cycle_groups(
+    idx: &Index,
+    analysis: &Analysis,
+    cached: Option<&repowalk_core::metrics::Metrics>,
+) -> Vec<Vec<String>> {
+    if !analysis.modules.is_empty() {
         modules::cycles(&analysis.modules, &analysis.module_edges)
+    } else if let Some(m) = cached {
+        m.cycles.clone()
+    } else {
+        metrics::compute(idx).cycles
     }
 }
 
@@ -683,7 +692,7 @@ mod tests {
 
         // An empty analysis yields empty aggregates (no panic, no invented value).
         assert_eq!(risk(&a), Risk::default());
-        assert!(cycle_groups(&idx, &a).is_empty());
+        assert!(cycle_groups(&idx, &a, None).is_empty());
 
         // The module-tree fallback still describes the shape from the index.
         assert_eq!(top_level_dirs(&idx), vec![("src".to_string(), 1, 10)]);
@@ -767,7 +776,10 @@ mod tests {
         let r = risk(&analysis);
         assert_eq!(r.unused, complexity::unused_variables(&analysis).len());
         // Cycles read from the same analysis; deterministic and panic-free.
-        assert_eq!(cycle_groups(&idx, &analysis), cycle_groups(&idx, &analysis));
+        assert_eq!(
+            cycle_groups(&idx, &analysis, None),
+            cycle_groups(&idx, &analysis, None)
+        );
 
         eprintln!(
             "ONBOARD census: files={} loc={} symbols={} entrypoints={:?} langs={:?}",
@@ -778,7 +790,7 @@ mod tests {
             r.hot_files,
             r.hot_functions,
             r.unused,
-            cycle_groups(&idx, &analysis)
+            cycle_groups(&idx, &analysis, None)
         );
 
         let _ = std::fs::remove_dir_all(&root);

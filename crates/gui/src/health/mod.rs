@@ -121,6 +121,11 @@ impl CacheKey {
 #[derive(Clone)]
 struct Cache {
     key: CacheKey,
+    /// Pins the exact artifacts the key fingerprints. Without this, the bare
+    /// `Arc` addresses could be reused by a NEW allocation (same address,
+    /// same counts — likely when re-learning the same repo) and a stale
+    /// cache would be accepted as fresh (ABA hazard).
+    _pin: (Arc<repowalk_core::model::Index>, Option<Arc<Analysis>>),
     v1: Arc<Metrics>,
     /// `None` when no analysis artifact has landed yet.
     v2: Option<Arc<MetricsV2>>,
@@ -135,6 +140,7 @@ struct Cache {
 impl Cache {
     fn build(
         key: CacheKey,
+        pin: (Arc<repowalk_core::model::Index>, Option<Arc<Analysis>>),
         idx: &repowalk_core::model::Index,
         analysis: Option<&Analysis>,
         repo: Option<&Path>,
@@ -159,6 +165,7 @@ impl Cache {
 
         Self {
             key,
+            _pin: pin,
             v1,
             v2,
             module_files,
@@ -188,7 +195,13 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
     let cache: Cache = match ui.ctx().data_mut(|d| d.get_temp::<Cache>(cache_id)) {
         Some(c) if c.key == key => c,
         _ => {
-            let built = Cache::build(key, &idx, analysis.as_deref(), repo.as_deref());
+            let built = Cache::build(
+                key,
+                (idx.clone(), analysis.clone()),
+                &idx,
+                analysis.as_deref(),
+                repo.as_deref(),
+            );
             ui.ctx()
                 .data_mut(|d| d.insert_temp(cache_id, built.clone()));
             built
@@ -628,9 +641,11 @@ fn short_path(path: &str) -> String {
 
 /// Navigate to a file (and line) in Text mode via the shared selection.
 fn goto(app: &mut App, file: String, line: Option<usize>) {
-    app.mode = Mode::Text;
-    app.open_file_with(file.clone(), line);
-    app.selection = Some(Selection::File(file));
+    app.set_mode(Mode::Text);
+    // One navigation path for every sidebar jump: open/activate a tab too,
+    // so the tab strip and breadcrumbs agree with the editor (they used to
+    // disagree, and clicking the stale tab silently reverted the editor).
+    app.goto_file(file.clone(), line, Some(Selection::File(file)));
 }
 
 fn module_widget(m: &ModuleComplexity) -> egui::text::LayoutJob {

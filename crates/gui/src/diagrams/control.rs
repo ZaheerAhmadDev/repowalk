@@ -223,7 +223,7 @@ fn picker(
 // ── Canvas ──────────────────────────────────────────────────────────────────
 
 fn canvas(ui: &mut egui::Ui, cfg: &FunctionCfg, index: Option<&Index>) {
-    let state_id = egui::Id::new(STATE_ID).with(cfg.symbol.as_str());
+    let state_id = interact::canvas_key(STATE_ID, index).with(cfg.symbol.as_str());
     let mut reset_requested = false;
     badge_strip(
         ui,

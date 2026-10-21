@@ -37,13 +37,22 @@ pub fn ui(ui: &mut egui::Ui, app: &mut crate::app::App) {
         return;
     }
     match app.sidebar_tab {
-        // The v1 stacked panels, unchanged, under one activity.
+        // The v1 stacked panels under one activity. ONE wrapping scroll —
+        // each section's own inner cap (map 50%, tour 45%) used to mean
+        // that on a short window the Flow section and everything under the
+        // caps was clipped and unreachable, while on a tall window the map
+        // artificially stopped at 360px and left half the panel blank.
         Tab::Map => {
-            map::ui(ui, app);
-            theme::separator(ui);
-            tour::ui(ui, app);
-            theme::separator(ui);
-            flow::ui(ui, app);
+            egui::ScrollArea::vertical()
+                .id_salt("map-stack")
+                .auto_shrink(false)
+                .show(ui, |ui| {
+                    map::ui(ui, app);
+                    theme::separator(ui);
+                    tour::ui(ui, app);
+                    theme::separator(ui);
+                    flow::ui(ui, app);
+                });
         }
         // Full-height panels for the two new activities (search used to live
         // at the bottom of Map; as its own activity it gets the whole panel).

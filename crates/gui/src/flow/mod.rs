@@ -101,7 +101,13 @@ impl FlowState {
             if self.seeded_symbol.as_deref() != Some(id.as_str()) {
                 self.wave_source = id.clone();
                 self.seeded_symbol = Some(id.clone());
-                self.playback.playhead = 0.0;
+                // Rewind the playhead ONLY for the Waves tab (this seed
+                // serves wave slicing). Clicking a Feature step row also
+                // selects a symbol — rewinding here used to snap that tab's
+                // playhead back to step 1 right after you clicked it.
+                if self.tab == FlowTab::Waves {
+                    self.playback.playhead = 0.0;
+                }
             }
         }
     }
@@ -365,12 +371,17 @@ fn sub_tabs(ui: &mut egui::Ui, flow: &mut FlowState) {
             .clicked()
         {
             flow.playback.playhead = 0.0;
+            // Each sub-tab replays a different-length sequence: switching
+            // tabs rewinds AND pauses (the new tab otherwise auto-plays from
+            // the old tab's timeline).
+            flow.playback.playing = false;
         }
         if ui
             .selectable_value(&mut flow.tab, FlowTab::Waves, "Entrypoint waves")
             .clicked()
         {
             flow.playback.playhead = 0.0;
+            flow.playback.playing = false;
         }
         if ui
             .selectable_value(&mut flow.tab, FlowTab::Feature, "Feature")
@@ -378,6 +389,7 @@ fn sub_tabs(ui: &mut egui::Ui, flow: &mut FlowState) {
             .clicked()
         {
             flow.playback.playhead = 0.0;
+            flow.playback.playing = false;
         }
     });
 }

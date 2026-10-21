@@ -329,15 +329,17 @@ fn header(
             {
                 *reset = true;
             }
-            ui.label(
-                egui::RichText::new(
-                    "box = one module (a folder of the repo) · \
-                     arrows crossing boxes = imports between modules (labelled ×N) · \
-                     tree faint · ⟳ = cycle · wheel zoom · drag pan · drag box move",
-                )
-                .size(theme::FONT_SMALL)
-                .color(theme::TEXT_MUTED),
-            );
+            if ui.available_width() > 560.0 {
+                ui.label(
+                    egui::RichText::new(
+                        "box = one module (a folder of the repo) · \
+                         arrows crossing boxes = imports between modules (labelled ×N) · \
+                         tree faint · ⟳ = cycle · wheel zoom · drag pan · drag box move",
+                    )
+                    .size(theme::FONT_SMALL)
+                    .color(theme::TEXT_MUTED),
+                );
+            }
         });
     });
     theme::separator(ui);
@@ -372,7 +374,14 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
     header(
         ui,
         &lay,
-        analysis.module_edges.len(),
+        // Cap banner compares against IMPORT edges only — the canvas draws
+        // `.filter(Import).take(EDGE_CAP)`, so counting tree edges too used
+        // to announce a false "capped at N imports".
+        analysis
+            .module_edges
+            .iter()
+            .filter(|e| e.kind == ModuleEdgeKind::Import)
+            .count(),
         &cycles,
         &mut reset_requested,
     );
@@ -397,7 +406,8 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
                 ui.allocate_exact_size(ui.available_size(), egui::Sense::click_and_drag());
             let painter = ui.painter_at(rect);
             let origin = rect.min;
-            let mut state = interact::CanvasState::load(ui.ctx(), egui::Id::new(STATE_ID));
+            let key = interact::canvas_key(STATE_ID, app.index.as_deref());
+            let mut state = interact::CanvasState::load(ui.ctx(), key);
             if reset_requested {
                 state.reset();
             }
@@ -548,7 +558,7 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
                 }
             }
 
-            state.store(ui.ctx(), egui::Id::new(STATE_ID));
+            state.store(ui.ctx(), key);
         });
 }
 

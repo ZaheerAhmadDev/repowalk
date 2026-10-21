@@ -70,11 +70,15 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
                 FilesDock::Right => eframe::egui::Panel::right("text-files-r"),
                 FilesDock::Float => unreachable!("handled above"),
             };
+            // Same dynamic cap as the main sidebar: a narrow screen keeps the
+            // majority of the window for the document itself.
+            let max_files = (ui.ctx().viewport_rect().width() * 0.45)
+                .clamp(theme::SIDEBAR_MIN, theme::SIDEBAR_MAX);
             panel
                 .resizable(true)
                 .default_size(240.0)
                 .min_size(180.0)
-                .max_size(theme::SIDEBAR_MAX)
+                .max_size(max_files)
                 .show(ui, |ui| {
                     eframe::egui::Frame::new()
                         .inner_margin(egui::Margin::symmetric(
@@ -97,9 +101,11 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
 /// before an index exists (once indexed, Open lives in the toolbar).
 fn open_repository(ui: &mut egui::Ui, app: &mut App) {
     ui.centered_and_justified(|ui| {
+        // Dynamic: the card never claims more than ~90% of a small window.
+        let card_w = CARD_WIDTH.min((ui.available_width() * 0.9).max(320.0));
         ui.add_space(((ui.available_height() - CARD_HEIGHT) * 0.5).max(theme::SPACE_6));
         ui.vertical_centered(|ui| {
-            ui.allocate_ui(egui::vec2(CARD_WIDTH, 0.0), |ui| {
+            ui.allocate_ui(egui::vec2(card_w, 0.0), |ui| {
                 egui::Frame::new()
                     .fill(theme::SURFACE_E2)
                     .stroke(egui::Stroke::new(1.0, theme::BORDER_SUBTLE))
@@ -109,7 +115,7 @@ fn open_repository(ui: &mut egui::Ui, app: &mut App) {
                         theme::SPACE_6 as i8,
                     ))
                     .show(ui, |ui| {
-                        ui.set_min_width(CARD_WIDTH - 2.0 * theme::SPACE_6 - 2.0);
+                        ui.set_min_width(card_w * 0.7 - 2.0 * theme::SPACE_6);
                         ui.label(
                             egui::RichText::new("Open a repository")
                                 .size(theme::FONT_HEADING)
@@ -144,6 +150,16 @@ fn open_repository(ui: &mut egui::Ui, app: &mut App) {
                                 app.start_indexing(path);
                             }
                         });
+                        ui.add_space(theme::SPACE_1);
+                        // No path typing required: one click, pick a folder
+                        // in the OS dialog, the index builds itself.
+                        if ui
+                            .button("Browse… — pick a folder")
+                            .on_hover_text("open the OS directory picker instead of typing a path")
+                            .clicked()
+                        {
+                            app.browse_folder();
+                        }
                     });
             });
         });

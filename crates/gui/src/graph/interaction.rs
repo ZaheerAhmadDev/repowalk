@@ -1,8 +1,8 @@
 //! Graph interaction: hover preview, click → neighborhood highlight + dim,
 //! A→B flow trace via BFS (plan §7.3). OWNER: RSK-20.
 use eframe::egui;
-use repowalk_core::model::{EdgeKind, Index};
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use repowalk_core::model::Index;
+use std::collections::BTreeSet;
 
 use crate::app::{App, Selection, TracePick};
 use crate::graph::filter;
@@ -11,45 +11,14 @@ use crate::theme;
 
 /// BFS shortest call path from `a` to `b` over resolved call edges.
 /// Returns the node id path including both endpoints, or None (honest "no path").
+///
+/// Delegates to core's canonical trace (flow::CallGraph::build): call edges
+/// are keyed by the CALLER's enclosing NAME in the index, and the old local
+/// BFS keyed adjacency on that raw name — so a path from a SYMBOL ID couldn't
+/// even take its first hop and Graph mode said "no call path" for pairs Flow
+/// mode traced fine (two features in one app disagreeing).
 pub fn shortest_call_path(idx: &Index, a: &str, b: &str) -> Option<Vec<String>> {
-    if a == b {
-        return Some(vec![a.to_string()]);
-    }
-    let mut adj: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
-    for e in &idx.edges {
-        if e.kind == EdgeKind::Call && e.callee != e.caller {
-            adj.entry(e.caller.as_str())
-                .or_default()
-                .push(e.callee.as_str());
-        }
-    }
-    for v in adj.values_mut() {
-        v.sort_unstable();
-        v.dedup();
-    }
-    let mut prev: BTreeMap<&str, &str> = BTreeMap::new();
-    let mut seen: BTreeSet<&str> = BTreeSet::from([a]);
-    let mut queue = VecDeque::from([a]);
-    while let Some(cur) = queue.pop_front() {
-        for next in adj.get(cur).into_iter().flatten() {
-            if !seen.insert(next) {
-                continue;
-            }
-            prev.insert(next, cur);
-            if *next == b {
-                let mut path = vec![b.to_string()];
-                let mut step = b;
-                while let Some(&p) = prev.get(step) {
-                    path.push(p.to_string());
-                    step = p;
-                }
-                path.reverse();
-                return Some(path);
-            }
-            queue.push_back(*next);
-        }
-    }
-    None
+    repowalk_core::flow::trace(idx, a, b)
 }
 
 /// The focus node plus its direct callers/callees — the "keep lit" set used to
@@ -186,42 +155,47 @@ pub fn handle(ui: &mut egui::Ui, app: &mut App) {
                         }
                         TracePick::None => {}
                     }
-                    if let Some((a, b)) = app.trace.clone() {
-                        match shortest_call_path(&idx, &a, &b) {
-                            Some(p) => {
-                                // Short chains read in full; long ones abbreviate.
-                                let shown = if p.len() > 4 {
-                                    format!(
-                                        "{} → … → {}",
-                                        display_name(&idx, &p[0]),
-                                        display_name(&idx, &p[p.len() - 1])
-                                    )
-                                } else {
-                                    p.iter()
-                                        .map(|id| display_name(&idx, id))
-                                        .collect::<Vec<_>>()
-                                        .join(" → ")
-                                };
-                                ui.colored_label(
-                                    theme::SUCCESS,
-                                    egui::RichText::new(format!(
-                                        "{} ({} hops)",
-                                        shown,
-                                        p.len() - 1
-                                    ))
-                                    .size(theme::FONT_SMALL),
-                                );
-                            }
-                            None => {
-                                ui.colored_label(
-                                    theme::DANGER,
-                                    egui::RichText::new(format!(
-                                        "no call path from {} to {}",
-                                        display_name(&idx, &a),
-                                        display_name(&idx, &b),
-                                    ))
-                                    .size(theme::FONT_SMALL),
-                                );
+                    // The resolved trace is only shown while not picking —
+                    // the stale banner used to keep rendering below the
+                    // "Click node A" prompt until a new trace resolved.
+                    if app.trace.is_some() && matches!(app.trace_pick, TracePick::None) {
+                        if let Some((a, b)) = app.trace.clone() {
+                            match shortest_call_path(&idx, &a, &b) {
+                                Some(p) => {
+                                    // Short chains read in full; long ones abbreviate.
+                                    let shown = if p.len() > 4 {
+                                        format!(
+                                            "{} → … → {}",
+                                            display_name(&idx, &p[0]),
+                                            display_name(&idx, &p[p.len() - 1])
+                                        )
+                                    } else {
+                                        p.iter()
+                                            .map(|id| display_name(&idx, id))
+                                            .collect::<Vec<_>>()
+                                            .join(" → ")
+                                    };
+                                    ui.colored_label(
+                                        theme::SUCCESS,
+                                        egui::RichText::new(format!(
+                                            "{} ({} hops)",
+                                            shown,
+                                            p.len() - 1
+                                        ))
+                                        .size(theme::FONT_SMALL),
+                                    );
+                                }
+                                None => {
+                                    ui.colored_label(
+                                        theme::DANGER,
+                                        egui::RichText::new(format!(
+                                            "no call path from {} to {}",
+                                            display_name(&idx, &a),
+                                            display_name(&idx, &b),
+                                        ))
+                                        .size(theme::FONT_SMALL),
+                                    );
+                                }
                             }
                         }
                         if strip_button(ui, "Clear", theme::TEXT_SECONDARY) {
@@ -334,33 +308,43 @@ pub fn handle(ui: &mut egui::Ui, app: &mut App) {
 
     // Node click: trace picking first, else selection sync. Cluster nodes are
     // handled by `render::ui` (collapse/expand), so they are ignored here.
-    let clicked_id: Option<String> = app
-        .graph_state
-        .as_ref()
-        .and_then(|(_, g)| g.selected_nodes().last().copied())
-        .and_then(|n| app.graph_state.as_ref().unwrap().1.node(n))
-        .map(|node| node.payload().id.clone())
-        .filter(|id| !id.starts_with("cluster:"));
+    //
+    // Clicks arrive as GraphChange::NodeClicked events relayed through temp
+    // memory by render (a one-frame hop — `handle` runs before the widget).
+    // The crate's PERSISTENT node selection used to be read instead, so
+    // after one frame every further frame re-consumed the same node: pick A
+    // became pick B with the same id and the banner always resolved to
+    // "A (0 hops)".
+    let clicked_id: Option<String> = ui
+        .ctx()
+        .data_mut(|d| d.remove_temp::<String>(egui::Id::new("graph-node-clicked")));
     if let Some(id) = clicked_id {
-        match app.trace_pick {
-            TracePick::PickA => {
-                app.pending_trace_a = Some(id);
-                app.trace_pick = TracePick::PickB;
-                return;
-            }
-            TracePick::PickB => {
-                if let Some(a) = app.pending_trace_a.take() {
-                    app.trace = Some((a, id));
+        if !id.starts_with("cluster:") {
+            match app.trace_pick {
+                TracePick::PickA => {
+                    app.pending_trace_a = Some(id);
+                    app.trace_pick = TracePick::PickB;
+                    return;
                 }
-                app.trace_pick = TracePick::None;
-                return;
+                TracePick::PickB => {
+                    if let Some(a) = app.pending_trace_a.take() {
+                        app.trace = Some((a, id));
+                    }
+                    app.trace_pick = TracePick::None;
+                    return;
+                }
+                TracePick::None => {}
             }
-            TracePick::None => {}
-        }
-        if let Some(sym) = idx.symbols.iter().find(|s| s.id == id) {
-            app.select(Selection::Symbol(sym.id.clone()));
-        } else if let Some(path) = id.strip_prefix("file:") {
-            app.select(Selection::File(path.to_string()));
+            if let Some(sym) = idx.symbols.iter().find(|s| s.id == id) {
+                // Canvas click: keep the graph on screen — the highlight
+                // inside the view is the visible effect. `select` here used
+                // to reuse the repo tab as a text tab, yanking the reader
+                // out of Graph mode so the highlight could only be seen
+                // after navigating back.
+                app.select_in_view(Selection::Symbol(sym.id.clone()));
+            } else if let Some(path) = id.strip_prefix("file:") {
+                app.select_in_view(Selection::File(path.to_string()));
+            }
         }
     }
 
@@ -373,10 +357,19 @@ pub fn handle(ui: &mut egui::Ui, app: &mut App) {
     });
     let mut keep: Option<BTreeSet<String>> = focus.as_ref().map(|f| neighborhood(&idx, f));
 
-    if let Some((a, b)) = app.trace.clone() {
-        if let Some(path) = shortest_call_path(&idx, &a, &b) {
-            // trace mode: highlight only the path
-            keep = Some(path.into_iter().collect());
+    // A resolved trace highlights the PATH, not the neighbourhood: the
+    // traversed edges go full-strength ACCENT (selected) and everything off
+    // the path dims — the path used to be readable only via the text banner.
+    let mut trace_edges: BTreeSet<(String, String)> = BTreeSet::new();
+    if app.trace.is_some() && matches!(app.trace_pick, TracePick::None) {
+        if let Some((a, b)) = app.trace.clone() {
+            if let Some(path) = shortest_call_path(&idx, &a, &b) {
+                keep = Some(path.iter().cloned().collect());
+                trace_edges = path
+                    .windows(2)
+                    .map(|w| (w[0].clone(), w[1].clone()))
+                    .collect();
+            }
         }
     }
 
@@ -403,13 +396,66 @@ pub fn handle(ui: &mut egui::Ui, app: &mut App) {
                 node.display_mut().dimmed = !search_ok && !focus_ok;
             }
         }
+
+        // Idle graph — no focus, no search: clear the crate-side selection
+        // too. Esc used to clear only app.selection while the crate kept the
+        // node selected, so the selection ring + dim snapped straight back
+        // the next frame ("Esc cleaves selection" broken in Graph mode).
+        if keep.is_none() && !search_active {
+            let nodes: Vec<_> = g.g().node_indices().collect();
+            for i in nodes {
+                if let Some(n) = g.g_mut().node_weight_mut(i) {
+                    n.set_selected(false);
+                }
+            }
+            let edges: Vec<_> = g.g().edge_indices().collect();
+            for i in edges {
+                if let Some(e) = g.g_mut().edge_weight_mut(i) {
+                    e.set_selected(false);
+                }
+            }
+        }
+
+        // Edge dim pass (above: nodes). While a trace is resolved, edges on
+        // the path light up accent; everything else fades.
+        if !trace_edges.is_empty() {
+            // StableGraph edge iteration via petgraph's visitor traits.
+            // Collect (id, endpoints, payload-ids) FIRST — the immutable
+            // borrow must be released before the mutable dim pass below.
+            use petgraph::visit::{EdgeRef as _, IntoEdgeReferences as _};
+            let edges: Vec<(_, _, Option<String>, Option<String>)> = g
+                .g()
+                .edge_references()
+                .map(|r| {
+                    (
+                        r.id(),
+                        r.source(),
+                        g.g()
+                            .node_weight(r.source())
+                            .map(|n| n.payload().id.clone()),
+                        g.g()
+                            .node_weight(r.target())
+                            .map(|n| n.payload().id.clone()),
+                    )
+                })
+                .collect();
+            for (e_idx, _, sp, tp) in edges {
+                let on_path = sp
+                    .zip(tp)
+                    .is_some_and(|(s, t)| trace_edges.contains(&(s, t)));
+                if let Some(w) = g.g_mut().edge_weight_mut(e_idx) {
+                    w.display_mut().dimmed = !on_path;
+                    w.display_mut().selected = on_path;
+                }
+            }
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use repowalk_core::model::{CallSite, Edge, Symbol};
+    use repowalk_core::model::{CallSite, Edge, EdgeKind, Symbol};
 
     fn sym(id: &str, name: &str) -> Symbol {
         Symbol {

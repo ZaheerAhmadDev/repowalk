@@ -61,7 +61,7 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
         .open(&mut close)
         .resizable(false)
         .collapsible(false)
-        .default_width(420.0)
+        .default_width((ui.ctx().viewport_rect().width() * 0.9).min(420.0))
         .anchor(Align2::CENTER_TOP, [0.0, 24.0])
         .show(ui.ctx(), |ui| {
             // The input keeps focus for the overlay's lifetime; Esc/Enter are
@@ -111,7 +111,11 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
                 egui::RichText::new("↵ open best match · esc close").size(theme::FONT_SMALL),
             );
 
-            if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+            if ui.input(|i| i.key_pressed(egui::Key::Enter))
+                // With an empty query the "best match" is just walk-order
+                // luck — Enter should not open a file you didn't ask for.
+                && !app.quick_open_query.trim().is_empty()
+            {
                 picked = shown.first().cloned();
             }
         });

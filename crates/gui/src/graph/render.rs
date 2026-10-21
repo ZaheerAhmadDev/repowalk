@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::app::{App, TracePick};
-use crate::graph::filter::{self, BuildSig, ConfidenceFilter, GraphUiState, NODE_CAP};
+use crate::graph::filter::{self, BuildSig, ConfidenceFilter, GraphLayout, GraphUiState, NODE_CAP};
 use crate::theme;
 
 /// Node payload: everything the custom shape needs to draw honestly.
@@ -285,6 +285,9 @@ const ZOOM_SHORT: f32 = 0.55;
 /// egui_graphs custom id: keys the persisted layout state and (pan/zoom)
 /// metadata for the one graph view in the app. Keep in sync with `with_id`.
 const GRAPH_ID: &str = "repowalk-graph";
+/// The layered view keeps its own crate id, so its layout/pan/zoom state never
+/// clobbers the force view's — switching layouts restores the framing you left.
+const GRAPH_ID_LAYERED: &str = "repowalk-graph-layered";
 
 // ── Interaction knobs (B5-03) ───────────────────────────────────────────────
 //
@@ -301,8 +304,11 @@ const GRAPH_ID: &str = "repowalk-graph";
 // that, nodes stay exactly where the user drags them (B5-03).
 
 /// Hard cap on simulation steps before the force layout freezes regardless of
-/// displacement (no endless CPU burn on a stubborn layout).
-pub const LAYOUT_STEPS_CAP: u64 = 600;
+/// displacement (no endless CPU burn on a stubborn layout). The crate's force
+/// layout has no centering force, so sparse/disconnected graphs keep drifting
+/// outward forever and never satisfy the settle threshold — the cap is what
+/// actually stops them.
+pub const LAYOUT_STEPS_CAP: u64 = 180;
 /// Freeze only after this many steps, so the initial spread has a chance to
 /// act before we pin everything down.
 pub const LAYOUT_SETTLE_MIN_STEPS: u64 = 90;
@@ -322,6 +328,7 @@ pub fn layout_should_freeze(steps: u64, avg_displacement: Option<f32>) -> bool {
 /// Pure fit-to-rect transform using the crate's metadata semantics
 /// (`screen = pan + canvas·zoom`): `screen = pan + canvas_pos·zoom`. Returns
 /// `None` for empty/invalid input (never a wild zoom).
+#[cfg(test)]
 pub fn fit_pan_zoom(
     bounds: egui::Rect,
     canvas: egui::Vec2,
@@ -347,36 +354,6 @@ pub fn fit_pan_zoom(
     Some((zoom, canvas * 0.5 - bounds.center().to_vec2() * zoom))
 }
 
-/// Perspective bounds of all nodes (position ± node half-extents + a label
-/// allowance below, so labels aren't clipped by a tight fit).
-fn node_bounds(g: &WalkGraph) -> egui::Rect {
-    let mut r = egui::Rect::NOTHING;
-    for n in g.g().node_weights() {
-        let d = n.display();
-        let (hx, hy) = if d.is_cluster {
-            (d.radius * 1.1, d.radius * 0.75)
-        } else {
-            (d.radius, d.radius)
-        };
-        r.min.x = r.min.x.min(d.pos.x - hx);
-        r.min.y = r.min.y.min(d.pos.y - hy);
-        r.max.x = r.max.x.max(d.pos.x + hx);
-        r.max.y = r.max.y.max(d.pos.y + hy + 34.0);
-    }
-    r
-}
-
-/// Store a computed fit into egui_graphs' (pan/zoom) metadata so the next
-/// frame draws fitted. Honest no-op when the bounds degenerate.
-fn store_fit(ui: &mut egui::Ui, g: &WalkGraph, canvas: egui::Vec2) {
-    if let Some((zoom, pan)) = fit_pan_zoom(node_bounds(g), canvas, 0.1) {
-        let mut meta = egui_graphs::MetadataFrame::new(Some(GRAPH_ID.to_string())).load(ui);
-        meta.zoom = zoom;
-        meta.pan = pan;
-        meta.save(ui);
-    }
-}
-
 /// Whether the user has manually panned/zoomed/moved a node since the last
 /// (re)build — auto-fit defers to manual framing. egui temp memory.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -398,6 +375,163 @@ fn save_nav_flags(ui: &egui::Ui, flags: NavFlags) {
     ui.ctx().data_mut(|d| d.insert_temp(nav_flags_id(), flags));
 }
 
+/// Seed every node on a deterministic golden-angle spiral around the origin.
+///
+/// egui_graphs builds nodes at `(0,0)`, and the force step divides by the
+/// distance between nodes: with every distance zero, no node ever moves. The
+/// graph then draws as a single dot with all twelve labels stacked on it
+/// ("12 nodes" in the legend, one visible blob). Positions only need to be
+/// *distinct* for the layout to take over; deriving them from the sorted ids
+/// keeps the start stable across rebuilds.
+pub fn seed_positions(g: &mut WalkGraph) {
+    let mut nodes: Vec<(String, NodeIndex<DefaultIx>)> = g
+        .g()
+        .node_indices()
+        .map(|i| {
+            let id = g
+                .g()
+                .node_weight(i)
+                .map(|n| n.payload().id.clone())
+                .unwrap_or_default();
+            (id, i)
+        })
+        .collect();
+    if nodes.is_empty() {
+        return;
+    }
+    nodes.sort_by(|a, b| a.0.cmp(&b.0));
+    let total = nodes.len() as f32;
+    let golden = std::f32::consts::PI * (3.0 - 5.0_f32.sqrt());
+    let radius = 80.0 + 26.0 * total.sqrt();
+    for (i, (_, idx)) in nodes.into_iter().enumerate() {
+        let angle = i as f32 * golden;
+        let ring = 0.72 + 0.28 * ((i % 4) as f32 / 3.0);
+        let pos = egui::pos2(angle.cos() * radius * ring, angle.sin() * radius * ring);
+        if let Some(node) = g.node_mut(idx) {
+            node.set_location(pos);
+        }
+    }
+}
+
+/// Extremes of node **centers** plus the fixed per-side allowances (node
+/// radius, cluster half-extent, and the label strip below a node).
+///
+/// The allowances do not scale with the positions, which is why a plain
+/// fit on the node bounds left the outermost labels a few pixels outside the
+/// canvas.
+fn node_extents(g: &WalkGraph) -> Option<(egui::Rect, egui::Vec2, egui::Vec2)> {
+    if g.g().node_count() == 0 {
+        return None;
+    }
+    let mut pos = egui::Rect::NOTHING;
+    let mut extra_min = egui::Vec2::ZERO;
+    let mut extra_max = egui::Vec2::ZERO;
+    for n in g.g().node_weights() {
+        let d = n.display();
+        let (hx, hy) = if d.is_cluster {
+            (d.radius * 1.1, d.radius * 0.75)
+        } else {
+            (d.radius, d.radius)
+        };
+        pos.min.x = pos.min.x.min(d.pos.x);
+        pos.min.y = pos.min.y.min(d.pos.y);
+        pos.max.x = pos.max.x.max(d.pos.x);
+        pos.max.y = pos.max.y.max(d.pos.y);
+        extra_min.x = extra_min.x.max(hx);
+        extra_min.y = extra_min.y.max(hy);
+        extra_max.x = extra_max.x.max(hx);
+        // Label allowance is below the node only (see `frame_positions`).
+        extra_max.y = extra_max.y.max(hy + 34.0);
+    }
+    Some((pos, extra_min, extra_max))
+}
+
+/// Scale and offset that place node **centers** so the node bounds — the
+/// centers' span plus the fixed radius/label allowances — fit inside `canvas`
+/// with padding and end up centered there.
+///
+/// Returns `None` for degenerate input. A zero span keeps scale 1 (a lone node
+/// should not be blown up to fill the viewport).
+fn frame_positions(
+    span: egui::Vec2,
+    extra_min: egui::Vec2,
+    extra_max: egui::Vec2,
+    canvas: egui::Vec2,
+) -> Option<(f32, egui::Vec2)> {
+    if !canvas.x.is_finite() || !canvas.y.is_finite() || canvas.x <= 0.0 || canvas.y <= 0.0 {
+        return None;
+    }
+    const PADDING: f32 = 0.08;
+    let room = canvas / (1.0 + PADDING) - extra_min - extra_max;
+    // A column (or row) of stacked nodes has no span on one axis; keep design
+    // scale for that axis instead of dividing by zero.
+    let fits = |room: f32, span: f32| (room > 0.0 && span > 0.0).then(|| room / span);
+    let scale = match (fits(room.x, span.x), fits(room.y, span.y)) {
+        (Some(x), Some(y)) => x.min(y),
+        (Some(x), None) => x,
+        (None, Some(y)) => y,
+        (None, None) => 1.0,
+    };
+    if !scale.is_finite() || scale <= 0.0 {
+        return None;
+    }
+    // Offset is the canvas-space image of the span's center. Center the
+    // *node bounds* (including the label allowance), not just the centers.
+    let offset = canvas * 0.5 - (extra_max - extra_min) * 0.5;
+    Some((scale, offset))
+}
+
+/// Once a layout settles, pull the settled positions into the canvas so the
+/// view can stay at zoom 1.
+///
+/// egui_graphs' force layout works at its own scale (hundreds of units even
+/// for a dozen nodes). Fitting that literally zooms to ~0.4, which shrinks
+/// nodes to two-pixel dots and drops every label under the legibility
+/// threshold. Rescaling the *positions* instead keeps nodes at their designed
+/// size, with readable labels, inside the viewport. Manual pan/zoom wins: the
+/// caller only normalizes when the user has not taken over.
+///
+/// The fit accounts for the non-scaling node/label allowances exactly, so the
+/// outermost labels stay inside the canvas instead of peeking off the edge.
+fn normalize_positions(ui: &mut egui::Ui, g: &mut WalkGraph, canvas: egui::Vec2, id: &str) {
+    let Some((pos, extra_min, extra_max)) = node_extents(g) else {
+        return;
+    };
+    let Some((scale, offset)) = frame_positions(pos.size(), extra_min, extra_max, canvas) else {
+        return;
+    };
+    let center = pos.center();
+    let indices: Vec<_> = g.g().node_indices().collect();
+    for idx in indices {
+        if let Some(node) = g.node_mut(idx) {
+            let p = node.location();
+            node.set_location(egui::pos2(
+                offset.x + (p.x - center.x) * scale,
+                offset.y + (p.y - center.y) * scale,
+            ));
+        }
+    }
+    // Positions are now canvas-space; reset the camera so the next frame draws
+    // them at 1:1 instead of re-fitting the old scale.
+    let mut meta = egui_graphs::MetadataFrame::new(Some(id.to_string())).load(ui);
+    meta.zoom = 1.0;
+    meta.pan = egui::Vec2::ZERO;
+    meta.save(ui);
+}
+
+fn framed_size_id(id: &str) -> egui::Id {
+    egui::Id::new(("repowalk_graph_framed", id))
+}
+
+fn framed_size(ui: &egui::Ui, id: &str) -> Option<egui::Vec2> {
+    ui.ctx().data(|d| d.get_temp(framed_size_id(id)))
+}
+
+fn set_framed_size(ui: &egui::Ui, id: &str, size: egui::Vec2) {
+    ui.ctx()
+        .data_mut(|d| d.insert_temp(framed_size_id(id), size));
+}
+
 /// Point the persisted force-layout state at a fresh, running simulation
 /// (used after a graph rebuild and by the legend's `relayout` control).
 pub fn arm_layout(ui: &mut egui::Ui) {
@@ -414,6 +548,36 @@ pub fn arm_layout(ui: &mut egui::Ui) {
         Some(GRAPH_ID.to_string()),
     );
     save_nav_flags(ui, NavFlags::default());
+}
+
+/// (Re)run the layered/hierarchical pass. The crate's tree layout places nodes
+/// once per `triggered = false`, so this is both "switch to layered" and
+/// "relayout" for that view. Row/column spacing is set for our node radii
+/// (5–26px), not the crate's tight defaults.
+pub fn arm_layered(ui: &mut egui::Ui) {
+    let mut st = egui_graphs::get_layout_state::<egui_graphs::LayoutStateHierarchical>(
+        ui,
+        Some(GRAPH_ID_LAYERED.to_string()),
+    );
+    st.triggered = false;
+    st.orientation = egui_graphs::LayoutHierarchicalOrientation::TopDown;
+    st.row_dist = 96.0;
+    st.col_dist = 120.0;
+    st.center_parent = true;
+    egui_graphs::set_layout_state::<egui_graphs::LayoutStateHierarchical>(
+        ui,
+        st,
+        Some(GRAPH_ID_LAYERED.to_string()),
+    );
+    save_nav_flags(ui, NavFlags::default());
+}
+
+/// Arm whichever layout the reader picked.
+pub fn arm_layout_for(ui: &mut egui::Ui, layout: GraphLayout) {
+    match layout {
+        GraphLayout::Force => arm_layout(ui),
+        GraphLayout::Layered => arm_layered(ui),
+    }
 }
 
 /// Straight edge; dashed + `?` badge when the resolver was not Exact.
@@ -567,6 +731,25 @@ struct RawInfo {
     god: bool,
 }
 
+/// Call-edge callers are keyed by the enclosing NAME in the index; the graph
+/// must key nodes on canonical symbol ids. Without this, a name-keyed caller
+/// that is also a live symbol drew as a second GHOST node ("(root)" module) —
+/// the same function appearing twice. Mirrors core::flow::CallGraph::caller_key:
+/// ids round-trip; a unique same-name symbol whose range contains the call line
+/// wins; anything ambiguous stays raw (honest partial resolution, no guessing).
+fn canonical_caller(sym_of: &BTreeMap<&str, &Symbol>, raw: &str, line: usize) -> String {
+    if sym_of.contains_key(raw) {
+        return raw.to_owned();
+    }
+    let mut cands = sym_of
+        .values()
+        .filter(|s| s.name == raw && s.start_line <= line && line <= s.end_line);
+    match (cands.next(), cands.next()) {
+        (Some(hit), None) => hit.id.clone(),
+        _ => raw.to_owned(),
+    }
+}
+
 fn raw_info(
     raw: &str,
     sym_of: &BTreeMap<&str, &Symbol>,
@@ -672,14 +855,15 @@ pub fn build_graph(idx: &Index, p: &BuildParams) -> BuiltGraph {
         if !p.confidence.keeps(e.confidence) {
             continue;
         }
-        let a_info = raw_info(&e.caller, &sym_of, &entry_files, p.god_files);
+        let caller = canonical_caller(&sym_of, &e.caller, e.line);
+        let a_info = raw_info(&caller, &sym_of, &entry_files, p.god_files);
         let b_info = raw_info(&e.callee, &sym_of, &entry_files, p.god_files);
         if let Some(m) = p.module {
             if a_info.module != m || b_info.module != m {
                 continue;
             }
         }
-        let a = ensure_node(&e.caller, &a_info, p.collapsed, &mut meta, &mut members);
+        let a = ensure_node(&caller, &a_info, p.collapsed, &mut meta, &mut members);
         let b = ensure_node(&e.callee, &b_info, p.collapsed, &mut meta, &mut members);
         if a == b {
             continue;
@@ -780,6 +964,7 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
     let Some(idx) = app.index.clone() else {
         empty_canvas(
             ui,
+            app,
             "No index yet — open a repository to build the call graph.",
         );
         return;
@@ -823,6 +1008,12 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
         state.total_nodes = built.total_nodes;
         state.shown_nodes = built.shown_nodes;
         state.truncated = built.truncated;
+        let mut graph = built.graph;
+        // egui_graphs leaves every node at (0,0). The force layout can never
+        // separate coincident nodes (the repulsion direction is zero), so the
+        // whole graph drew as one dot with every label stacked on it. Give the
+        // simulation a deterministic, non-degenerate start.
+        seed_positions(&mut graph);
         app.graph_state = Some((
             (
                 idx.edges.len(),
@@ -830,10 +1021,10 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
                 app.edge_calls,
                 app.edge_imports,
             ),
-            built.graph,
+            graph,
         ));
-        // Fresh graph, fresh positions: re-run (and re-fit) the force layout.
-        arm_layout(ui);
+        // Fresh graph, fresh positions: re-run (and re-fit) the chosen layout.
+        arm_layout_for(ui, state.layout);
         save_state(ui.ctx(), state.clone());
     }
 
@@ -852,45 +1043,92 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
             // canvas (pan/zoom), so a scroller would double-handle wheel
             // events and clip nothing that the viewer doesn't clip itself.
             let mut toggle_cluster: Option<String> = None;
+            let mut relayed_click: Option<String> = None;
             if let Some((_, g)) = app.graph_state.as_mut() {
                 let mut interacted = false;
-                let response = egui_graphs::GraphView::<
-                    egui_graphs::FruchtermanReingoldState,
-                    egui_graphs::LayoutForceDirected<egui_graphs::FruchtermanReingold>,
-                >::new()
-                .with_id(Some(GRAPH_ID.to_string()))
-                .with_interactions(
-                    &egui_graphs::SettingsInteraction::new()
-                        .with_dragging_enabled(true)
-                        .with_node_selection_enabled(true),
-                )
-                .with_navigations(
-                    &egui_graphs::SettingsNavigation::new()
-                        .with_zoom_and_pan_enabled(true)
-                        // Per-frame refit would cancel user pan/zoom after
-                        // every gesture; the crate still fits on the first
-                        // frame (`first_frame_pending`), and B5-03's auto-fit
-                        // keeps re-fitting only until the layout settles.
-                        .with_fit_to_screen_enabled(false),
-                )
-                .show(ui, g);
+                let interactions = egui_graphs::SettingsInteraction::new()
+                    .with_dragging_enabled(true)
+                    .with_node_selection_enabled(true);
+                let navigations = egui_graphs::SettingsNavigation::new()
+                    .with_zoom_and_pan_enabled(true)
+                    // Per-frame refit by the crate would cancel user pan/zoom
+                    // after every gesture; the crate still fits on the first
+                    // frame, and the app keeps the settled graph framed by
+                    // normalizing positions instead.
+                    .with_fit_to_screen_enabled(false);
+                let response = if state.layout == GraphLayout::Layered {
+                    let tree_was_pending = !egui_graphs::get_layout_state::<
+                        egui_graphs::LayoutStateHierarchical,
+                    >(
+                        ui, Some(GRAPH_ID_LAYERED.to_string())
+                    )
+                    .triggered;
+                    let response = egui_graphs::GraphView::<
+                        egui_graphs::LayoutStateHierarchical,
+                        egui_graphs::LayoutHierarchical,
+                    >::new()
+                    .with_id(Some(GRAPH_ID_LAYERED.to_string()))
+                    .with_interactions(&interactions)
+                    .with_navigations(&navigations)
+                    .show(ui, g);
+                    // The tree pass ran inside `show` (it lays every node out
+                    // once). Pull the result into view at design scale — the
+                    // same treatment the force layout gets while it runs.
+                    //
+                    // The canvas height also changes on the first frames (the
+                    // legend grows a row once the graph exists), and the crate
+                    // keeps *screen* position when the widget moves. Reframe
+                    // whenever the canvas settles at a new size, otherwise the
+                    // tree stays glued to the old, smaller viewport.
+                    let size = response.response.rect.size();
+                    if tree_was_pending || framed_size(ui, GRAPH_ID_LAYERED) != Some(size) {
+                        normalize_positions(ui, g, size, GRAPH_ID_LAYERED);
+                        set_framed_size(ui, GRAPH_ID_LAYERED, size);
+                    }
+                    response
+                } else {
+                    egui_graphs::GraphView::<
+                        egui_graphs::FruchtermanReingoldState,
+                        egui_graphs::LayoutForceDirected<egui_graphs::FruchtermanReingold>,
+                    >::new()
+                    .with_id(Some(GRAPH_ID.to_string()))
+                    .with_interactions(&interactions)
+                    .with_navigations(&navigations)
+                    .show(ui, g)
+                };
                 for change in &response.changes {
-                    match change {
-                        egui_graphs::GraphChange::NodeClicked { node } => {
-                            if let Some(n) = g.node(*node) {
-                                if n.payload().is_cluster {
-                                    toggle_cluster = Some(n.payload().module.clone());
-                                }
+                    if let egui_graphs::GraphChange::NodeClicked { node } = change {
+                        if let Some(n) = g.node(*node) {
+                            if n.payload().is_cluster {
+                                toggle_cluster = Some(n.payload().module.clone());
+                            } else {
+                                // Relay GENUINE click events to the
+                                // interaction layer (`handle` runs one
+                                // frame ahead of the widget). The crate's
+                                // persistent node selection used to be
+                                // the input, which re-fired every frame
+                                // and broke the A→B trace picker.
+                                relayed_click = Some(n.payload().id.clone());
                             }
                         }
-                        egui_graphs::GraphChange::Panned { .. }
-                        | egui_graphs::GraphChange::Zoomed { .. }
-                        | egui_graphs::GraphChange::NodeMoved { .. }
-                        | egui_graphs::GraphChange::NodeDragStarted { .. } => {
-                            interacted = true;
-                        }
-                        _ => {}
                     }
+                }
+
+                // `Panned`/`Zoomed` are NOT proof of a user gesture: on the
+                // very first frame egui_graphs fits the graph itself and
+                // reports that fit as a pan/zoom change. Treating it as user
+                // input set `user_adjusted` before the layout had even placed
+                // the nodes, so the auto-fit below never ran and the view
+                // stayed pinned at the crate's (absurd) first-frame zoom —
+                // the graph showed as one giant arc instead of the graph.
+                // Only real pointer input counts.
+                let pointer_gesture = response.response.dragged()
+                    || (response.response.hovered()
+                        && ui.input(|i| {
+                            i.zoom_delta() != 1.0 || i.smooth_scroll_delta() != egui::Vec2::ZERO
+                        }));
+                if pointer_gesture {
+                    interacted = true;
                 }
 
                 // While the force layout is still breathing, keep the whole
@@ -906,11 +1144,20 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
                     ui,
                     Some(GRAPH_ID.to_string()),
                 );
-                if settle.is_running {
-                    if !flags.user_adjusted {
-                        store_fit(ui, g, response.response.rect.size());
+                if state.layout == GraphLayout::Force {
+                    let size = response.response.rect.size();
+                    // Keep the *positions* canvassed while it runs, and
+                    // reframe once more if the canvas settles at a new size
+                    // after the freeze.
+                    let refit = !flags.user_adjusted
+                        && (settle.is_running || framed_size(ui, GRAPH_ID) != Some(size));
+                    if refit {
+                        normalize_positions(ui, g, size, GRAPH_ID);
+                        set_framed_size(ui, GRAPH_ID, size);
                     }
-                    if layout_should_freeze(settle.step_count, settle.last_avg_displacement) {
+                    if settle.is_running
+                        && layout_should_freeze(settle.step_count, settle.last_avg_displacement)
+                    {
                         let mut st = settle;
                         st.is_running = false;
                         egui_graphs::set_layout_state::<egui_graphs::FruchtermanReingoldState>(
@@ -929,6 +1176,12 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
                     st.collapsed.insert(module);
                 }
                 save_state(ui.ctx(), st);
+            }
+            if let Some(id) = relayed_click {
+                // Handed to `interaction::handle` next frame (it runs before
+                // the widget, so this frame's click lands one frame later).
+                ui.ctx()
+                    .data_mut(|d| d.insert_temp(egui::Id::new("graph-node-clicked"), id));
             }
         });
 }
@@ -953,7 +1206,10 @@ fn caps_banner(ui: &mut egui::Ui, state: &GraphUiState) {
         });
 }
 
-fn empty_canvas(ui: &mut egui::Ui, msg: &str) {
+/// Empty frame for "no index yet": say why it's empty AND offer the way out
+/// (browsing a folder used to exist only in Text mode — opening a repo now
+/// works from Graph mode too, browser button included).
+fn empty_canvas(ui: &mut egui::Ui, app: &mut App, msg: &str) {
     egui::Frame::new()
         .fill(theme::BG_BASE)
         .stroke(egui::Stroke::new(1.0, theme::BORDER_SUBTLE))
@@ -965,6 +1221,14 @@ fn empty_canvas(ui: &mut egui::Ui, msg: &str) {
                         .size(theme::FONT_BODY)
                         .color(theme::TEXT_SECONDARY),
                 );
+                ui.add_space(theme::SPACE_3);
+                if ui
+                    .button("Browse… — pick a codebase folder")
+                    .on_hover_text("open the OS directory picker; the graph builds when it lands")
+                    .clicked()
+                {
+                    app.browse_folder();
+                }
             });
         });
 }
@@ -1058,15 +1322,19 @@ pub fn legend(ui: &mut egui::Ui, app: &mut App) {
                     ui.add_space(theme::SPACE_1);
                 }
 
-                ui.label(hint(
-                    "dots = code (symbols · files · modules) · arrows = \u{201c}uses\u{201d}",
-                ));
-                ui.label(hint("size = fan-in"));
-                ui.label(hint("dashed ? = low confidence"));
-                ui.label(hint("▢ cluster · ◆ god file"));
-                ui.label(hint(
-                    "drag nodes · drag empty space to pan · ctrl+scroll to zoom",
-                ));
+                // Dynamic: the encoding/gesture hints step aside on a narrow
+                // pane — the hover cards carry the same explanations.
+                if ui.available_width() > 640.0 {
+                    ui.label(hint(
+                        "dots = code (symbols · files · modules) · arrows = \u{201c}uses\u{201d}",
+                    ));
+                    ui.label(hint("size = fan-in"));
+                    ui.label(hint("dashed ? = low confidence"));
+                    ui.label(hint("▢ cluster · ◆ god file"));
+                    ui.label(hint(
+                        "drag nodes · drag empty space to pan · ctrl+scroll to zoom",
+                    ));
+                }
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui
@@ -1082,8 +1350,16 @@ pub fn legend(ui: &mut egui::Ui, app: &mut App) {
                         )
                         .clicked()
                     {
-                        app.trace_pick = TracePick::PickA;
-                        app.pending_trace_a = None;
+                        // Toggle, not unconditional restart: pressing the
+                        // button mid-pick used to wipe the pending endpoint
+                        // with no feedback.
+                        if !matches!(app.trace_pick, TracePick::None) {
+                            app.trace_pick = TracePick::None;
+                            app.pending_trace_a = None;
+                        } else {
+                            app.trace_pick = TracePick::PickA;
+                            app.pending_trace_a = None;
+                        }
                     }
                     legend_toggle(ui, &mut app.edge_imports, "imports");
                     legend_toggle(ui, &mut app.edge_calls, "calls");
@@ -1178,14 +1454,32 @@ pub fn legend(ui: &mut egui::Ui, app: &mut App) {
                     ui.label(hint(&counts));
                 }
                 ui.add_space(theme::SPACE_2);
-                // Re-run the force layout from scratch; it re-fits while it
-                // settles, then freezes — user drags survive after that.
+                // Layout picker: force for hubs/cycles, layered for direction.
+                ui.label(hint("layout"));
+                let mut force_on = state.layout == GraphLayout::Force;
+                let mut layered_on = state.layout == GraphLayout::Layered;
+                legend_toggle(ui, &mut force_on, "force");
+                legend_toggle(ui, &mut layered_on, "layered");
+                let layout_changed =
+                    filter::resolve_layout_pick(state.layout, force_on, layered_on);
+                if let Some(layout) = layout_changed {
+                    state.layout = layout;
+                }
+
+                // Re-run the active layout from scratch.
+                let relayout_label = match state.layout {
+                    GraphLayout::Force => "relayout",
+                    GraphLayout::Layered => "re-tree",
+                };
                 if ui
-                    .button(egui::RichText::new("relayout").size(theme::FONT_SMALL))
-                    .on_hover_text("Restart the force layout and re-fit the view")
+                    .button(egui::RichText::new(relayout_label).size(theme::FONT_SMALL))
+                    .on_hover_text("Restart the layout and re-fit the view")
                     .clicked()
                 {
-                    arm_layout(ui);
+                    arm_layout_for(ui, state.layout);
+                }
+                if let Some(layout) = layout_changed {
+                    arm_layout_for(ui, layout);
                 }
             });
         });
@@ -1395,6 +1689,31 @@ mod tests {
     }
 
     #[test]
+    fn force_layout_starts_from_distinct_positions() {
+        let idx = idx_two_modules();
+        let collapsed = BTreeSet::new();
+        let built = build_graph(&idx, &params(&collapsed));
+        let mut graph = built.graph;
+        // egui_graphs leaves every node at (0,0); unseeded, the force layout
+        // can never separate them and the whole graph renders as one dot.
+        assert!(graph
+            .g()
+            .node_weights()
+            .all(|n| n.location() == egui::Pos2::ZERO));
+        seed_positions(&mut graph);
+        let pos: Vec<egui::Pos2> = graph.g().node_weights().map(|n| n.location()).collect();
+        assert!(pos.len() >= 3);
+        for (i, a) in pos.iter().enumerate() {
+            for b in &pos[i + 1..] {
+                assert!(
+                    (*a - *b).length() > 1.0,
+                    "seeded positions must differ: {a:?} vs {b:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn short_label_is_the_leaf_segment() {
         assert_eq!(short_label("foo::bar::baz"), "baz");
         assert_eq!(short_label("Type::method"), "method");
@@ -1449,6 +1768,54 @@ mod tests {
             egui::Rect::from_min_size(pos2(0.0, 0.0), vec2(f32::NAN, 3.0)),
             canvas,
             0.1
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn framing_keeps_labels_inside_the_canvas() {
+        use eframe::egui::vec2;
+        let span = vec2(494.0, 336.0);
+        let extra_min = vec2(26.0, 26.0);
+        // Labels hang below a node, so the bottom allowance is taller.
+        let extra_max = vec2(26.0, 60.0);
+        let canvas = vec2(642.0, 392.0);
+        let (scale, offset) = frame_positions(span, extra_min, extra_max, canvas).unwrap();
+        assert!(scale.is_finite() && scale > 0.0);
+        let min = offset - span * 0.5 * scale - extra_min;
+        let max = offset + span * 0.5 * scale + extra_max;
+        assert!(min.x >= 0.0 && min.y >= 0.0, "{min:?} escapes the canvas");
+        assert!(
+            max.x <= canvas.x && max.y <= canvas.y,
+            "{max:?} escapes the canvas"
+        );
+        // Centered on the node bounds, label strip included.
+        let mid = (min + max) * 0.5;
+        assert!(
+            (mid - canvas * 0.5).length() < 1e-3,
+            "{mid:?} is off-center"
+        );
+    }
+
+    #[test]
+    fn framing_a_single_node_keeps_design_scale_and_centers_it() {
+        use eframe::egui::vec2;
+        let (scale, offset) = frame_positions(
+            vec2(0.0, 0.0),
+            vec2(5.0, 5.0),
+            vec2(5.0, 39.0),
+            vec2(300.0, 200.0),
+        )
+        .unwrap();
+        assert_eq!(scale, 1.0);
+        // Canvas center, shifted up by half the asymmetric label allowance.
+        assert!((offset - vec2(150.0, 83.0)).length() < 1e-3, "{offset:?}");
+        // Degenerate canvas: no wild transform.
+        assert!(frame_positions(
+            vec2(1.0, 1.0),
+            vec2(1.0, 1.0),
+            vec2(1.0, 1.0),
+            vec2(0.0, 0.0)
         )
         .is_none());
     }

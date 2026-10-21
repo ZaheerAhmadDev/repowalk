@@ -82,6 +82,15 @@ pub struct App {
     pub show_shortcuts: bool,
     pub show_command_palette: bool,
     pub palette_query: String,
+    /// Audit fix: which row the palette keyboard cursor is on (↑↓ + ↵).
+    pub palette_cursor: usize,
+    /// Audit fix: a tab close that needs a "discard unsaved edits?" answer.
+    pub pending_close: Option<usize>,
+    /// Native folder-picker thread result (Browse…; polled every frame).
+    pub folder_pick: Option<std::sync::mpsc::Receiver<Option<std::path::PathBuf>>>,
+    /// Metrics computed once per adopted index (poll_progress), shared by
+    /// the toolbar strip / Map panel / Search symbol list / Repo 101.
+    pub cached_metrics: Option<Arc<repowalk_core::metrics::Metrics>>,
     pub show_open_popup: bool,
     pub search_focus: bool,
     pub list_cursor: usize,
@@ -145,6 +154,10 @@ impl App {
             show_shortcuts: false,
             show_command_palette: false,
             palette_query: String::new(),
+            palette_cursor: 0,
+            pending_close: None,
+            folder_pick: None,
+            cached_metrics: None,
             show_open_popup: false,
             search_focus: false,
             list_cursor: 0,
@@ -187,6 +200,11 @@ impl App {
         self.selection = None;
         self.trace = None;
         self.trace_pick = TracePick::None;
+        self.pending_trace_a = None;
+        self.jump_line = None;
+        self.list_cursor = 0;
+        self.search_focus = false;
+        self.pending_close = None;
         self.editor_buffers.clear();
         self.dirty_edits.clear();
         self.open_file = None;
@@ -253,12 +271,50 @@ impl App {
     }
 
     /// Poll the background worker; adopt the index when it lands.
+    /// Open the OS directory picker on a worker thread; the result lands in
+    /// `folder_pick` and is adopted next update. The dialog must not block
+    /// the UI thread (egui repaints while it is open — the window stays
+    /// interactive), and rfd's sync dialog is a blocking call.
+    pub fn browse_folder(&mut self) {
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            // rfd's sync pick_folder blocks — that's why it lives on its own
+            // thread and reports back over a channel.
+            let picked = rfd::FileDialog::new()
+                .set_title("Open a codebase folder")
+                .pick_folder()
+                .map(|p| p.to_path_buf());
+            let _ = tx.send(picked);
+        });
+        self.folder_pick = Some(rx);
+    }
+
+    /// Adopt a finished folder-pick: start learning the chosen directory.
+    fn adopt_folder_pick(&mut self) {
+        if let Some(rx) = &self.folder_pick {
+            if let Ok(Some(dir)) = rx.try_recv() {
+                self.folder_pick = None;
+                if dir.as_os_str().is_empty() {
+                    // Cancelled.
+                } else {
+                    self.repo_input = dir.to_string_lossy().to_string();
+                    self.start_indexing(dir);
+                }
+            }
+        }
+    }
+
     pub fn poll_progress(&mut self) {
         let mut p = self.progress.lock().unwrap();
         if p.finished {
             let mut learned: Option<usize> = None;
             if let Some(idx) = p.index.take() {
                 learned = Some(idx.files.len());
+                // Compute the repo metrics ONCE per index (Tarjan SCC + p99
+                // sorts over the whole graph is not a per-frame cost): the
+                // toolbar strip, Map panel and Search symbol list used to
+                // each recompute it every repaint of the sidebar.
+                self.cached_metrics = Some(Arc::new(repowalk_core::metrics::compute(&idx)));
                 self.index = Some(idx);
             }
             if let Some(a) = p.analysis.take() {
@@ -308,6 +364,65 @@ impl App {
         self.selection = Some(sel);
     }
 
+    /// Adopt the shared selection WITHOUT leaving the reading view: used by
+    /// graph/flow/diagrams canvas clicks, where the highlight inside the
+    /// view is the visible effect. A plain `select` here used to yank the
+    /// reader out of graph mode by reusing the repo tab as a text tab, and
+    /// the highlighted neighbourhood could only be seen after manually
+    /// switching back.
+    pub fn select_in_view(&mut self, sel: Selection) {
+        match &sel {
+            Selection::File(path) => {
+                // Background-load the file so a later switch to Text (or a
+                // sidebar open of the same file) finds it instantly.
+                self.open_file_with(path.clone(), None);
+            }
+            Selection::Symbol(id) => {
+                if let Some(sym) = self
+                    .index
+                    .as_ref()
+                    .and_then(|idx| idx.symbols.iter().find(|s| s.id == *id))
+                {
+                    self.open_file_with(sym.file.clone(), Some(sym.start_line));
+                }
+            }
+        }
+        self.selection = Some(sel);
+    }
+
+    /// Open a file at `line` in the editor from any sidebar panel while
+    /// keeping the shell a single truth: the navigation opens or activates a
+    /// document tab (tab strip + breadcrumbs follow the editor) and may
+    /// adopt `sel` as the shared selection. Health / references / variables /
+    /// Repo-101 rows used to call `open_file_with` directly, so the tab strip
+    /// kept showing the previous file and clicking that tab silently
+    /// reverted the editor.
+    pub fn goto_file(&mut self, path: String, line: Option<usize>, sel: Option<Selection>) {
+        self.open_in_tabs(path.clone());
+        self.open_file_with(path, line);
+        if let Some(sel) = sel {
+            self.selection = Some(sel);
+        }
+    }
+
+    /// Schedule a tab close; a tab with unsaved edits must survive the trip,
+    /// so it waits for a "discard unsaved edits?" answer instead of closing
+    /// (Ctrl+W and the tab-strip close affordance both go through here).
+    pub fn request_close_tab(&mut self, idx: usize) {
+        if idx >= self.tabs.len() {
+            return;
+        }
+        let dirty = self.tabs[idx]
+            .file
+            .as_deref()
+            .is_some_and(|f| self.dirty_edits.contains(f));
+        if dirty {
+            self.pending_close = Some(idx);
+        } else {
+            self.close_tab(idx);
+        }
+    }
+
     /// Change the reading mode of the active document. Every mode switch (the
     /// toolbar segments, the Tab/g keys, the palette) goes through here so the
     /// tab strip and the mode stay one truth.
@@ -323,9 +438,12 @@ impl App {
     }
 
     pub fn open_file_with(&mut self, path: String, line: Option<usize>) {
-        if self.open_file.as_deref() != Some(path.as_str())
-            && !self.editor_buffers.contains_key(&path)
-        {
+        // Load whenever the buffer is missing. This used to also require
+        // `open_file != path`, but `activate_tab` (called by `open_in_tabs`
+        // just before this) already points `open_file` at the file — so the
+        // guard skipped the read and the editor showed its empty hint while
+        // the tab claimed the file was open.
+        if !self.editor_buffers.contains_key(&path) {
             if let Some(repo) = &self.repo {
                 match std::fs::read_to_string(repo.join(&path)) {
                     Ok(text) => {
@@ -394,10 +512,11 @@ impl App {
             ctrl_tab,
         ) = ctx.input(|i| {
             (
-                i.key_pressed(egui::Key::Tab),
+                i.key_pressed(egui::Key::Tab) && i.modifiers.is_none(),
                 i.key_pressed(egui::Key::Slash) && i.modifiers.is_none(),
                 i.key_pressed(egui::Key::Escape),
-                i.key_pressed(egui::Key::Questionmark) && i.modifiers.is_none(),
+                i.key_pressed(egui::Key::Questionmark)
+                    && !(i.modifiers.ctrl || i.modifiers.alt || i.modifiers.command),
                 i.key_pressed(egui::Key::G) && i.modifiers.is_none(),
                 i.key_pressed(egui::Key::Enter),
                 i.key_pressed(egui::Key::J) && i.modifiers.is_none(),
@@ -411,6 +530,11 @@ impl App {
                 i.key_pressed(egui::Key::Tab) && i.modifiers.ctrl,
             )
         });
+        // When a text field holds focus, the vim-ish bare keys (`g`, Tab,
+        // Enter, j/k, /, ?) belong to the character the user is typing —
+        // without this gate every `g` in the editor flipped the pane to
+        // Graph. Ctrl-combos keep working while editing.
+        let editing = ctx.egui_wants_keyboard_input();
         if self.show_command_palette {
             // While the palette is open, only Esc / Ctrl+K apply globally.
             if esc || ctrl_k {
@@ -421,6 +545,7 @@ impl App {
         }
         if ctrl_k {
             self.show_command_palette = true;
+            self.show_quick_open = false; // one overlay at a time
             self.palette_query.clear();
             return;
         }
@@ -449,13 +574,13 @@ impl App {
             self.show_sidebar = !self.show_sidebar;
         }
         if ctrl_w {
-            self.close_tab(self.active_tab);
+            self.request_close_tab(self.active_tab);
         }
         if ctrl_tab && self.tabs.len() > 1 {
             let next = (self.active_tab + 1) % self.tabs.len();
             self.activate_tab(next);
         }
-        if tab {
+        if tab && !editing {
             self.set_mode(match self.mode {
                 Mode::Text => Mode::Graph,
                 Mode::Graph => Mode::Flow,
@@ -463,7 +588,12 @@ impl App {
                 Mode::Diagrams => Mode::Text,
             });
         }
-        if slash {
+        if slash && !editing {
+            // Raise the Search panel like the palette's sibling action does:
+            // the focus flag was otherwise consumed only when the panel
+            // happened to be rendered later, i.e. `/` did nothing visible.
+            self.sidebar_tab = sidebar::Tab::Search;
+            self.show_sidebar = true;
             self.search_focus = true;
         }
         if esc {
@@ -471,22 +601,22 @@ impl App {
             self.show_shortcuts = false;
             self.show_open_popup = false;
         }
-        if question {
+        if question && !editing {
             self.show_shortcuts = !self.show_shortcuts;
         }
-        if g {
+        if g && !editing {
             self.set_mode(Mode::Graph);
         }
         if ctrl_s {
             self.save_open_file();
         }
-        if j {
+        if j && !editing {
             self.list_cursor = self.list_cursor.saturating_add(1);
         }
-        if k {
+        if k && !editing {
             self.list_cursor = self.list_cursor.saturating_sub(1);
         }
-        if enter {
+        if enter && !editing {
             let cursor = self.list_cursor;
             if self.mode == Mode::Text {
                 let items = self.sidebar_list_entries();
@@ -502,23 +632,100 @@ impl App {
         let Some(idx) = &self.index else {
             return Vec::new();
         };
+        // While a search query is live, the j/k/Enter cursor walks THE
+        // RESULT LIST — the one the panel draws — not "tour files, then
+        // hits"; cursor 0 used to select tour[0] no matter what you typed,
+        // and file-path hits were pushed as symbol ids that never opened.
+        if !self.query.trim().is_empty() {
+            return repowalk_core::search::search(idx, &self.query, 10)
+                .into_iter()
+                .map(|h| match idx.symbols.iter().find(|s| s.id == h.target) {
+                    Some(_) => Selection::Symbol(h.target.clone()),
+                    None => Selection::File(h.path.clone()),
+                })
+                .collect();
+        }
         let mut entries: Vec<Selection> = repowalk_core::tour::tour(idx, 20)
             .into_iter()
             .map(|t| Selection::File(t.path))
             .collect();
-        if !self.query.trim().is_empty() {
-            for h in repowalk_core::search::search(idx, &self.query, 10) {
-                entries.push(Selection::Symbol(h.target));
-            }
-        } else {
-            entries.extend(
-                idx.symbols
-                    .iter()
-                    .take(30)
-                    .map(|s| Selection::Symbol(s.id.clone())),
-            );
-        }
+        entries.extend(
+            idx.symbols
+                .iter()
+                .take(30)
+                .map(|s| Selection::Symbol(s.id.clone())),
+        );
         entries
+    }
+
+    /// Dev helper: with `REPOWALK_AUTOSHOT=/path.png` set, capture the REAL
+    /// window once the index has landed. Lets the agent look at what the user
+    /// actually sees (headless probes can't show layout/paint problems).
+    /// `REPOWALK_AUTOSHOT_MODE=text|graph|flow|diagrams` and
+    /// `REPOWALK_AUTOSHOT_FILE=<repo-relative path>` select what to show,
+    /// `REPOWALK_AUTOSHOT_DELAY=<frames>` waits for animations (the graph's
+    /// force layout starts wide and only fits after a few frames).
+    fn maybe_autoshot(&mut self, ctx: &egui::Context) {
+        static DONE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        static SETUP: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        static FRAMES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        if DONE.load(std::sync::atomic::Ordering::Relaxed) {
+            return;
+        }
+        let Ok(path) = std::env::var("REPOWALK_AUTOSHOT") else {
+            return;
+        };
+        if self.index.is_none() {
+            return;
+        }
+        if !SETUP.swap(true, std::sync::atomic::Ordering::Relaxed) {
+            // Select the file FIRST: `select` opens it in a Text tab and
+            // activates that tab, which would otherwise clobber a mode set
+            // beforehand — the capture then showed the editor while claiming
+            // to be the graph.
+            if let Ok(file) = std::env::var("REPOWALK_AUTOSHOT_FILE") {
+                self.select(Selection::File(file));
+            }
+            if let Ok(mode) = std::env::var("REPOWALK_AUTOSHOT_MODE") {
+                let mode = match mode.as_str() {
+                    "graph" => Some(Mode::Graph),
+                    "flow" => Some(Mode::Flow),
+                    "diagrams" => Some(Mode::Diagrams),
+                    "text" => Some(Mode::Text),
+                    _ => None,
+                };
+                if let Some(mode) = mode {
+                    self.set_mode(mode);
+                }
+            }
+            // `REPOWALK_AUTOSHOT_LAYOUT=force|layered` picks the graph layout
+            // (it lives in egui temp memory, not `App`, so it is set through
+            // the graph module's own state store).
+            if let Ok(layout) = std::env::var("REPOWALK_AUTOSHOT_LAYOUT") {
+                let picked = match layout.as_str() {
+                    "layered" => Some(crate::graph::filter::GraphLayout::Layered),
+                    "force" => Some(crate::graph::filter::GraphLayout::Force),
+                    _ => None,
+                };
+                if let Some(picked) = picked {
+                    let mut state = crate::graph::render::load_state(ctx);
+                    state.layout = picked;
+                    crate::graph::render::save_state(ctx, state);
+                }
+            }
+        }
+        let delay = std::env::var("REPOWALK_AUTOSHOT_DELAY")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(120);
+        let frame = FRAMES.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+        if frame < delay {
+            ctx.request_repaint();
+            return;
+        }
+        DONE.store(true, std::sync::atomic::Ordering::Relaxed);
+        self.pending_screenshot = Some((0, PathBuf::from(path)));
+        crate::export::png::request_screenshot(ctx, 0);
     }
 
     /// Drain `Event::Screenshot` for a pending export and write the PNG (RSK-23).
@@ -675,10 +882,13 @@ impl App {
                 .add(egui::Button::new(
                     crate::icons::glyph(crate::icons::OPEN, 15.0).color(theme::TEXT_SECONDARY),
                 ))
-                .on_hover_text("Open a repository folder…")
+                .on_hover_text("Browse… — pick a codebase folder (or paste a path in the popup)")
                 .clicked()
             {
-                self.show_open_popup = true;
+                // The promise is now literal: the toolbar button opens the
+                // OS directory picker. Users who prefer pasting a path can
+                // still use the typed-path popup it used to open.
+                self.browse_folder();
             }
             if ui
                 .add(egui::Button::new(
@@ -818,8 +1028,9 @@ impl App {
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.weak(repowalk_core::VERSION);
-                if let Some(idx) = &self.index {
-                    let m = repowalk_core::metrics::compute(idx);
+                if let (Some(idx), Some(m)) = (&self.index, &self.cached_metrics) {
+                    // Cached once per index (poll_progress): this strip used
+                    // to recompute SCC + p99 sorts every single frame.
                     ui.weak(format!(
                         "{} files · {} LOC · {} cycles",
                         idx.files.len(),
@@ -841,7 +1052,16 @@ impl App {
                     self.error = None;
                 }
             } else if !self.status.is_empty() {
-                ui.colored_label(theme::TEXT_SECONDARY, &self.status);
+                // Dynamic: a long status truncates in its leftover width
+                // instead of pushing the "?"-shortcuts affordance off the
+                // edge; the full text stays on hover.
+                ui.add(
+                    egui::Label::new(
+                        egui::RichText::new(&self.status).color(theme::TEXT_SECONDARY),
+                    )
+                    .truncate(),
+                )
+                .on_hover_text(&self.status);
             } else {
                 ui.colored_label(theme::TEXT_MUTED, "ready");
             }
@@ -855,6 +1075,44 @@ impl App {
                 }
             });
         });
+    }
+
+    /// "Discard unsaved edits?" modal: closing a dirty tab (the × on the
+    /// dot, or Ctrl+W) used to silently drop the edits with no warning.
+    fn discard_edits_confirm(&mut self, ctx: &egui::Context) {
+        let Some(idx) = self.pending_close else {
+            return;
+        };
+        let file = self
+            .tabs
+            .get(idx)
+            .and_then(|t| t.file.clone())
+            .unwrap_or_default();
+        let mut open = true;
+        egui::Window::new("Discard unsaved edits?")
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ctx, |ui| {
+                ui.label(egui::RichText::new(format!(
+                    "{file} has unsaved edits (Ctrl+S saves them)."
+                )));
+                ui.add_space(theme::SPACE_2);
+                ui.horizontal(|ui| {
+                    if ui.button(egui::RichText::new("Discard").strong()).clicked() {
+                        self.pending_close = None;
+                        self.close_tab(idx);
+                    }
+                    if ui.button("Keep editing").clicked() {
+                        self.pending_close = None;
+                    }
+                });
+            });
+        if !open {
+            // × / Esc on the window = keep the edits.
+            self.pending_close = None;
+        }
     }
 
     /// Modal-ish open-repo popup (progressive disclosure: path + Learn button).
@@ -872,8 +1130,25 @@ impl App {
                 ui.label(egui::RichText::new("Path to a codebase:").color(theme::TEXT_SECONDARY));
                 ui.add_space(theme::SPACE_2);
                 let resp = ui.text_edit_singleline(&mut self.repo_input);
+                // The advertised keyboard flow (type a path, hit ↵) needs the
+                // field focused: without this, ↵ dead-ended (lost_focus never
+                // became true because focus was never given).
+                resp.request_focus();
                 let go = (resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)))
                     || ui.button("Learn").clicked();
+                ui.horizontal(|ui| {
+                    // The other way in — no pasting local paths by hand:
+                    // the native OS folder dialog.
+                    if ui
+                        .button("Browse…")
+                        .on_hover_text("pick a folder with the OS dialog")
+                        .clicked()
+                    {
+                        self.browse_folder();
+                        self.show_open_popup = false;
+                    }
+                    ui.weak("or paste a local path and hit ↵");
+                });
                 if go {
                     let path = PathBuf::from(self.repo_input.trim());
                     if !path.as_os_str().is_empty() {
@@ -890,58 +1165,88 @@ impl App {
         if !self.show_command_palette {
             return;
         }
+        // The visible rows, filtered exactly like the Enter path used to —
+        // so ↑↓/↵ agree with what is drawn (the audit caught Enter forever
+        // running "the first action" regardless).
+        let q = self.palette_query.to_lowercase();
+        let actions: Vec<crate::app::PaletteAction> = palette_actions(self)
+            .into_iter()
+            .filter(|a| {
+                q.is_empty()
+                    || a.label.to_lowercase().contains(&q)
+                    || a.hint.to_lowercase().contains(&q)
+            })
+            .collect();
+        // Clamp the keyboard cursor into the visible rows.
+        self.palette_cursor = if actions.is_empty() {
+            0
+        } else {
+            self.palette_cursor.min(actions.len() - 1)
+        };
         let mut open = true;
-        let mut run: Option<PaletteAction> = None;
+        let mut run: Option<crate::app::PaletteAction> = None;
         egui::Window::new("Command palette")
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
-            .default_width(380.0)
+            .default_width((ctx.viewport_rect().width() * 0.9).min(380.0))
             .anchor(egui::Align2::CENTER_CENTER, [0.0, -60.0])
             .show(ctx, |ui| {
-                egui::TextEdit::singleline(&mut self.palette_query)
-                    .hint_text("type a command…")
-                    .show(ui);
+                let edit = egui::TextEdit::singleline(&mut self.palette_query)
+                    .hint_text("type a command…");
+                let resp = ui.add(edit);
+                // Ctrl+K used to open a palette you had to CLICK into before
+                // you could type — keyboard-only use was impossible.
+                resp.request_focus();
+                // ↑↓ move the keyboard cursor (consumed so they don't
+                // scroll anything else behind the window).
+                let (up, down) = ui.input_mut(|i| {
+                    (
+                        i.count_and_consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp),
+                        i.count_and_consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown),
+                    )
+                });
+                let len = actions.len().max(1);
+                self.palette_cursor = self
+                    .palette_cursor
+                    .saturating_add(down)
+                    .saturating_sub(up)
+                    .min(len - 1);
                 ui.add_space(theme::SPACE_2);
-                let q = self.palette_query.to_lowercase();
-                let actions = palette_actions(self);
-                let mut shown = 0usize;
-                for action in actions {
-                    if !q.is_empty()
-                        && !action.label.to_lowercase().contains(&q)
-                        && !action.hint.to_lowercase().contains(&q)
-                    {
-                        continue;
-                    }
-                    shown += 1;
-                    let selected = shown == 1;
+                for (idx, action) in actions.iter().enumerate() {
+                    let selected = idx == self.palette_cursor;
                     let text = if action.hint.is_empty() {
                         action.label.to_string()
                     } else {
                         format!("{}    ({})", action.label, action.hint)
                     };
-                    if ui.selectable_label(selected, text).clicked() {
-                        run = Some(action);
+                    let label = ui.selectable_label(selected, text);
+                    if selected {
+                        label.scroll_to_me(Some(egui::Align::Center));
+                    }
+                    if label.clicked() {
+                        run = Some(action.clone());
                     }
                 }
-                if shown == 0 {
+                if actions.is_empty() {
                     ui.weak("no matching commands");
                 }
                 ui.add_space(theme::SPACE_1);
                 ui.colored_label(theme::TEXT_MUTED, "↑↓ navigate · ↵ run · esc close");
-                if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                    run = palette_actions(self).into_iter().find(|a| {
-                        let qq = self.palette_query.to_lowercase();
-                        qq.is_empty()
-                            || a.label.to_lowercase().contains(&qq)
-                            || a.hint.to_lowercase().contains(&qq)
-                    });
+                // ↵ runs the CURSOR row — but only when the user actually
+                // typed a query: with an empty palette, Enter used to
+                // silently run whatever sat first on the list.
+                if ui.input(|i| i.key_pressed(egui::Key::Enter))
+                    && !self.palette_query.trim().is_empty()
+                {
+                    run = actions.get(self.palette_cursor).cloned();
                 }
             });
         self.show_command_palette = open;
         if let Some(action) = run {
             self.show_command_palette = false;
             self.palette_query.clear();
+            self.palette_cursor = 0;
             match action.kind {
                 PaletteKind::ModeText => self.set_mode(Mode::Text),
                 PaletteKind::ModeGraph => self.set_mode(Mode::Graph),
@@ -960,11 +1265,30 @@ impl App {
                     self.show_quick_open = true;
                     self.quick_open_query.clear();
                 }
-                PaletteKind::PanelUsage => self.sidebar_tab = sidebar::Tab::Usage,
-                PaletteKind::PanelHealth => self.sidebar_tab = sidebar::Tab::Health,
-                PaletteKind::PanelNotes => self.sidebar_tab = sidebar::Tab::Notes,
-                PaletteKind::PanelOnboard => self.sidebar_tab = sidebar::Tab::Onboard,
-                PaletteKind::FocusSearch => self.search_focus = true,
+                PaletteKind::PanelUsage => {
+                    self.sidebar_tab = sidebar::Tab::Usage;
+                    self.show_sidebar = true;
+                }
+                PaletteKind::PanelHealth => {
+                    self.sidebar_tab = sidebar::Tab::Health;
+                    self.show_sidebar = true;
+                }
+                PaletteKind::PanelNotes => {
+                    self.sidebar_tab = sidebar::Tab::Notes;
+                    self.show_sidebar = true;
+                }
+                PaletteKind::PanelOnboard => {
+                    self.sidebar_tab = sidebar::Tab::Onboard;
+                    self.show_sidebar = true;
+                }
+                PaletteKind::FocusSearch => {
+                    // Same as its sibling PanelSearch: raise the panel THEN
+                    // focus — this used to only set the flag, a no-op while
+                    // the Search panel wasn't visible.
+                    self.sidebar_tab = sidebar::Tab::Search;
+                    self.show_sidebar = true;
+                    self.search_focus = true;
+                }
                 PaletteKind::OpenRepo => self.show_open_popup = true,
                 PaletteKind::ExportPng => self.export_png(ctx),
                 PaletteKind::ExportMd => self.export_markdown(),
@@ -1005,10 +1329,14 @@ impl App {
                         for (keys, desc) in [
                             ("Tab", "Cycle Text / Graph / Flow / Diagrams"),
                             ("Ctrl+K", "Command palette"),
-                            ("/", "Focus search"),
+                            ("Ctrl+P", "Quick open a file"),
+                            ("/", "Raise the Search panel and focus it"),
                             ("j / k", "Move through sidebar lists"),
                             ("Enter", "Jump to / select"),
                             ("g", "Focus graph"),
+                            ("Ctrl+W", "Close the active tab (ask first if unsaved)"),
+                            ("Ctrl+Tab", "Next tab"),
+                            ("Ctrl+B", "Show / hide the sidebar"),
                             ("Esc", "Clear selection / trace / dialogs"),
                             ("Ctrl+S", "Save the edited file"),
                             ("Ctrl+T", "Toggle light / dark theme"),
@@ -1067,8 +1395,10 @@ impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         self.poll_progress();
+        self.adopt_folder_pick();
         self.handle_keyboard(&ctx);
         self.consume_screenshot_event(&ctx);
+        self.maybe_autoshot(&ctx);
 
         // Top toolbar strip (the VS Code title/menu row).
         egui::Frame::new()
@@ -1096,13 +1426,17 @@ impl eframe::App for App {
                 activity_bar(self, ui);
             });
 
-        // The side panel itself (Ctrl+B hides it).
+        // The side panel itself (Ctrl+B hides it). Its cap is dynamic: the
+        // panel may never claim more than ~55% of the screen, so on a small
+        // window the central pane keeps a working majority.
         if self.show_sidebar {
+            let screen_w = ctx.viewport_rect().width();
+            let max_side = (screen_w * 0.55).clamp(theme::SIDEBAR_MIN + 40.0, theme::SIDEBAR_MAX);
             egui::Panel::left("sidebar")
                 .resizable(true)
                 .default_size(theme::SIDEBAR_DEFAULT)
                 .min_size(theme::SIDEBAR_MIN)
-                .max_size(theme::SIDEBAR_MAX)
+                .max_size(max_side)
                 .show(ui, |ui| {
                     ui.add_space(theme::SPACE_1);
                     sidebar::ui(ui, self);
@@ -1155,6 +1489,7 @@ impl eframe::App for App {
         self.open_popup(&ctx);
         self.command_palette(&ctx);
         self.shortcuts_window(&ctx);
+        self.discard_edits_confirm(&ctx);
         quick_open::ui(ui, self);
         self.progress_overlay(ui);
     }
@@ -1184,7 +1519,14 @@ fn activity_bar(app: &mut App, ui: &mut egui::Ui) {
                 theme::SPACE_6,
             );
             let (_, resp) = ui.allocate_exact_size(size, egui::Sense::click());
-            let resp = resp.on_hover_text(format!("{name} panel"));
+            let resp = resp.on_hover_text(format!(
+                "{name} panel{}",
+                if active {
+                    " — click again to close"
+                } else {
+                    ""
+                }
+            ));
             if active {
                 let edge = egui::Rect::from_min_max(
                     resp.rect.min,
@@ -1208,7 +1550,15 @@ fn activity_bar(app: &mut App, ui: &mut egui::Ui) {
                 },
             );
             if resp.clicked() {
-                app.sidebar_tab = tab;
+                // Toggle semantics (user request): the icon of the panel that
+                // is already open closes it; clicking any other icon opens
+                // that panel. Ctrl+B stays the global show/hide shortcut.
+                if active && app.show_sidebar {
+                    app.show_sidebar = false;
+                } else {
+                    app.sidebar_tab = tab;
+                    app.show_sidebar = true;
+                }
             }
         }
     });
@@ -1247,6 +1597,7 @@ fn mode_segment(ui: &mut egui::Ui, label: &str, shortcut: &str, active: bool) ->
 
 // ── Command palette model ───────────────────────────────────────────────────
 
+#[derive(Clone)]
 enum PaletteKind {
     ModeText,
     ModeGraph,
@@ -1272,6 +1623,7 @@ enum PaletteKind {
     ClearSelection,
 }
 
+#[derive(Clone)]
 struct PaletteAction {
     label: &'static str,
     hint: &'static str,
@@ -1392,3 +1744,7 @@ fn palette_actions(_app: &App) -> Vec<PaletteAction> {
         },
     ]
 }
+
+#[cfg(test)]
+#[path = "shell_probe.rs"]
+mod shell_probe;

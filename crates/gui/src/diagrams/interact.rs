@@ -219,8 +219,8 @@ impl CanvasState {
         ctx.data_mut(|d| d.insert_temp(id, self.clone()));
     }
 
-    /// The persisted drag offset of one node (canvas coordinates); `ZERO` when
-    /// the node has never been moved.
+    /// The persisted drag offset of one node (canvas coordinates); `ZERO`
+    /// when the node has never been moved.
     pub fn node_offset(&self, node_id: &str) -> Vec2 {
         self.offsets.get(node_id).copied().unwrap_or(Vec2::ZERO)
     }
@@ -244,6 +244,19 @@ impl CanvasState {
         self.group_offsets.clear();
         self.dragging = None;
     }
+}
+
+/// Canvas memory key that includes the repo + learn signature, so
+/// drag/pan/zoom state can't leak across repositories or re-learns
+/// (identical `src/main.rs` paths in a different repo used to inherit
+/// each other's node offsets; a re-learn renumbering ids mis-placed
+/// previously-dragged nodes).
+pub fn canvas_key(base: &'static str, idx: Option<&repowalk_core::model::Index>) -> egui::Id {
+    let mut id = egui::Id::new(base);
+    if let Some(idx) = idx {
+        id = id.with(&idx.repo_root).with(&idx.indexed_at);
+    }
+    id
 }
 
 /// Run one frame of pan / zoom / node-drag / hover over a painter-canvas

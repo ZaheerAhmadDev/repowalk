@@ -297,23 +297,28 @@ fn header(ui: &mut egui::Ui, lay: &TypeLayout, edge_count: usize, reset: &mut bo
                 *reset = true;
             }
             ui.vertical(|ui| {
-                ui.label(
-                    egui::RichText::new(
-                        "what you see: a box = a type learned from the code · \
-                         arrows = how types relate (solid inherits · dashed impl · \
-                         field, variant labelled)",
-                    )
-                    .size(theme::FONT_SMALL)
-                    .color(theme::TEXT_MUTED),
-                );
-                ui.label(
-                    egui::RichText::new(
-                        "gestures: wheel zoom · drag empty space pans · \
-                         drag a box or its module name to move that module together",
-                    )
-                    .size(theme::FONT_SMALL)
-                    .color(theme::TEXT_MUTED),
-                );
+                // Dynamic: the explanatory captions are desktop furniture —
+                // on a narrow pane they get out of the way (the hover tags
+                // carry the same words).
+                if ui.available_width() > 560.0 {
+                    ui.label(
+                        egui::RichText::new(
+                            "what you see: a box = a type learned from the code · \
+                             arrows = how types relate (solid inherits · dashed impl · \
+                             field, variant labelled)",
+                        )
+                        .size(theme::FONT_SMALL)
+                        .color(theme::TEXT_MUTED),
+                    );
+                    ui.label(
+                        egui::RichText::new(
+                            "gestures: wheel zoom · drag empty space pans · \
+                             drag a box or its module name to move that module together",
+                        )
+                        .size(theme::FONT_SMALL)
+                        .color(theme::TEXT_MUTED),
+                    );
+                }
             });
         });
     });
@@ -382,7 +387,8 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
                 ui.allocate_exact_size(ui.available_size(), egui::Sense::click_and_drag());
             let painter = ui.painter_at(rect);
             let origin = rect.min;
-            let mut state = interact::CanvasState::load(ui.ctx(), egui::Id::new(STATE_ID));
+            let key = interact::canvas_key(STATE_ID, app.index.as_deref());
+            let mut state = interact::CanvasState::load(ui.ctx(), key);
             if reset_requested {
                 state.reset();
             }
@@ -649,7 +655,7 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
                 }
             }
 
-            state.store(ui.ctx(), egui::Id::new(STATE_ID));
+            state.store(ui.ctx(), key);
         });
 }
 
