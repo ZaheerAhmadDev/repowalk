@@ -165,7 +165,7 @@ pub fn handle(ui: &mut egui::Ui, app: &mut App) {
                                     // Short chains read in full; long ones abbreviate.
                                     let shown = if p.len() > 4 {
                                         format!(
-                                            "{} → … → {}",
+                                            "{} -> … -> {}",
                                             display_name(&idx, &p[0]),
                                             display_name(&idx, &p[p.len() - 1])
                                         )
@@ -173,7 +173,7 @@ pub fn handle(ui: &mut egui::Ui, app: &mut App) {
                                         p.iter()
                                             .map(|id| display_name(&idx, id))
                                             .collect::<Vec<_>>()
-                                            .join(" → ")
+                                            .join(" -> ")
                                     };
                                     ui.colored_label(
                                         theme::SUCCESS,
@@ -213,72 +213,22 @@ pub fn handle(ui: &mut egui::Ui, app: &mut App) {
         }
     }
 
-    // Hover preview strip (under the legend): signature in CODE + file:line.
+    // Hover is a cursor-following tooltip only — never a widget in the layout
+    // above the canvas. A hover strip used to sit in this column (signature in
+    // code face), which resized the graph on every hover transition; the
+    // auto-fit then rescaled/recentred and could move the node out from under
+    // the cursor, flipping hover back and forth ("the graph jumps"). Keeping
+    // hover out of layout fixes the loop at the source (and keeps the graph's
+    // egui id — and therefore its remembered zoom/pan — stable).
     let hovered: Option<(String, NodeInfo)> = app.graph_state.as_ref().and_then(|(_, g)| {
         g.hovered_node().and_then(|h| g.node(h)).map(|node| {
             let payload = node.payload();
             (payload.id.clone(), payload.clone())
         })
     });
-    let hovered_id: Option<String> = hovered.as_ref().map(|(id, _)| id.clone());
-    if let Some(hovered) = hovered_id {
-        egui::Frame::new()
-            .fill(theme::SURFACE_E2)
-            .inner_margin(egui::Margin::symmetric(
-                theme::SPACE_2 as i8,
-                theme::SPACE_1 as i8,
-            ))
-            .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    if let Some(module) = hovered.strip_prefix("cluster:") {
-                        // Collapsed module cluster: real module name + hint.
-                        ui.colored_label(
-                            theme::TEXT_PRIMARY,
-                            egui::RichText::new(format!("▢ {module}"))
-                                .family(egui::FontFamily::Monospace)
-                                .size(theme::FONT_CODE),
-                        );
-                        ui.colored_label(
-                            theme::TEXT_MUTED,
-                            egui::RichText::new("collapsed module — click to expand")
-                                .size(theme::FONT_SMALL),
-                        );
-                    } else if let Some(s) = idx.symbols.iter().find(|s| s.id == hovered) {
-                        ui.colored_label(
-                            theme::TEXT_PRIMARY,
-                            egui::RichText::new(&s.signature)
-                                .family(egui::FontFamily::Monospace)
-                                .size(theme::FONT_CODE),
-                        );
-                        ui.colored_label(
-                            theme::TEXT_MUTED,
-                            egui::RichText::new(format!("{}:{}", s.file, s.start_line))
-                                .size(theme::FONT_SMALL),
-                        );
-                        // The id is inspector/tooltip-only — never a node label.
-                        ui.colored_label(
-                            theme::TEXT_DISABLED,
-                            egui::RichText::new(&s.id)
-                                .family(egui::FontFamily::Monospace)
-                                .size(theme::FONT_SMALL),
-                        );
-                    } else {
-                        // File-level node: show its path in code face + id.
-                        let path = hovered.strip_prefix("file:").unwrap_or(hovered.as_str());
-                        ui.colored_label(
-                            theme::TEXT_SECONDARY,
-                            egui::RichText::new(path)
-                                .family(egui::FontFamily::Monospace)
-                                .size(theme::FONT_SMALL),
-                        );
-                    }
-                });
-            });
-    }
 
-    // Plain-language hover card at the cursor — the understanding pass: what
-    // this node IS, what its arrows mean (the strip above stays the technical
-    // view: name in code face, file:line, id).
+    // Plain-language hover card at the cursor: what this node IS, where it
+    // lives, and what its arrows mean.
     if let Some((id, info)) = hovered {
         let (title, lines) = node_tag(&idx, &id, &info);
         egui::Popup::new(

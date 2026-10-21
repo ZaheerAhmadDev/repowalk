@@ -1056,46 +1056,54 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
                     // frame, and the app keeps the settled graph framed by
                     // normalizing positions instead.
                     .with_fit_to_screen_enabled(false);
-                let response = if state.layout == GraphLayout::Layered {
-                    let tree_was_pending = !egui_graphs::get_layout_state::<
-                        egui_graphs::LayoutStateHierarchical,
-                    >(
-                        ui, Some(GRAPH_ID_LAYERED.to_string())
-                    )
-                    .triggered;
-                    let response = egui_graphs::GraphView::<
-                        egui_graphs::LayoutStateHierarchical,
-                        egui_graphs::LayoutHierarchical,
-                    >::new()
-                    .with_id(Some(GRAPH_ID_LAYERED.to_string()))
-                    .with_interactions(&interactions)
-                    .with_navigations(&navigations)
-                    .show(ui, g);
-                    // The tree pass ran inside `show` (it lays every node out
-                    // once). Pull the result into view at design scale — the
-                    // same treatment the force layout gets while it runs.
-                    //
-                    // The canvas height also changes on the first frames (the
-                    // legend grows a row once the graph exists), and the crate
-                    // keeps *screen* position when the widget moves. Reframe
-                    // whenever the canvas settles at a new size, otherwise the
-                    // tree stays glued to the old, smaller viewport.
-                    let size = response.response.rect.size();
-                    if tree_was_pending || framed_size(ui, GRAPH_ID_LAYERED) != Some(size) {
-                        normalize_positions(ui, g, size, GRAPH_ID_LAYERED);
-                        set_framed_size(ui, GRAPH_ID_LAYERED, size);
-                    }
-                    response
-                } else {
-                    egui_graphs::GraphView::<
-                        egui_graphs::FruchtermanReingoldState,
-                        egui_graphs::LayoutForceDirected<egui_graphs::FruchtermanReingold>,
-                    >::new()
-                    .with_id(Some(GRAPH_ID.to_string()))
-                    .with_interactions(&interactions)
-                    .with_navigations(&navigations)
-                    .show(ui, g)
-                };
+                // Stable id scope: egui_graphs keys its remembered camera by
+                // the widget's auto-id. Any conditional widget above the
+                // canvas used to shift that id, and the crate then re-ran its
+                // first-frame fit — a one-frame jolt on every transition.
+                let response = ui
+                    .push_id("graph-canvas", |ui| {
+                        if state.layout == GraphLayout::Layered {
+                            let tree_was_pending = !egui_graphs::get_layout_state::<
+                                egui_graphs::LayoutStateHierarchical,
+                            >(
+                                ui, Some(GRAPH_ID_LAYERED.to_string())
+                            )
+                            .triggered;
+                            let response = egui_graphs::GraphView::<
+                                egui_graphs::LayoutStateHierarchical,
+                                egui_graphs::LayoutHierarchical,
+                            >::new()
+                            .with_id(Some(GRAPH_ID_LAYERED.to_string()))
+                            .with_interactions(&interactions)
+                            .with_navigations(&navigations)
+                            .show(ui, g);
+                            // The tree pass ran inside `show` (it lays every node out
+                            // once). Pull the result into view at design scale — the
+                            // same treatment the force layout gets while it runs.
+                            //
+                            // The canvas height also changes on the first frames (the
+                            // legend grows a row once the graph exists), and the crate
+                            // keeps *screen* position when the widget moves. Reframe
+                            // whenever the canvas settles at a new size, otherwise the
+                            // tree stays glued to the old, smaller viewport.
+                            let size = response.response.rect.size();
+                            if tree_was_pending || framed_size(ui, GRAPH_ID_LAYERED) != Some(size) {
+                                normalize_positions(ui, g, size, GRAPH_ID_LAYERED);
+                                set_framed_size(ui, GRAPH_ID_LAYERED, size);
+                            }
+                            response
+                        } else {
+                            egui_graphs::GraphView::<
+                                egui_graphs::FruchtermanReingoldState,
+                                egui_graphs::LayoutForceDirected<egui_graphs::FruchtermanReingold>,
+                            >::new()
+                            .with_id(Some(GRAPH_ID.to_string()))
+                            .with_interactions(&interactions)
+                            .with_navigations(&navigations)
+                            .show(ui, g)
+                        }
+                    })
+                    .inner;
                 for change in &response.changes {
                     if let egui_graphs::GraphChange::NodeClicked { node } = change {
                         if let Some(n) = g.node(*node) {
@@ -1330,7 +1338,7 @@ pub fn legend(ui: &mut egui::Ui, app: &mut App) {
                     ));
                     ui.label(hint("size = fan-in"));
                     ui.label(hint("dashed ? = low confidence"));
-                    ui.label(hint("▢ cluster · ◆ god file"));
+                    ui.label(hint("boxes = clusters · big dots = god files"));
                     ui.label(hint(
                         "drag nodes · drag empty space to pan · ctrl+scroll to zoom",
                     ));
@@ -1340,7 +1348,7 @@ pub fn legend(ui: &mut egui::Ui, app: &mut App) {
                     if ui
                         .add(
                             egui::Button::new(
-                                egui::RichText::new("trace A→B")
+                                egui::RichText::new("trace A to B")
                                     .size(theme::FONT_SMALL)
                                     .color(theme::ACCENT),
                             )
@@ -1408,7 +1416,7 @@ pub fn legend(ui: &mut egui::Ui, app: &mut App) {
                 // Collapse/expand a module into a single super-node. Clicking an
                 // on-canvas cluster also expands it; this menu creates clusters.
                 ui.menu_button(
-                    egui::RichText::new("cluster ▾").size(theme::FONT_SMALL),
+                    egui::RichText::new("cluster…").size(theme::FONT_SMALL),
                     |ui| {
                         if let Some(idx) = app.index.clone() {
                             let mut mods: Vec<String> =

@@ -81,6 +81,7 @@ pub fn transport(ui: &mut egui::Ui, flow: &mut FlowState, steps: usize) {
         if ui
             .add_enabled(steps > 0, egui::Button::new(play))
             .on_hover_text("Play / pause the flow (plays from the scrub position)")
+            .on_disabled_hover_text("No steps yet — pick the endpoints in the card above")
             .clicked()
         {
             flow.playback.toggle_play(steps);
@@ -88,6 +89,7 @@ pub fn transport(ui: &mut egui::Ui, flow: &mut FlowState, steps: usize) {
         if ui
             .add_enabled(steps > 0, egui::Button::new("⏮"))
             .on_hover_text("Step back")
+            .on_disabled_hover_text("No steps yet — pick the endpoints in the card above")
             .clicked()
         {
             flow.playback.step_back(steps);
@@ -95,6 +97,7 @@ pub fn transport(ui: &mut egui::Ui, flow: &mut FlowState, steps: usize) {
         if ui
             .add_enabled(steps > 0, egui::Button::new("⏭"))
             .on_hover_text("Step forward")
+            .on_disabled_hover_text("No steps yet — pick the endpoints in the card above")
             .clicked()
         {
             flow.playback.step_forward(steps);
@@ -121,7 +124,8 @@ pub fn transport(ui: &mut egui::Ui, flow: &mut FlowState, steps: usize) {
                 steps > 0,
                 egui::Slider::new(&mut frac, 0.0..=1.0).show_value(false),
             )
-            .on_hover_text("Scrub the playhead");
+            .on_hover_text("Scrub the playhead")
+            .on_disabled_hover_text("No steps yet — pick the endpoints in the card above");
         if scrub.changed() {
             flow.playback.playhead = frac * total;
         }

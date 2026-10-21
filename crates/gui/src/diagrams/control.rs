@@ -99,7 +99,12 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
     ui.ctx()
         .data_mut(|d| *d.get_temp_mut_or_default::<String>(filter_id) = filter);
     if let Some(id) = clicked {
-        app.select(Selection::Symbol(id));
+        // Stay in Diagrams: picking a function in the rail is an in-place
+        // selection, not a navigation. `select` used to open the symbol's
+        // file in a Text tab, yanking the reader out of the diagram they
+        // were reading; `select_in_view` moves the CFG (and the shared
+        // selection) without touching the tab strip or the mode.
+        app.select_in_view(Selection::Symbol(id));
     }
 }
 

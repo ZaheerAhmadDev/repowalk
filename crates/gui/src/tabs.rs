@@ -37,7 +37,19 @@ impl TabView {
     /// `Diagrams · Types`, and so on.
     pub fn title(&self) -> String {
         match &self.file {
-            Some(path) => path.rsplit('/').next().unwrap_or(path).to_string(),
+            Some(path) => {
+                // Trailing/empty path components must not produce a blank tab
+                // label (a bare icon + × reads as a mysterious "File" tab).
+                let base = path
+                    .rsplit('/')
+                    .find(|part| !part.is_empty())
+                    .unwrap_or(path);
+                if base.is_empty() {
+                    "(untitled)".into()
+                } else {
+                    base.to_string()
+                }
+            }
             None => match self.mode {
                 Mode::Text => "Editor".into(),
                 Mode::Graph => "Call graph".into(),
@@ -71,10 +83,14 @@ pub fn diagram_label(tab: DiagramsTab) -> &'static str {
 // ── App-side helpers (kept here so tab semantics live in one file) ──────────
 
 impl App {
-    /// Open `file` in the tab strip: an already-open file is activated; when
-    /// the active tab is a repository view a new tab is appended, and when it
-    /// is a file tab the active tab is reused (VS Code's preview-tab reuse).
+    /// Open `file` in the tab strip: an already-open file is activated; the
+    /// active tab is reused (VS Code's preview-tab behaviour) so clicking
+    /// through files never piles up redundant tabs. A tab with unsaved edits
+    /// is never replaced — the new file opens beside it instead.
     pub fn open_in_tabs(&mut self, file: String) {
+        if file.trim().is_empty() {
+            return;
+        }
         if let Some(hit) = self
             .tabs
             .iter()
@@ -83,21 +99,22 @@ impl App {
             self.activate_tab(hit);
             return;
         }
-        let reuse = self.tabs[self.active_tab].file.is_none();
-        let insert_at = if reuse {
-            self.active_tab
-        } else {
-            self.tabs.len()
+        let tab = TabView {
+            file: Some(file),
+            mode: Mode::Text,
+            ..TabView::default()
         };
-        self.tabs.insert(
-            insert_at,
-            TabView {
-                file: Some(file),
-                mode: Mode::Text,
-                ..TabView::default()
-            },
-        );
-        self.activate_tab(insert_at);
+        let reusable = match &self.tabs[self.active_tab].file {
+            None => true,
+            Some(path) => !self.dirty_edits.contains(path),
+        };
+        if reusable {
+            self.tabs[self.active_tab] = tab;
+        } else {
+            self.tabs.push(tab);
+            self.active_tab = self.tabs.len() - 1;
+        }
+        self.activate_tab(self.active_tab);
     }
 
     /// Make tab `idx` the active one and sync the rest of the app to it (the
@@ -166,6 +183,10 @@ pub fn tab_strip(ui: &mut egui::Ui, app: &mut App) {
                 ui.spacing_mut().item_spacing.x = theme::SPACE_1;
                 ui.set_min_height(theme::TAB_HEIGHT);
                 let tabs = app.tabs.clone();
+                // Divider x-positions are painted after the loop: a later
+                // tab's background is added to the painter later and would
+                // otherwise cover the line drawn at its left edge.
+                let mut dividers: Vec<(f32, egui::Rangef)> = Vec::new();
                 for (i, tab) in tabs.iter().enumerate() {
                     let active = i == app.active_tab;
                     let dirty = tab
@@ -178,6 +199,13 @@ pub fn tab_strip(ui: &mut egui::Ui, app: &mut App) {
                     } else {
                         theme::TEXT_SECONDARY
                     };
+                    // Reserve a shape *before* the content so the tab's
+                    // background paints behind the icon/title/close. A bare
+                    // strip of text had no boundaries at all: adjacent tabs
+                    // ran together and the active accent line floated over
+                    // the title glyphs instead of spanning the tab.
+                    let bg = ui.painter().add(egui::Shape::Noop);
+                    let start_x = ui.cursor().min.x - theme::SPACE_1 * 0.5;
 
                     // File-type icon, then the title, then the close affordance —
                     // dirty shows the filled dot (VS Code swaps × ↔ dot), not a
@@ -249,15 +277,74 @@ pub fn tab_strip(ui: &mut egui::Ui, app: &mut App) {
                         }
                     }
 
-                    if active {
-                        let rect = resp.rect;
-                        let top = egui::Rect::from_min_max(
-                            rect.min,
-                            egui::pos2(rect.max.x, rect.min.y + 2.0),
+                    // One visual container per tab: a full-height band with
+                    // rounded top corners, a hover fill for inactive tabs, a
+                    // raised fill + 2px accent for the active one, and a 1px
+                    // divider at every internal boundary.
+                    let center_y = resp.rect.center().y;
+                    let band = egui::Rect::from_min_max(
+                        egui::pos2(start_x, center_y - theme::TAB_HEIGHT * 0.5),
+                        egui::pos2(
+                            ui.cursor().min.x + theme::SPACE_1 * 0.5,
+                            center_y + theme::TAB_HEIGHT * 0.5,
+                        ),
+                    );
+                    let hovered = ui
+                        .ctx()
+                        .pointer_hover_pos()
+                        .is_some_and(|p| band.contains(p));
+                    let fill = if active {
+                        theme::SURFACE_E2
+                    } else if hovered {
+                        theme::SURFACE_HOVER
+                    } else {
+                        egui::Color32::TRANSPARENT
+                    };
+                    if fill != egui::Color32::TRANSPARENT {
+                        ui.painter().set(
+                            bg,
+                            egui::Shape::rect_filled(
+                                band,
+                                egui::CornerRadius {
+                                    nw: theme::CORNER_MD,
+                                    ne: theme::CORNER_MD,
+                                    sw: 0,
+                                    se: 0,
+                                },
+                                fill,
+                            ),
                         );
-                        ui.painter()
-                            .rect_filled(top, egui::CornerRadius::ZERO, theme::ACCENT);
                     }
+                    if active {
+                        let accent = egui::Rect::from_min_max(
+                            band.min,
+                            egui::pos2(band.max.x, band.min.y + 2.0),
+                        );
+                        ui.painter().rect_filled(
+                            accent,
+                            egui::CornerRadius {
+                                nw: theme::CORNER_MD,
+                                ne: theme::CORNER_MD,
+                                sw: 0,
+                                se: 0,
+                            },
+                            theme::ACCENT,
+                        );
+                    }
+                    if i + 1 < tabs.len() {
+                        dividers.push((
+                            band.max.x,
+                            egui::Rangef::new(
+                                band.top() + theme::SPACE_2,
+                                band.bottom() - theme::SPACE_2,
+                            ),
+                        ));
+                    }
+                }
+                // Internal separators on top of every background.
+                for (x, y) in dividers {
+                    ui.painter()
+                        .vline(x, y, egui::Stroke::new(1.0, theme::BORDER_SUBTLE));
                 }
             });
         });
@@ -315,6 +402,20 @@ mod tests {
         };
         assert_eq!(t.title(), "app.rs");
         assert_eq!(t.crumb(), ["crates", "gui", "src", "app.rs"]);
+    }
+
+    #[test]
+    fn empty_or_trailing_paths_never_title_a_blank_tab() {
+        let empty = TabView {
+            file: Some(String::new()),
+            ..TabView::default()
+        };
+        assert_eq!(empty.title(), "(untitled)");
+        let trailing = TabView {
+            file: Some("src/".into()),
+            ..TabView::default()
+        };
+        assert_eq!(trailing.title(), "src");
     }
 
     #[test]

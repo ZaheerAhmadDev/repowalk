@@ -919,22 +919,22 @@ impl App {
             let export = ui.menu_button(
                 crate::icons::glyph(crate::icons::EXPORT_ICON, 15.0).color(theme::TEXT_SECONDARY),
                 |ui| {
-                    if ui.button("Window → PNG").clicked() {
+                    if ui.button("Window to PNG").clicked() {
                         self.export_png(ui.ctx());
                         ui.close();
                     }
-                    if ui.button("Tour + health → Markdown").clicked() {
+                    if ui.button("Tour + health to Markdown").clicked() {
                         self.export_markdown();
                         ui.close();
                     }
-                    if ui.button("Architecture report → Markdown").clicked() {
+                    if ui.button("Architecture report to Markdown").clicked() {
                         self.export_architecture_report();
                         ui.close();
                     }
                     ui.separator();
                     // v2 diagrams: the same core emitters `repowalk graph` uses, so
                     // the file the GUI writes and the file the CLI prints are equal.
-                    ui.menu_button("Diagrams → Mermaid (.mmd)", |ui| {
+                    ui.menu_button("Diagrams to Mermaid (.mmd)", |ui| {
                         if ui.button("Call graph").clicked() {
                             self.export_diagram(Diagram::CallGraph, "mermaid", "mmd");
                             ui.close();
@@ -956,7 +956,7 @@ impl App {
                             ui.close();
                         }
                     });
-                    ui.menu_button("Diagrams → Graphviz DOT (.dot)", |ui| {
+                    ui.menu_button("Diagrams to Graphviz DOT (.dot)", |ui| {
                         if ui.button("Call graph").clicked() {
                             self.export_diagram(Diagram::CallGraph, "dot", "dot");
                             ui.close();
@@ -978,7 +978,7 @@ impl App {
                             ui.close();
                         }
                     });
-                    ui.menu_button("Diagrams → SVG (.svg)", |ui| {
+                    ui.menu_button("Diagrams to SVG (.svg)", |ui| {
                         if ui.button("Call graph").clicked() {
                             self.export_diagram(Diagram::CallGraph, "svg", "svg");
                             ui.close();
@@ -1698,32 +1698,32 @@ fn palette_actions(_app: &App) -> Vec<PaletteAction> {
             kind: PaletteKind::QuickOpen,
         },
         PaletteAction {
-            label: "Export window → PNG",
+            label: "Export window to PNG",
             hint: "",
             kind: PaletteKind::ExportPng,
         },
         PaletteAction {
-            label: "Export tour+health → Markdown",
+            label: "Export tour+health to Markdown",
             hint: "",
             kind: PaletteKind::ExportMd,
         },
         PaletteAction {
-            label: "Export architecture report → Markdown",
+            label: "Export architecture report to Markdown",
             hint: "",
             kind: PaletteKind::ExportArchitecture,
         },
         PaletteAction {
-            label: "Export call graph → Mermaid",
+            label: "Export call graph to Mermaid",
             hint: "",
             kind: PaletteKind::ExportMermaid,
         },
         PaletteAction {
-            label: "Export call graph → Graphviz DOT",
+            label: "Export call graph to Graphviz DOT",
             hint: "",
             kind: PaletteKind::ExportDot,
         },
         PaletteAction {
-            label: "Export call graph → SVG",
+            label: "Export call graph to SVG",
             hint: "",
             kind: PaletteKind::ExportSvg,
         },

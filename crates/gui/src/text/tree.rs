@@ -225,7 +225,7 @@ fn file_row(ui: &mut egui::Ui, app: &mut App, row: &FileRow) {
         } else {
             egui::Color32::TRANSPARENT
         };
-        ui.colored_label(marker, "⟶");
+        ui.colored_label(marker, "▶");
         crate::icons::file_mark(ui, &row.path, 14.0);
         ui.label(egui::RichText::new(&row.name).color(if selected {
             theme::TEXT_PRIMARY

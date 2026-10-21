@@ -236,3 +236,96 @@ fn shell_survives_small_windows() {
         );
     }
 }
+
+/// The Flow tab must explain its two endpoints *where the empty canvas is*,
+/// not point at a sidebar section the reader has to hunt for.
+#[test]
+fn flow_view_explains_its_endpoints_in_place() {
+    let mut harness = harness();
+    harness.state_mut().index = Some(std::sync::Arc::new(sample_index()));
+    harness.state_mut().mode = Mode::Flow;
+    harness.run_steps(3);
+    let tree = dump_tree(&harness);
+
+    assert!(
+        tree.contains("Trace a call path"),
+        "flow trace card missing:\n{tree}"
+    );
+    assert!(tree.contains("Start (A)"), "A slot missing:\n{tree}");
+    assert!(tree.contains("End (B)"), "B slot missing:\n{tree}");
+    assert!(
+        tree.contains("not set"),
+        "empty endpoint state missing:\n{tree}"
+    );
+    assert_eq!(
+        harness.query_all_by_label("choose…").count(),
+        2,
+        "expected a choose button for each endpoint:\n{tree}"
+    );
+
+    // Arming A must immediately offer functions (not an empty \"no matches\"
+    // list) and with the sample index the one function is `run`.
+    {
+        let choose_a = harness.query_all_by_label("choose…").next().unwrap();
+        choose_a.click();
+    }
+    harness.run_steps(3);
+    let armed = dump_tree(&harness);
+    assert!(
+        armed.contains("run"),
+        "armed picker should suggest the sample function:\n{armed}"
+    );
+}
+
+/// Arming a picker with an empty query must offer functions immediately; an
+/// empty result list used to read as if the repository had no functions.
+#[test]
+fn empty_picker_query_offers_functions() {
+    let idx = sample_index();
+    let hits = crate::flow::picker_hits(&idx, "", 6);
+    assert_eq!(hits.len(), 1, "expected the sample function: {hits:?}");
+    assert_eq!(hits[0].0, "src/main.rs:10");
+}
+
+/// Picking A hands straight over to B, then forms the shared trace pair.
+#[test]
+fn flow_endpoint_picking_advances_from_a_to_b_to_the_pair() {
+    let mut harness = harness();
+    let app = harness.state_mut();
+    app.flow.pick = TracePick::PickA;
+    crate::flow::assign_endpoint(app, "src/main.rs:10".into());
+    assert_eq!(app.flow.trace_a, "src/main.rs:10");
+    assert_eq!(
+        app.flow.pick,
+        TracePick::PickB,
+        "after A the picker should wait for B"
+    );
+
+    crate::flow::assign_endpoint(app, "src/main.rs:10".into());
+    assert_eq!(app.flow.trace_b, "src/main.rs:10");
+    assert_eq!(app.flow.pick, TracePick::None);
+    assert_eq!(
+        app.trace,
+        Some(("src/main.rs:10".into(), "src/main.rs:10".into()))
+    );
+}
+
+/// Clicking through files replaces the clean preview tab instead of piling
+/// up redundant tabs; unsaved work is never displaced.
+#[test]
+fn opening_files_reuses_a_clean_tab_but_keeps_a_dirty_one() {
+    let mut harness = harness();
+    let app = harness.state_mut();
+    app.select(Selection::File("src/main.rs".into()));
+    app.select(Selection::File("src/lib.rs".into()));
+    assert_eq!(app.tabs.len(), 1, "clean preview tabs should be reused");
+    assert_eq!(app.tabs[0].title(), "lib.rs");
+
+    app.dirty_edits.insert("src/lib.rs".into());
+    app.select(Selection::File("src/main.rs".into()));
+    assert_eq!(app.tabs.len(), 2, "a dirty tab must survive the next open");
+    assert!(app
+        .tabs
+        .iter()
+        .any(|t| t.file.as_deref() == Some("src/lib.rs")));
+}
