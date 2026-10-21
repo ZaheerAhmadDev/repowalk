@@ -249,7 +249,7 @@ impl CanvasState {
 /// Canvas memory key that includes the repo + learn signature, so
 /// drag/pan/zoom state can't leak across repositories or re-learns
 /// (identical `src/main.rs` paths in a different repo used to inherit
-/// each other's node offsets; a re-learn renumbering ids mis-placed
+/// each other's node offsets; a re-learn renumbering ids misplaced
 /// previously-dragged nodes).
 pub fn canvas_key(base: &'static str, idx: Option<&repowalk_core::model::Index>) -> egui::Id {
     let mut id = egui::Id::new(base);
@@ -315,7 +315,7 @@ pub fn frame_with(
 
     let hovered = resp
         .hover_pos()
-        .map(&to_local)
+        .map(to_local)
         .map(|q| state.layer.to_canvas(q.to_vec2()))
         .and_then(|canvas_pt| hit_index(canvas_pt, &placed).map(|i| items[i].0.clone()));
 
@@ -343,7 +343,7 @@ pub fn frame_with(
         state.dragging = None;
         if let Some(press) = resp
             .interact_pointer_pos()
-            .map(&to_local)
+            .map(to_local)
             .map(|q| state.layer.to_canvas(q.to_vec2()))
             .and_then(|canvas_pt| hit_index(canvas_pt, &placed))
         {

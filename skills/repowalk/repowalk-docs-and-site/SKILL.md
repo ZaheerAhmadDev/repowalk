@@ -57,9 +57,10 @@ python3 -m http.server -d site 8080   # then open http://localhost:8080/
 | `site-lint.yml` | — | `htmlhint site` | `npx htmlhint site` |
 | `pages-build-check.yml` | — | Pages artifact builds from `./site` | — |
 
-Note: `html5validator.yml` is misnamed — it actually runs the Rust gate
-(`cargo fmt --check`, `cargo clippy -D warnings`, `cargo test --all`). The site
-HTML validator is `site-lint.yml` (htmlhint).
+Note: there is no `html5validator.yml` — the old file was misnamed and actually
+ran the Rust gate (`cargo fmt --check`, `cargo clippy -D warnings`,
+`cargo test --all`), so it was removed. The site HTML validator is
+`site-lint.yml` (htmlhint).
 
 ## The markdownlint config filename matters
 

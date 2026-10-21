@@ -36,6 +36,7 @@ Program Director, outside the count).
 ## Tier 3 — contributors (85)
 
 ### Core Engine (CORE)
+
 | Seat | Wave | Slice | Card |
 |---|---|---|---|
 | CORE-01 | W1 | `model.rs` v2 types (Variable/Cfg/Type/Module/UseSite) + `analysis.rs` aggregate | CORE-3 |
@@ -49,6 +50,7 @@ Program Director, outside the count).
 | CORE-09 | W2 | analysis-schema notes for DOC-2 | DOC-2 |
 
 ### Code Intelligence (INTEL)
+
 | Seat | Wave | Slice | Card |
 |---|---|---|---|
 | INTEL-01 | W1 | `analyze/mod.rs` analyzer framework + dispatch | INTEL-2 |
@@ -62,6 +64,7 @@ Program Director, outside the count).
 | INTEL-09 | W1 | fixture authoring help (TS/JS sample) | VER-2 |
 
 ### Graph & Motion (GRAPH)
+
 | Seat | Wave | Slice | Card |
 |---|---|---|---|
 | GRAPH-01 | W3 | `diagrams/common` shared canvas kit (zoom/pan/click→source) | GRAPH-2 |
@@ -75,6 +78,7 @@ Program Director, outside the count).
 | GRAPH-09 | W3 | diagram notes | GRAPH-2…5 |
 
 ### Design System (DSN)
+
 | Seat | Wave | Slice | Card |
 |---|---|---|---|
 | DSN-01 | W4 | light theme palette + token audit | DSN-2 |
@@ -87,6 +91,7 @@ Program Director, outside the count).
 | DSN-08 | W4 | visual polish sweep | DSN-2/3 |
 
 ### Text & Explain (TEXT)
+
 | Seat | Wave | Slice | Card |
 |---|---|---|---|
 | TEXT-01 | W3 | `usage/variables.rs` per-file table | TEXT-2 |
@@ -99,6 +104,7 @@ Program Director, outside the count).
 | TEXT-08 | W3–W4 | editor regression tests | TEXT-2…4 |
 
 ### CLI & Export (PROD)
+
 | Seat | Wave | Slice | Card |
 |---|---|---|---|
 | PROD-01 | W4 | export framework + Mermaid emitter | PROD-2 |
@@ -111,6 +117,7 @@ Program Director, outside the count).
 | PROD-08 | W4 | help text + usage docs | PROD-3 |
 
 ### Verification (VER)
+
 | Seat | Wave | Slice | Card |
 |---|---|---|---|
 | VER-01 | W1 | golden harness for v2 artifacts | VER-2 |
@@ -124,6 +131,7 @@ Program Director, outside the count).
 | VER-09 | W5 | verification checklist v2 | VER-3 |
 
 ### Security & Risk (RISK)
+
 | Seat | Wave | Slice | Card |
 |---|---|---|---|
 | RISK-01 | W2 | perf budgets + guardrails doc | RISK-2 |
@@ -136,6 +144,7 @@ Program Director, outside the count).
 | RISK-08 | W2 | `board/docs/risks-v2.md` | RISK-2 |
 
 ### Build & Release (BLD)
+
 | Seat | Wave | Slice | Card |
 |---|---|---|---|
 | BLD-01 | W1 | pin + prove tree-sitter TS/JS (+`regex`) build | BLD-2 |
@@ -148,6 +157,7 @@ Program Director, outside the count).
 | BLD-08 | W1 | toolchain pins stay green | BLD-2 |
 
 ### Documentation (DOC)
+
 | Seat | Wave | Slice | Card |
 |---|---|---|---|
 | DOC-01 | W2 | v2 architecture doc (`docs/architecture.md`) | DOC-2 |

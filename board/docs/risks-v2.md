@@ -91,7 +91,7 @@ RISK-03), and the v1 flow-mode risks already tracked in
 
 ---
 
-# Final pass (RISK-3, 2026-10-16)
+## Final pass (RISK-3, 2026-10-16)
 
 Independent, evidence-based sweep of the whole `prerelease-v2` tree (branch head
 `66c2c11`). Every claim below is a command I ran on this checkout; where a number
@@ -99,7 +99,7 @@ is not proven I say **UNMEASURED** rather than restating a target. This section
 does not edit or soften R-12 … R-27 — status changes are restated with evidence
 in §5.
 
-## 1. No-network proof (v2-added dependencies)
+### 1. No-network proof (v2-added dependencies)
 
 What v2 *added* (from `git diff redesign..prerelease-v2 -- crates/core/Cargo.toml`):
 `regex = "1"`, `tree-sitter-javascript = "0.25.0"`, `tree-sitter-typescript = "0.23.2"`.
@@ -144,7 +144,7 @@ Lockfile caveat (now R-31): `Cargo.lock` *does* contain `tokio`, `wasm-bindgen`,
 native graph (`cargo tree` count 0). A naive `grep tokio Cargo.lock` misleads; the
 `cargo tree` gate is the correct one.
 
-## 2. Code-level network / urgency greps
+### 2. Code-level network / urgency greps
 
 | grep | hits | verdict |
 |---|---|---|
@@ -167,7 +167,7 @@ So the code-level precondition for the idle budget holds: **no `request_repaint`
 loop, no polling thread, no `Instant::now`, no sleep**. The budget itself is still
 **UNMEASURED** because idle CPU/repaint counts cannot be taken headless — see §3.
 
-## 3. Perf budget audit (VER-3 owns fresh numbers)
+### 3. Perf budget audit (VER-3 owns fresh numbers)
 
 **All four budgets are now MEASURED** by VER-3 in
 [`board/docs/verification-v2.md`](verification-v2.md). This table was written
@@ -188,7 +188,7 @@ the app was run headless against `fixtures/sample` and the idle window showed
 callback and playback guarded by a play flag. The command a human with a real
 display can re-run is in `verification-v2.md` §8.7.
 
-## 4. Scope freeze
+### 4. Scope freeze
 
 `docs/v2-plan.md` defines **F1, F2, F3, F4, F6, F7, F8, F9, F10, F11, F12, F13,
 F14, F15** — 14 specs. **There is no F5** anywhere in the plan or board (now R-31;
@@ -213,7 +213,7 @@ Leak checks:
   and is **untouched by the v2 diff** (`git diff redesign..prerelease-v2 -- crates/gui/src/app.rs`
   has no `save_open_file`/`fs::write` hunk). Not a v2 leak; flagged as a release-note item.
 
-## 5. Freeze checks + status changes to existing rows
+### 5. Freeze checks + status changes to existing rows
 
 - **`index.json` shape frozen.** `git diff --quiet redesign..prerelease-v2 -- crates/core/src/model.rs`
   → **exit 0 (identical)**. The v2 types (`Variable`, `VarKind`, `UseSite`, `CfgNode`,
@@ -246,7 +246,7 @@ Leak checks:
   `unsupported_language_files_are_reported_explicitly`. The old `parse_ts`/`_ =>` defect
   string is gone; `pipeline.rs:487` only quotes it inside a regression test message.
 
-## 6. New rows (R-28 … R-31)
+### 6. New rows (R-28 … R-31)
 
 | id | risk | likelihood | impact | mitigation | owner | verify hook |
 |---|---|---|---|---|---|---|
@@ -255,11 +255,10 @@ Leak checks:
 | R-30 | Release-note honesty: `app.rs::save_open_file` (Ctrl+S) writes the edited buffer back to user source, which sits in tension with the plan's "refactoring/editing features" non-goal; it predates `prerelease-v2` and was not touched, but a reviewer reading only the non-goals may be surprised | Low | Low | State it explicitly in the release notes / README as a pre-existing v1 capability, not a v2 feature; do not remove it inside the v2 freeze | PMO + DOC-4 | `git show redesign:crates/gui/src/app.rs \| grep -n 'save_open_file'` (line 230) and `git diff redesign..prerelease-v2 -- crates/gui/src/app.rs` shows no change to it |
 | R-31 | Definition-of-scope drift: `docs/v2-plan.md` claims "F1–F15 (everything)" but defines **no F5**, and `Cargo.lock` carries wasm-target-gated `tokio`/`web-sys`/`wasm-bindgen` that a naive lockfile grep reads as a network violation | Low | Low | State the real coverage (F1–F4, F6–F15) in the release checklist; document that the lockfile's async/web crates are `eframe`'s wasm-gated deps and that `cargo tree` (not `grep Cargo.lock`) is the no-network gate | DOC-4 + BLD-01 | `grep -cE '^### F5' docs/v2-plan.md` = 0 while `grep -cE '^### F[0-9]+' docs/v2-plan.md` = 14; `cargo tree --workspace --locked \| grep -c tokio` = 0 although `grep -c 'name = "tokio"' Cargo.lock` > 0 |
 
-## 7. Gates + honest assessment
+### 7. Gates + honest assessment
 
 - `python3 -m unittest board.tests.test_tasks` → **OK (8 tests, 0 failures)**.
-- `cargo test -p repowalk-core --locked` → **green**: 162 lib (2 ignored) + 10 analysis_golden
-  + 6 contract + 10 export_emitters + 1 golden + 4 grammar_abi + 2 walk_metrics + 1 doc-test, 0 failed.
+- `cargo test -p repowalk-core --locked` → **green**: 162 lib (2 ignored) + 10 analysis_golden + 6 contract + 10 export_emitters + 1 golden + 4 grammar_abi + 2 walk_metrics + 1 doc-test, 0 failed.
 - `cargo tree --workspace --locked | grep -cE 'reqwest|tokio|hyper|ureq|native-tls'` → **0**;
   `cargo metadata --offline --locked` → exit 0; `Cargo.lock` clean.
 
