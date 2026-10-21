@@ -996,6 +996,7 @@ version = "0.37.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "31bcbef0d4263a63eb32c4834e5d711613035ce1333468e107d928923e21e6e2"
 dependencies = [
+ "bytemuck",
  "emath 0.37.0",
 ]
 
@@ -1009,7 +1010,7 @@ dependencies = [
  "bytemuck",
  "document-features",
  "egui 0.36.2",
- "egui-wgpu",
+ "egui-wgpu 0.36.2",
  "egui-winit",
  "egui_glow",
  "glutin",
@@ -1096,6 +1097,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "egui-wgpu"
+version = "0.37.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0309cbe1febed48af5b974e4bcc424b35e9664863a4d402697147b57a488c864"
+dependencies = [
+ "ahash",
+ "bytemuck",
+ "document-features",
+ "epaint 0.37.0",
+ "log",
+ "profiling",
+ "thiserror 2.0.21",
+ "type-map",
+ "web-time",
+ "wgpu",
+]
+
+[[package]]
 name = "egui-winit"
 version = "0.36.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1161,7 +1180,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5eb3f3effb2726fee23449293e67acbf6cc6ce35525b1722bd5743bb348114d5"
 dependencies = [
  "eframe",
- "egui",
+ "egui 0.36.2",
  "kittest",
  "log",
  "serde",
@@ -1189,6 +1208,9 @@ name = "emath"
 version = "0.37.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e73ce90f54750be8672c02be0743fe47530e6f251e066f0ee2869b59eb297af5"
+dependencies = [
+ "bytemuck",
+]
 
 [[package]]
 name = "endi"
@@ -1261,6 +1283,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97bac86ae3dde93fc3951e790951caea739ff39a6c89d909cdaf1d9278dbb1bd"
 dependencies = [
  "ahash",
+ "bytemuck",
  "ecolor 0.37.0",
  "emath 0.37.0",
  "font-types",
@@ -2039,7 +2062,7 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "90ceaa75eb0036a32b6b9833962eb18137449e9817e2e586006471925b727fd5"
 dependencies = [
- "accesskit",
+ "accesskit 0.24.1",
  "accesskit_consumer 0.35.0",
 ]
 
@@ -3138,11 +3161,11 @@ dependencies = [
 name = "repowalk-gui"
 version = "2.0.0"
 dependencies = [
- "accesskit",
+ "accesskit 0.24.1",
  "anyhow",
  "eframe",
  "egui 0.37.0",
- "egui-wgpu",
+ "egui-wgpu 0.37.0",
  "egui_code_editor",
  "egui_graphs",
  "egui_kittest",

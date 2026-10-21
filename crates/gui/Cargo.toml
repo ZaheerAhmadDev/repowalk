@@ -14,7 +14,7 @@ egui = "0.37"
 egui_code_editor = { version = "0.4.2", features = ["serde"] }
 egui_graphs = "0.32.0"
 # same version eframe pulls; declared directly to configure backend selection
-egui-wgpu = "0.36"
+egui-wgpu = "0.37"
 petgraph = "0.8"
 repowalk-core = { path = "../core" }
 serde = { version = "1", features = ["derive"] }
