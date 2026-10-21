@@ -135,6 +135,35 @@ pub(crate) fn data_row(
     name: impl Into<egui::WidgetText>,
     meta: Option<Meta<'_>>,
 ) -> egui::Response {
+    data_row_marked(ui, selected, id_salt, None, name, meta)
+}
+
+/// A [`data_row`] that leads with the file's type chip, for lists of paths
+/// (explorer, quick open). The chip is painted, so the name column starts at
+/// the same x on every row.
+pub(crate) fn file_data_row(
+    ui: &mut egui::Ui,
+    selected: bool,
+    id_salt: impl std::hash::Hash + std::fmt::Debug,
+    path: &str,
+    name: impl Into<egui::WidgetText>,
+    meta: Option<Meta<'_>>,
+) -> egui::Response {
+    data_row_marked(ui, selected, id_salt, Some(path), name, meta)
+}
+
+/// Size of the leading type chip. Rows are 24 px; 14 px leaves the chip
+/// visually centred without crowding the name.
+pub(crate) const FILE_MARK_SIZE: f32 = 14.0;
+
+fn data_row_marked(
+    ui: &mut egui::Ui,
+    selected: bool,
+    id_salt: impl std::hash::Hash + std::fmt::Debug,
+    mark: Option<&str>,
+    name: impl Into<egui::WidgetText>,
+    meta: Option<Meta<'_>>,
+) -> egui::Response {
     theme::list_row(ui, selected, id_salt, |ui| {
         let row = ui.max_rect();
         let font = egui::FontId::new(theme::FONT_SMALL, egui::FontFamily::Proportional);
@@ -150,8 +179,19 @@ pub(crate) fn data_row(
             None => 0.0,
         };
         let gap = if meta.is_some() { theme::SPACE_2 } else { 0.0 };
-        // Reserve the right edge for `meta` so the name elides instead of colliding.
-        let name_budget = (row.width() - meta_w - gap).max(theme::SPACE_6);
+        // Reserve the right edge for `meta` and the left edge for the type
+        // chip, so the name elides instead of colliding.
+        let mark_w = if mark.is_some() {
+            FILE_MARK_SIZE * 1.15 + theme::SPACE_1
+        } else {
+            0.0
+        };
+        let name_budget = (row.width() - meta_w - gap - mark_w).max(theme::SPACE_6);
+
+        if let Some(path) = mark {
+            let resp = crate::icons::file_mark(ui, path, FILE_MARK_SIZE);
+            resp.on_hover_text(path.rsplit('/').next().unwrap_or(path));
+        }
 
         ui.allocate_ui_with_layout(
             egui::vec2(name_budget, theme::ROW_HEIGHT),

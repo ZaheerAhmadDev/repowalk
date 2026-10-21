@@ -1,5 +1,6 @@
-//! File tree pane: directories grouped as collapsible nodes (module color dot),
-//! entrypoint markers ⟶, full-row click targets → `Selection::File`. OWNER: RSK-17.
+//! File tree pane: directories grouped as collapsible nodes (tinted folder
+//! glyphs), files carrying colored type chips, entrypoint markers ⟶, full-row
+//! click targets → `Selection::File`. OWNER: RSK-17.
 use eframe::egui;
 use std::collections::BTreeMap;
 
@@ -168,27 +169,41 @@ fn dir_ui(ui: &mut egui::Ui, app: &mut App, dir: &DirNode, depth: usize) {
     // their own state and open when they contain the active file.
     let default_open = depth == 0 || contains_open(app, dir);
 
-    egui::collapsing_header::CollapsingState::load_with_default_open(
+    let state = egui::collapsing_header::CollapsingState::load_with_default_open(
         ui.ctx(),
         egui::Id::new(("text-tree-dir", dir.full.clone())),
         default_open,
-    )
-    .show_header(ui, |ui| {
-        ui.colored_label(theme::module_color(&dir.full), "●");
-        ui.label(
-            egui::RichText::new(dir.name())
-                .strong()
-                .color(theme::TEXT_PRIMARY),
-        );
-    })
-    .body(|ui| {
-        for row in &dir.files {
-            file_row(ui, app, row);
-        }
-        for sub in dir.subdirs.values() {
-            dir_ui(ui, app, sub, depth + 1);
-        }
-    });
+    );
+    // Folders are shapes, files are type chips: the open/closed glyph tells you
+    // what a row *is* before you read its name.
+    let open = state.is_open();
+    state
+        .show_header(ui, |ui| {
+            ui.label(
+                crate::icons::glyph(
+                    if open {
+                        crate::icons::FOLDER_OPENED
+                    } else {
+                        crate::icons::FOLDER
+                    },
+                    14.0,
+                )
+                .color(theme::module_color(&dir.full)),
+            );
+            ui.label(
+                egui::RichText::new(dir.name())
+                    .strong()
+                    .color(theme::TEXT_PRIMARY),
+            );
+        })
+        .body(|ui| {
+            for row in &dir.files {
+                file_row(ui, app, row);
+            }
+            for sub in dir.subdirs.values() {
+                dir_ui(ui, app, sub, depth + 1);
+            }
+        });
 }
 
 fn contains_open(app: &App, dir: &DirNode) -> bool {
@@ -197,7 +212,8 @@ fn contains_open(app: &App, dir: &DirNode) -> bool {
         .is_some_and(|open| open.starts_with(&format!("{}/", dir.full)))
 }
 
-/// Full-row file target: entrypoint marker, name, right-aligned line count.
+/// Full-row file target: entrypoint marker, type chip, name, right-aligned
+/// line count.
 fn file_row(ui: &mut egui::Ui, app: &mut App, row: &FileRow) {
     let selected = app.open_file.as_deref() == Some(row.path.as_str());
     let path = row.path.clone();
@@ -210,6 +226,7 @@ fn file_row(ui: &mut egui::Ui, app: &mut App, row: &FileRow) {
             egui::Color32::TRANSPARENT
         };
         ui.colored_label(marker, "⟶");
+        crate::icons::file_mark(ui, &row.path, 14.0);
         ui.label(egui::RichText::new(&row.name).color(if selected {
             theme::TEXT_PRIMARY
         } else {

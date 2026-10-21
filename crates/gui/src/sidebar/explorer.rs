@@ -91,11 +91,17 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
         .and_then(|p| p.file_name())
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| "repository".into());
-    ui.label(
-        egui::RichText::new(format!("▾ {name}"))
-            .size(theme::FONT_SMALL)
-            .color(theme::TEXT_SECONDARY),
-    );
+    // The root is a directory too: same folder language as the rows below
+    // (a bare "▾" rendered as tofu in the proportional font).
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = theme::SPACE_1;
+        ui.label(crate::icons::glyph(crate::icons::OPEN, 14.0).color(theme::TEXT_SECONDARY));
+        ui.label(
+            egui::RichText::new(&name)
+                .size(theme::FONT_SMALL)
+                .color(theme::TEXT_SECONDARY),
+        );
+    });
 
     let root = build(&idx.files);
     egui::ScrollArea::vertical()
@@ -115,35 +121,48 @@ fn dir_ui(ui: &mut egui::Ui, app: &mut App, dir: &DirNode, depth: usize) {
     // Top level starts open so the first click is not a hunt; deeper nodes are
     // closed until opened, and one that holds the active file opens itself.
     let default_open = depth <= 1 || contains_open(app, dir);
-
-    egui::collapsing_header::CollapsingState::load_with_default_open(
+    let state = egui::collapsing_header::CollapsingState::load_with_default_open(
         ui.ctx(),
         egui::Id::new(("explorer-dir", dir.full.clone())),
         default_open,
-    )
-    .show_header(ui, |ui| {
-        ui.add_space((depth as f32 - 1.0) * 12.0);
-        ui.colored_label(theme::module_color(&dir.full), "▸");
-        ui.label(
-            egui::RichText::new(&dir.name)
-                .strong()
-                .color(theme::TEXT_PRIMARY),
-        );
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.colored_label(
-                theme::TEXT_MUTED,
-                egui::RichText::new(count_files(dir).to_string()).size(theme::FONT_SMALL),
+    );
+    // Folders are shapes, files are type chips: the open/closed glyph tells
+    // you what a row *is* before you read its name.
+    let open = state.is_open();
+    state
+        .show_header(ui, |ui| {
+            ui.add_space((depth as f32 - 1.0) * 12.0);
+            ui.label(
+                crate::icons::glyph(
+                    if open {
+                        crate::icons::FOLDER_OPENED
+                    } else {
+                        crate::icons::FOLDER
+                    },
+                    14.0,
+                )
+                .color(theme::module_color(&dir.full)),
             );
+            ui.label(
+                egui::RichText::new(&dir.name)
+                    .strong()
+                    .color(theme::TEXT_PRIMARY),
+            );
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.colored_label(
+                    theme::TEXT_MUTED,
+                    egui::RichText::new(count_files(dir).to_string()).size(theme::FONT_SMALL),
+                );
+            });
+        })
+        .body(|ui| {
+            for row in &dir.files {
+                file_ui(ui, app, row, depth);
+            }
+            for sub in dir.dirs.values() {
+                dir_ui(ui, app, sub, depth + 1);
+            }
         });
-    })
-    .body(|ui| {
-        for row in &dir.files {
-            file_ui(ui, app, row, depth);
-        }
-        for sub in dir.dirs.values() {
-            dir_ui(ui, app, sub, depth + 1);
-        }
-    });
 }
 
 fn contains_open(app: &App, dir: &DirNode) -> bool {
@@ -158,11 +177,17 @@ fn file_ui(ui: &mut egui::Ui, app: &mut App, row: &FileRow, depth: usize) {
     // negative add_space advanced/overlapped rows. Clamp at zero.
     ui.add_space((((depth as f32) - 1.0).max(0.0)) * 12.0);
     let loc = row.lines.to_string();
-    let resp = crate::sidebar::data_row(
+    let selected = app.open_file.as_deref() == Some(path.as_str());
+    let resp = crate::sidebar::file_data_row(
         ui,
-        app.open_file.as_deref() == Some(path.as_str()),
+        selected,
         ("explorer-file", path.clone()),
-        row.name.clone(),
+        &path,
+        egui::RichText::new(&row.name).color(if selected {
+            theme::TEXT_PRIMARY
+        } else {
+            theme::TEXT_SECONDARY
+        }),
         Some(crate::sidebar::Meta::muted(&loc)),
     );
     let resp = resp.on_hover_text(format!("{path} · {}", row.lang));

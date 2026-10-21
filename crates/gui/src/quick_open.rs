@@ -88,10 +88,11 @@ pub fn ui(ui: &mut egui::Ui, app: &mut App) {
                         let name = path.rsplit('/').next().unwrap_or(path);
                         let dir = path[..path.len() - name.len()].trim_end_matches('/');
                         let meta_text = dir.to_string();
-                        let resp = crate::sidebar::data_row(
+                        let resp = crate::sidebar::file_data_row(
                             ui,
                             app.open_file.as_deref() == Some(path.as_str()),
                             ("quick-open", path.clone()),
+                            path,
                             name.to_string(),
                             if dir.is_empty() {
                                 None
