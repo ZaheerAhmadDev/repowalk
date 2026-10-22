@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="RepoWalk — offline-first, GUI-first codebase understanding. Map dependencies, trace flows, and explain any file without sending code anywhere. No AI, no network, no keys.">
+  <title>RepoWalk — Offline Codebase Understanding</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23635bff'/%3E%3Ctext x='16' y='22' font-family='Verdana' font-size='17' font-weight='bold' fill='white' text-anchor='middle'%3ER%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+
+<!-- Icon sprite (Lucide, ISC license — https://lucide.dev) -->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+  <symbol id="i-github" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></symbol>
+  <symbol id="i-arrow-up-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></symbol>
+  <symbol id="i-terminal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+  <symbol id="i-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="i-cpu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></symbol>
+  <symbol id="i-map" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/></symbol>
+  <symbol id="i-git-branch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></symbol>
+  <symbol id="i-compass" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z"/><circle cx="12" cy="12" r="10"/></symbol>
+  <symbol id="i-file-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M4.268 21a2 2 0 0 0 1.727 1H18a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v3"/><path d="m9 18-1.5-1.5"/><circle cx="5" cy="14" r="3"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-workflow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></symbol>
+  <symbol id="i-file-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></symbol>
+  <symbol id="i-network" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></symbol>
+  <symbol id="i-variable" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21s-4-3-4-9 4-9 4-9"/><path d="M16 3s4 3 4 9-4 9-4 9"/><line x1="15" x2="9" y1="9" y2="15"/><line x1="9" x2="15" y1="9" y2="15"/></symbol>
+  <symbol id="i-chart-column" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></symbol>
+  <symbol id="i-code-xml" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></symbol>
+  <symbol id="i-zap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></symbol>
+  <symbol id="i-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-package" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 7.703 4.734a2 2 0 0 0 1.994 0L20.7 7"/><path d="m7.5 4.27 9 5.15"/></symbol>
+  <symbol id="i-boxes" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.97 12.92A2 2 0 0 0 2 14.63v3.24a2 2 0 0 0 .97 1.71l3 1.8a2 2 0 0 0 2.06 0L12 19v-5.5l-5-3-4.03 2.42Z"/><path d="m7 16.5-4.74-2.85"/><path d="m7 16.5 5-3"/><path d="M7 16.5v5.17"/><path d="M12 13.5V19l3.97 2.38a2 2 0 0 0 2.06 0l3-1.8a2 2 0 0 0 .97-1.71v-3.24a2 2 0 0 0-.97-1.71L17 10.5l-5 3Z"/><path d="m17 16.5-5-3"/><path d="m17 16.5 4.74-2.85"/><path d="M17 16.5v5.17"/><path d="M7.97 4.42A2 2 0 0 0 7 6.13v4.37l5 3 5-3V6.13a2 2 0 0 0-.97-1.71l-3-1.8a2 2 0 0 0-2.06 0l-3 1.8Z"/><path d="M12 8 7.26 5.15"/><path d="m12 8 4.74-2.85"/><path d="M12 13.5V8"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"/></symbol>
+  <symbol id="i-external-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="18" y2="18"/></symbol>
+</svg>
+
+<header class="site-header">
+  <div class="container header-inner">
+    <div class="header-left">
+      <a class="brand" href="#top">
+        <span class="brand-logo">R</span>
+        <span class="brand-name">RepoWalk</span>
+        <span class="brand-tag mono">v2.0.0</span>
+      </a>
+      <nav class="main-nav" id="mainNav">
+        <a href="#definition">Definition</a>
+        <a href="#features">Features</a>
+        <a href="#how">How it works</a>
+        <a href="#cli">CLI</a>
+        <a href="#install">Install</a>
+      </nav>
+    </div>
+    <div class="header-right">
+      <a href="#install" class="docs-link">Docs</a>
+      <a href="https://github.com/ZaheerAhmadDev/repowalk" target="_blank" rel="noopener" class="btn-outline btn-pill btn-sm">
+        <svg class="ic-16" aria-hidden="true"><use href="#i-github"/></svg>GitHub</a>
+      <button class="menu-toggle" id="menuToggle" aria-expanded="false" aria-controls="mainNav" aria-label="Toggle navigation">
+        <svg class="ic-20" aria-hidden="true"><use href="#i-menu"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- ====================== HERO ====================== -->
+  <section class="hero">
+    <div class="hero-backdrop" aria-hidden="true">
+      <div class="hero-glow"></div>
+      <div class="hero-grid"></div>
+    </div>
+    <div class="container relative hero-inner">
+      <div class="hero-copy">
+        <div class="hero-badge">
+          <span class="pulse-dot accent"></span>Offline Codebase Understanding
+        </div>
+        <h1>See architecture.<br>Know where to start.</h1>
+        <p class="hero-sub">RepoWalk is GUI-first, offline codebase exploration for real code. Map dependencies, trace flows, and explain any file without sending code anywhere. No AI, no network, no keys.</p>
+        <div class="hero-chips">
+          <span class="chip mono">No AI &middot; No Network &middot; No Keys</span>
+          <span class="chip mono">Rust / Python / TS / JS</span>
+          <span class="chip mono">Apache-2.0</span>
+          <span class="chip mono">v2.0.0</span>
+        </div>
+        <div class="hero-ctas">
+          <a href="#install" class="btn-primary btn-pill">
+            Install RepoWalk
+            <svg class="ic-16" aria-hidden="true"><use href="#i-arrow-up-right"/></svg>
+          </a>
+          <a href="#cli" class="btn-outline btn-pill">View CLI Reference</a>
+        </div>
+        <div class="hero-trust">
+          <svg class="ic-14" aria-hidden="true"><use href="#i-shield"/></svg>
+          Works fully offline. Zero telemetry.
+        </div>
+      </div>
+
+      <div class="terminal-wrap reveal">
+        <div class="terminal">
+          <div class="terminal-bar">
+            <div class="terminal-dots" aria-hidden="true">
+              <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+            </div>
+            <div class="terminal-title mono">
+              <svg class="ic-16" aria-hidden="true"><use href="#i-terminal"/></svg>repowalk — ~/acme-api
+            </div>
+            <div class="terminal-status mono">
+              <span class="pulse-dot green"></span> indexed
+            </div>
+          </div>
+          <div class="terminal-body mono">
+            <div class="term-line">
+              <span class="prompt">$</span><span class="cmd">repowalk map ./repo --format json</span>
+            </div>
+            <div class="term-out">Walking 247 files... parsing tree-sitter grammars (rust, python, ts, js)</div>
+            <div class="term-out">Resolved edges <span class="text-emerald">exact 142</span> <span class="text-amber">name-only 12</span> <span class="text-dim">unresolved 3</span></div>
+            <div class="term-out spaced">✔ Indexed symbols: <span class="text-white">1,842</span> | files: 247 | deps: 89</div>
+            <div class="term-line spaced">
+              <span class="prompt">$</span><span class="cmd">repowalk tour --entry src/main.rs</span>
+            </div>
+            <div class="term-panel">
+              <div class="term-panel-title">tour / acme-api</div>
+              <div class="term-panel-line">1. <span class="text-indigo">main.rs</span> → initializes router, config (12 refs)</div>
+              <div class="term-panel-line">2. <span class="text-indigo">auth/middleware.ts</span> → guards all /api routes, calls verifyToken()</div>
+              <div class="term-panel-line">3. <span class="text-indigo">db/pool.py</span> → connection pooling, used by 23 call sites</div>
+              <div class="term-panel-more">... 7 more steps, 3 hotspots flagged</div>
+            </div>
+            <div class="term-line spaced">
+              <span class="prompt">$</span><span class="cmd">repowalk explain src/auth/middleware.ts:42</span>
+              <span class="caret" aria-hidden="true"></span>
+            </div>
+            <button class="copy-btn" data-copy="repowalk map ./repo --format json" aria-label="Copy example commands">
+              <svg class="ic-14 term-copy-icon" aria-hidden="true"><use href="#i-copy"/></svg><span>Copy</span>
+            </button>
+          </div>
+        </div>
+        <div class="terminal-props mono">
+          <span><span class="pulse-dot green"></span>tree-sitter accurate</span>
+          <span><span class="pulse-dot indigo"></span>no network calls</span>
+          <span><span class="pulse-dot gray"></span>runs on your machine</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================== DEFINITION ====================== -->
+  <section id="definition" class="section bg-subtle">
+    <div class="container">
+      <div class="definition-grid">
+        <div>
+          <div class="kicker"><span class="kicker-line"></span>Definition</div>
+          <h2>Codebase understanding shouldn't require the cloud.</h2>
+          <div class="prose">
+            <p>RepoWalk is an offline-first code intelligence tool that runs entirely on your device. It builds a precise symbol graph using tree-sitter, resolves dependencies without executing code, and surfaces architecture you can act on.</p>
+            <p>Unlike LLM-based explainers, RepoWalk never guesses. Every edge is classified as <strong>exact</strong> (fully resolved import) or <strong>name-only</strong> (heuristic), so you know what to trust. Reports, tours, and flow traces are deterministic and reproducible.</p>
+            <div class="info-card">
+              <div class="info-icon indigo">
+                <svg class="ic-16" aria-hidden="true"><use href="#i-info"/></svg>
+              </div>
+              <div>
+                <div class="info-title">GUI-first, CLI-complete</div>
+                <div class="info-body">Use the visual explorer for onboarding, or script <code class="inline-code">repowalk</code> in CI to generate architecture reports and block PRs that increase complexity.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <aside class="card principles-card">
+          <div class="card-label">Principles</div>
+          <ul class="principles-list">
+            <li><span class="bullet-dot"></span><div><div class="li-title">Deterministic</div><div class="li-body">Same repo, same output. No temperature, no hallucinations.</div></div></li>
+            <li><span class="bullet-dot"></span><div><div class="li-title">Local-only</div><div class="li-body">File walk + tree-sitter parsing. No sockets, no telemetry.</div></div></li>
+            <li><span class="bullet-dot"></span><div><div class="li-title">Explainable edges</div><div class="li-body">Every dependency labeled with confidence and source range.</div></div></li>
+            <li><span class="bullet-dot"></span><div><div class="li-title">Tool-friendly</div><div class="li-body">JSON, DOT, Mermaid exports for docs and CI.</div></div></li>
+          </ul>
+          <div class="principles-meta">
+            <div class="meta-row mono"><span>LICENSE</span><span class="strong">Apache-2.0</span></div>
+            <div class="meta-row mono"><span>MSRV</span><span class="strong">1.75+</span></div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================== FOUR WALLS ====================== -->
+  <section class="section">
+    <div class="container">
+      <div class="section-head narrow">
+        <h2>Four walls of modern codebase tools</h2>
+        <p class="section-sub">RepoWalk is built to break the patterns that make onboarding slow, risky, and dependent.</p>
+      </div>
+      <div class="grid cols-2">
+        <div class="card hover-card">
+          <div class="icon-circle indigo"><svg class="ic-20" aria-hidden="true"><use href="#i-shield"/></svg></div>
+          <div class="card-title">AI Hallucinations</div>
+          <div class="card-body">LLM explainers invent APIs and call chains. RepoWalk uses tree-sitter ASTs, so references are real ranges you can jump to.</div>
+        </div>
+        <div class="card hover-card">
+          <div class="icon-circle violet"><svg class="ic-20" aria-hidden="true"><use href="#i-eye-off"/></svg></div>
+          <div class="card-title">Network &amp; Privacy</div>
+          <div class="card-body">Cloud tools require uploading code. RepoWalk never opens a socket. Your IP stays on disk, audit-able and offline.</div>
+        </div>
+        <div class="card hover-card">
+          <div class="icon-circle blue"><svg class="ic-20" aria-hidden="true"><use href="#i-lock"/></svg></div>
+          <div class="card-title">Key Management</div>
+          <div class="card-body">No API keys, no tokens, no rate limits. One binary, works in air-gapped environments, CI, or a locked-down laptop.</div>
+        </div>
+        <div class="card hover-card">
+          <div class="icon-circle fuchsia"><svg class="ic-20" aria-hidden="true"><use href="#i-cpu"/></svg></div>
+          <div class="card-title">Context Limits</div>
+          <div class="card-body">LLMs truncate at 32k tokens. RepoWalk maps 250k+ LOC by streaming file walks and incremental indexing without OOM.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================== FEATURES ====================== -->
+  <section id="features" class="section bg-subtle">
+    <div class="container">
+      <div class="section-head row">
+        <div>
+          <div class="kicker"><span class="kicker-line"></span>Features</div>
+          <h2>Everything for a cold start</h2>
+        </div>
+        <p class="section-sub side">12 primitives that cover mapping, explaining, and guarding architecture — all offline.</p>
+      </div>
+      <div class="grid cols-3">
+        <div class="feature-card hover-card">
+          <div class="feature-head">
+            <div class="icon-circle ring indigo"><svg class="ic-18" aria-hidden="true"><use href="#i-map"/></svg></div>
+            <div class="feature-title">Code Map</div>
+          </div>
+          <div class="card-body sm">Full symbol graph with file → module → symbol hierarchy. Zoom from repo to function.</div>
+        </div>
+        <div class="feature-card hover-card">
+          <div class="feature-head">
+            <div class="icon-circle ring indigo"><svg class="ic-18" aria-hidden="true"><use href="#i-git-branch"/></svg></div>
+            <div class="feature-title">Call Graph</div>
+          </div>
+          <div class="card-body sm">Exact edges where resolvable, name-only fallback labeled. No false confidence.</div>
+        </div>
+        <div class="feature-card hover-card">
+          <div class="feature-head">
+            <div class="icon-circle ring indigo"><svg class="ic-18" aria-hidden="true"><use href="#i-compass"/></svg></div>
+            <div class="feature-title">Guided Tour</div>
+          </div>
+          <div class="card-body sm">Auto-generates onboarding paths from entry points. Ideal for new hires.</div>
+        </div>
+        <div class="feature-card hover-card">
+          <div class="feature-head">
+            <div class="icon-circle ring indigo"><svg class="ic-18" aria-hidden="true"><use href="#i-file-search"/></svg></div>
+            <div class="feature-title">Explain Here</div>
+          </div>
+          <div class="card-body sm">Point at any line: get enclosing scope, imports, complexity, and callers.</div>
+        </div>
+        <div class="feature-card hover-card">
+          <div class="feature-head">
+            <div class="icon-circle ring indigo"><svg class="ic-18" aria-hidden="true"><use href="#i-search"/></svg></div>
+            <div class="feature-title">Find &amp; Refs</div>
+          </div>
+          <div class="card-body sm">Offline find definitions and references with tree-sitter accuracy.</div>
+        </div>
+        <div class="feature-card hover-card">
+          <div class="feature-head">
+            <div class="icon-circle ring indigo"><svg class="ic-18" aria-hidden="true"><use href="#i-workflow"/></svg></div>
+            <div class="feature-title">Flow Trace</div>
+          </div>
+          <div class="card-body sm">Trace data/control flow between two symbols across files.</div>
+        </div>
+        <div class="feature-card hover-card">
+          <div class="feature-head">
+            <div class="icon-circle ring indigo"><svg class="ic-18" aria-hidden="true"><use href="#i-file-text"/></svg></div>
+            <div class="feature-title">Architecture Report</div>
+          </div>
+          <div class="card-body sm">Markdown/JSON report with hotspots, coupling, and entry points.</div>
+        </div>
+        <div class="feature-card hover-card">
+          <div class="feature-head">
+            <div class="icon-circle ring indigo"><svg class="ic-18" aria-hidden="true"><use href="#i-network"/></svg></div>
+            <div class="feature-title">Export Graph</div>
+          </div>
+          <div class="card-body sm">DOT, JSON, Mermaid. Drop into docs, wikis, or PR comments.</div>
+        </div>
+        <div class="feature-card hover-card">
+          <div class="feature-head">
+            <div class="icon-circle ring indigo"><svg class="ic-18" aria-hidden="true"><use href="#i-variable"/></svg></div>
+            <div class="feature-title">Variables View</div>
+          </div>
+          <div class="card-body sm">List scopes, shadowings, and mutability across languages.</div>
+        </div>
+        <div class="feature-card hover-card">
+          <div class="feature-head">
+            <div class="icon-circle ring indigo"><svg class="ic-18" aria-hidden="true"><use href="#i-chart-column"/></svg></div>
+            <div class="feature-title">Complexity Lens</div>
+          </div>
+          <div class="card-body sm">Cyclomatic &amp; cognitive complexity heatmap per function.</div>
+        </div>
+        <div class="feature-card hover-card">
+          <div class="feature-head">
+            <div class="icon-circle ring indigo"><svg class="ic-18" aria-hidden="true"><use href="#i-code-xml"/></svg></div>
+            <div class="feature-title">Multi-language</div>
+          </div>
+          <div class="card-body sm">Rust, Python, TypeScript, JavaScript via tree-sitter grammars.</div>
+        </div>
+        <div class="feature-card hover-card">
+          <div class="feature-head">
+            <div class="icon-circle ring indigo"><svg class="ic-18" aria-hidden="true"><use href="#i-zap"/></svg></div>
+            <div class="feature-title">Instant Index</div>
+          </div>
+          <div class="card-body sm">247 files in ~1.2s. Incremental re-index on save in GUI.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================== HOW IT WORKS ====================== -->
+  <section id="how" class="section">
+    <div class="container">
+      <h2>How it works</h2>
+      <div class="pipeline" role="list">
+        <div class="pipeline-step" role="listitem">
+          <div class="pipe-chip"><span class="pipe-num">1</span><span class="pipe-name">Walk</span><span class="pipe-desc">&mdash; enumerate files, respect .gitignore</span></div>
+        </div>
+        <svg class="ic-16 chevron" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+        <div class="pipeline-step" role="listitem">
+          <div class="pipe-chip"><span class="pipe-num">2</span><span class="pipe-name">Parse</span><span class="pipe-desc">&mdash; tree-sitter per language, no exec</span></div>
+        </div>
+        <svg class="ic-16 chevron" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+        <div class="pipeline-step" role="listitem">
+          <div class="pipe-chip"><span class="pipe-num">3</span><span class="pipe-name">Resolve</span><span class="pipe-desc">&mdash; exact imports, then name-only</span></div>
+        </div>
+        <svg class="ic-16 chevron" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+        <div class="pipeline-step" role="listitem">
+          <div class="pipe-chip"><span class="pipe-num">4</span><span class="pipe-name">Index</span><span class="pipe-desc">&mdash; symbol table + edge store</span></div>
+        </div>
+        <svg class="ic-16 chevron" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+        <div class="pipeline-step" role="listitem">
+          <div class="pipe-chip"><span class="pipe-num">5</span><span class="pipe-name">Visualize</span><span class="pipe-desc">&mdash; GUI &amp; reports</span></div>
+        </div>
+      </div>
+      <div class="grid cols-3 spaced">
+        <div class="mini-card">
+          <div class="mini-title">Language aware</div>
+          <div class="mini-body">Tree-sitter grammars for Rust, Python, TypeScript, JavaScript. Supports monorepos with mixed languages, with per-file parsing and error recovery.</div>
+        </div>
+        <div class="mini-card">
+          <div class="mini-title">Confidence explicit</div>
+          <div class="mini-body">Every edge stores kind: exact (import resolved to file), name-only (symbol name match), unresolved. UI shows color + tooltip so you know what to trust.</div>
+        </div>
+        <div class="mini-card">
+          <div class="mini-title">GUI + CLI parity</div>
+          <div class="mini-body">Same core in both. GUI is a thin viewer over the JSON graph. CLI can run in CI to emit reports, fail on complexity thresholds, or export Mermaid diagrams.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================== INSTALL ====================== -->
+  <section id="install" class="section bg-subtle">
+    <div class="container">
+      <div class="install-grid">
+        <div>
+          <h2>Install in 30 seconds</h2>
+          <p class="section-sub">One binary, no runtime dependencies. Works on macOS, Linux, Windows. Python bindings optional.</p>
+          <div class="stats">
+            <div class="stat-row"><span class="stat-label">Binary size</span><span class="stat-value mono">~12 MB</span></div>
+            <div class="stat-row"><span class="stat-label">Startup</span><span class="stat-value mono">&lt; 80ms cold</span></div>
+            <div class="stat-row"><span class="stat-label">Memory</span><span class="stat-value mono">~180 MB for 250k LOC</span></div>
+          </div>
+        </div>
+        <div class="install-codes">
+          <div class="code-card">
+            <div class="code-bar mono"><svg class="ic-16" aria-hidden="true"><use href="#i-package"/></svg>cargo</div>
+            <div class="code-body">
+              <pre class="mono"><code>cargo install repowalk --locked</code></pre>
+              <button class="copy-btn" data-copy="cargo install repowalk --locked" aria-label="Copy cargo install command">
+                <svg class="ic-14" aria-hidden="true"><use href="#i-copy"/></svg><span>Copy</span>
+              </button>
+            </div>
+          </div>
+          <div class="code-card">
+            <div class="code-bar mono"><svg class="ic-16" aria-hidden="true"><use href="#i-terminal"/></svg>pip / brew</div>
+            <div class="code-body">
+              <pre class="mono"><code>pip install repowalk
+brew install repowalk/tap/repowalk</code></pre>
+              <button class="copy-btn" data-copy="pip install repowalk&#10;brew install repowalk/tap/repowalk" aria-label="Copy pip and brew install commands">
+                <svg class="ic-14" aria-hidden="true"><use href="#i-copy"/></svg><span>Copy</span>
+              </button>
+            </div>
+          </div>
+          <div class="info-card plain">
+            <div class="info-icon amber">
+              <svg class="ic-16" aria-hidden="true"><use href="#i-info"/></svg>
+            </div>
+            <div class="info-body sm"><strong>Offline by default.</strong> RepoWalk never makes network requests. You can verify with <code class="inline-code">--dry-run</code> or a firewall log.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================== CLI REFERENCE ====================== -->
+  <section id="cli" class="section">
+    <div class="container">
+      <div class="section-head row">
+        <div>
+          <h2>CLI Reference</h2>
+          <p class="section-sub">Deterministic commands for mapping, querying, and exporting. Same output locally and in CI.</p>
+        </div>
+        <div class="chip mono with-dot"><span class="pulse-dot green"></span>10 commands</div>
+      </div>
+      <div class="table-wrap">
+        <table class="cli-table">
+          <thead>
+            <tr>
+              <th class="col-command">Command</th>
+              <th>Description</th>
+              <th class="col-example">Example</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="cmd-badge mono">repowalk map</span></td>
+              <td class="cell-body">Build full architecture map of target directory. Walks files respecting .gitignore, parses with tree-sitter, resolves imports to exact edges and falls back to name-only matches.</td>
+              <td><span class="cmd-example mono">map ./repo --format json</span></td>
+            </tr>
+            <tr>
+              <td><span class="cmd-badge mono">repowalk tour</span></td>
+              <td class="cell-body">Generate guided walkthrough from entry points. Heuristics detect mains, routers, and handlers, then orders files by centrality for onboarding.</td>
+              <td><span class="cmd-example mono">tour --entry src/main.rs</span></td>
+            </tr>
+            <tr>
+              <td><span class="cmd-badge mono">repowalk explain</span></td>
+              <td class="cell-body">Explain a symbol, file, or directory in local context. Shows enclosing scope, imports, callers, complexity, and why it exists without LLM.</td>
+              <td><span class="cmd-example mono">explain src/auth/middleware.ts:42</span></td>
+            </tr>
+            <tr>
+              <td><span class="cmd-badge mono">repowalk find</span></td>
+              <td class="cell-body">Offline find definitions and references. Tree-sitter accurate ranges, works across languages, supports exact and name-only search modes.</td>
+              <td><span class="cmd-example mono">find --symbol verifyToken</span></td>
+            </tr>
+            <tr>
+              <td><span class="cmd-badge mono">repowalk flow</span></td>
+              <td class="cell-body">Trace data and control flow between two symbols. Follows call graph and variable assignments across files to answer &ldquo;how does X reach Y?&rdquo;.</td>
+              <td><span class="cmd-example mono">flow --from login --to db.query</span></td>
+            </tr>
+            <tr>
+              <td><span class="cmd-badge mono">repowalk report</span></td>
+              <td class="cell-body">Produce markdown/JSON report of architecture, complexity hotspots, coupling, and entry points. Ideal for CI artifacts and PR summaries.</td>
+              <td><span class="cmd-example mono">report --out arch.md</span></td>
+            </tr>
+            <tr>
+              <td><span class="cmd-badge mono">repowalk graph</span></td>
+              <td class="cell-body">Export symbol graph in multiple formats. Supports DOT for Graphviz, JSON for tooling, and Mermaid for embedding in docs.</td>
+              <td><span class="cmd-example mono">graph --format mermaid</span></td>
+            </tr>
+            <tr>
+              <td><span class="cmd-badge mono">repowalk variables</span></td>
+              <td class="cell-body">List variables, scopes, shadowings, and mutability. Highlights shadowed bindings and unused locals per file and per function.</td>
+              <td><span class="cmd-example mono">variables src/db/pool.py</span></td>
+            </tr>
+            <tr>
+              <td><span class="cmd-badge mono">repowalk complexity</span></td>
+              <td class="cell-body">Calculate cyclomatic and cognitive complexity per function. Flags hotspots over threshold, useful as CI gate.</td>
+              <td><span class="cmd-example mono">complexity --threshold 15</span></td>
+            </tr>
+            <tr>
+              <td><span class="cmd-badge mono">repowalk refs</span></td>
+              <td class="cell-body">Show incoming and outgoing references for a symbol. Includes file, line, confidence (exact vs name-only), and import path.</td>
+              <td><span class="cmd-example mono">refs --symbol UserService</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="grid cols-3 short">
+        <div class="mini-card flex">
+          <span class="bullet-dot"></span>
+          <div><div class="mini-title sm">JSON stable</div><div class="mini-body">All commands support --format json with stable schema for scripting.</div></div>
+        </div>
+        <div class="mini-card flex">
+          <span class="bullet-dot"></span>
+          <div><div class="mini-title sm">Exit codes</div><div class="mini-body">0 = success, 1 = partial, 2 = error. Use in CI gates and pre-commit.</div></div>
+        </div>
+        <div class="mini-card flex">
+          <span class="bullet-dot"></span>
+          <div><div class="mini-title sm">Offline proof</div><div class="mini-body">Run with --offline to assert no network. Fails if any socket is attempted.</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================== GUI GUIDE ====================== -->
+  <section class="section bg-subtle">
+    <div class="container">
+      <div class="gui-grid">
+        <div>
+          <h2>GUI Guide</h2>
+          <p class="section-sub">The desktop app is a fast viewer over the same graph. No Electron bloat, native file watching.</p>
+          <div class="steps">
+            <div class="step-card">
+              <div class="step-num mono">01</div>
+              <div>
+                <div class="li-title">Open folder</div>
+                <div class="li-body">Drag a repo or use Cmd+O. RepoWalk respects .gitignore and indexes in background.</div>
+              </div>
+            </div>
+            <div class="step-card">
+              <div class="step-num mono">02</div>
+              <div>
+                <div class="li-title">Explore map</div>
+                <div class="li-body">Left: file tree with complexity badges. Center: symbol graph. Right: details for selected symbol.</div>
+              </div>
+            </div>
+            <div class="step-card">
+              <div class="step-num mono">03</div>
+              <div>
+                <div class="li-title">Trace &amp; explain</div>
+                <div class="li-body">Right-click any symbol → Explain, Find Refs, Trace Flow. All offline, instant.</div>
+              </div>
+            </div>
+            <div class="step-card">
+              <div class="step-num mono">04</div>
+              <div>
+                <div class="li-title">Export</div>
+                <div class="li-body">File → Export Report generates arch.md, graph.dot, and hotspots.json for sharing.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="table-head-row">
+            <h3>Shortcuts</h3>
+            <span class="mono muted-2 sm">macOS / Win/Linux</span>
+          </div>
+          <div class="table-wrap">
+            <table class="shortcuts-table">
+              <thead>
+                <tr><th>Shortcut</th><th>Action</th></tr>
+              </thead>
+              <tbody>
+                <tr><td class="key mono">⌘K / Ctrl+K</td><td>Quick open symbol</td></tr>
+                <tr><td class="key mono">⌘O / Ctrl+O</td><td>Find file</td></tr>
+                <tr><td class="key mono">⌘⇧F / Ctrl+Shift+F</td><td>Find references</td></tr>
+                <tr><td class="key mono">⌘E / Ctrl+E</td><td>Explain at cursor</td></tr>
+                <tr><td class="key mono">⌘G / Ctrl+G</td><td>Toggle graph view</td></tr>
+                <tr><td class="key mono">⌘R / Ctrl+R</td><td>Re-index</td></tr>
+                <tr><td class="key mono">.</td><td>Toggle exact / all edges</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="perf-card">
+            <div class="info-icon indigo outline">
+              <svg class="ic-16" aria-hidden="true"><use href="#i-boxes"/></svg>
+            </div>
+            <div>
+              <div class="li-title">Performance note</div>
+              <div class="perf-body">Graph rendering uses WebGL instancing. 2k nodes at 60fps on M1. No WASM, just Rust core + native UI.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================== RELEASE NOTES ====================== -->
+  <section class="section">
+    <div class="container">
+      <h2>Release notes</h2>
+      <div class="timeline">
+        <div class="release">
+          <span class="release-dot"></span>
+          <div class="release-head">
+            <span class="release-tag mono">v2.0.0</span>
+            <span class="release-date mono">2024-11-18</span>
+          </div>
+          <ul class="release-list">
+            <li><span class="dash">&mdash;</span>Complete GUI rewrite in native toolkit</li>
+            <li><span class="dash">&mdash;</span>Added Python &amp; JS support</li>
+            <li><span class="dash">&mdash;</span>Flow trace beta</li>
+            <li><span class="dash">&mdash;</span>Report export to Mermaid</li>
+          </ul>
+        </div>
+        <div class="release">
+          <span class="release-dot"></span>
+          <div class="release-head">
+            <span class="release-tag mono">v1.3.0</span>
+            <span class="release-date mono">2024-08-02</span>
+          </div>
+          <ul class="release-list">
+            <li><span class="dash">&mdash;</span>Complexity lens &amp; threshold gates</li>
+            <li><span class="dash">&mdash;</span>Variables view with shadowing detection</li>
+          </ul>
+        </div>
+        <div class="release">
+          <span class="release-dot"></span>
+          <div class="release-head">
+            <span class="release-tag mono">v1.0.0</span>
+            <span class="release-date mono">2024-05-14</span>
+          </div>
+          <ul class="release-list">
+            <li><span class="dash">&mdash;</span>Initial Apache-2.0 release</li>
+            <li><span class="dash">&mdash;</span>map, find, explain, refs</li>
+            <li><span class="dash">&mdash;</span>Offline proof mode</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================== LIMITS & HONESTY ====================== -->
+  <section class="section bg-subtle">
+    <div class="container">
+      <h2>Limits &amp; honesty</h2>
+      <div class="grid cols-2 spaced">
+        <div class="card hover-card">
+          <div class="li-title flex-with-icon">
+            <svg class="ic-16 dim" aria-hidden="true"><use href="#i-layers"/></svg>What it is not
+          </div>
+          <ul class="disc-list">
+            <li>Not an LLM. Won't write code or invent explanations.</li>
+            <li>Not a type checker. Doesn't execute or type-check, only parses.</li>
+            <li>Not a security scanner. Finds structure, not vulnerabilities.</li>
+            <li>Best for static languages; dynamic Python/JS uses heuristics.</li>
+          </ul>
+        </div>
+        <div class="card hover-card">
+          <div class="li-title flex-with-icon">
+            <svg class="ic-16 amber-icon" aria-hidden="true"><use href="#i-zap"/></svg>When to use something else
+          </div>
+          <ul class="disc-list">
+            <li>Need semantic search across docs → use vector search.</li>
+            <li>Need runtime profiling → use a profiler.</li>
+            <li>Monorepo over 1M LOC → index per package, not whole.</li>
+            <li>Heavy macro metaprogramming in Rust may lower exact rate.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-top">
+      <div class="footer-brand">
+        <span class="brand-logo lg">R</span>
+        <div>
+          <div class="footer-name">RepoWalk</div>
+          <div class="footer-sub mono">Offline codebase understanding &middot; Apache-2.0</div>
+        </div>
+      </div>
+      <div class="footer-links">
+        <a href="#install" class="flex-with-icon">Docs <svg class="ic-12" aria-hidden="true"><use href="#i-external-link"/></svg></a>
+        <a href="#cli" class="flex-with-icon">Changelog <svg class="ic-12" aria-hidden="true"><use href="#i-external-link"/></svg></a>
+        <a href="#definition">Privacy — no data leaves device</a>
+        <span class="mono">&copy; 2024 RepoWalk</span>
+      </div>
+    </div>
+    <div class="footer-note mono">
+      <span>Built with Rust, tree-sitter, and a stubborn belief that local tools should be excellent.</span>
+      <span class="tooltip-note"><span class="pulse-dot green"></span> No telemetry. No phoning home.</span>
+    </div>
+  </div>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
