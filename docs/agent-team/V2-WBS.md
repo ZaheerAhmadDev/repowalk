@@ -192,6 +192,7 @@ Kept here so the roster stays the single source of truth for *who owns what*.
 | Diagram/export **emitters live in `crates/core/src/export/**`**, owned by PROD-2 (not `crates/gui`) | GUI and CLI must share one emitter implementation instead of duplicating Mermaid/DOT/SVG |
 | **VER-2 scope narrowed** to `fixtures/vars/**` + `fixtures/ts/**`; VER-3 owns `fixtures/corpus/**` | `fixtures/**` as one glob would have made every verifier a single-writer bottleneck |
 | **`crates/gui/src/app.rs` + `main.rs` are integrator-owned** | it is the only file every GUI seat wants to touch; seats send the exact hunk by message, PMO applies it, then they verify |
+| **(correction, 2026-10-25) `fixtures/corpus/**` was never created** — VER-3's budget evidence came from dogfooding cloned external repos instead (see `board/docs/verification-v2.md`); the `fixtures/corpus/** | VER-3` ownership row in `v2-execution-plan.md` is historical | the 5-second-budget acceptance did not require a checked-in corpus; recorded in `board/docs/audit-model-2026-10-25.md` F-6 |
 | File-ownership map, batch schedule, message cadence and gates: [`../v2-execution-plan.md`](../v2-execution-plan.md) | the plan was previously implicit in card descriptions |
 
 Ownership rule of thumb: **one writer per path, per batch**. If two cards need the

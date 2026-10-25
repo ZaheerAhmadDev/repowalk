@@ -24,13 +24,18 @@ A seat never learns about a dependency change from anything else than a
 A card can start only when its layer's input exists. Within a batch every card
 owns disjoint files, so they genuinely run in parallel.
 
+> **Reconciled 2026-10-25:** every batch below is closed and every card in
+> `board/tasks/*.json` (the source of truth) is `status: done` — 92 cards across B0–B4
+> plus the user-requested **B5** (cut on `vscode-ui`, landed to `main` via PR #26). The
+> State column records the closure; §7's batch log has the per-batch evidence.
+
 | Batch | Layer | Cards | Depends on | State |
 |---|---|---|---|---|
 | **B0** | Contracts & infra | CORE-3 (`analysis.rs`), analyze interface, module skeletons, **board live messages** | — | ☑ |
-| **B1** | Language extraction | BLD-2, VER-2, INTEL-2, INTEL-3, INTEL-4 | B0 | BLD-2 ☑ · VER-2 ☑ · INTEL-2 ▶ · INTEL-3 ▶ · INTEL-4 ▶ |
-| **B2** | Aggregates & first views | CORE-4, CORE-5, CORE-7, GRAPH-2, PROD-2, TEXT-2, DSN-2, DOC-2, RISK-2 | B0 (+B1 for end-to-end runs) | ▶ launching |
-| **B3** | Full view surface | GRAPH-3, GRAPH-4, GRAPH-5, TEXT-3, DSN-3, PROD-3, INTEL-5, CORE-6, DOC-3 | B2 | ☐ |
-| **B4** | Reading workflow & release | TEXT-4, VER-3, RISK-3, DOC-4, PMO-3 | B3 | ☐ |
+| **B1** | Language extraction | BLD-2, VER-2, INTEL-2, INTEL-3, INTEL-4 | B0 | ☑ closed (`129fc0e`) |
+| **B2** | Aggregates & first views | CORE-4, CORE-5, CORE-7, GRAPH-2, PROD-2, TEXT-2, DSN-2, DOC-2, RISK-2 | B0 (+B1 for end-to-end runs) | ☑ closed (`1ef4649`) |
+| **B3** | Full view surface | GRAPH-3, GRAPH-4, GRAPH-5, TEXT-3, DSN-3, PROD-3, INTEL-5, CORE-6, DOC-3 | B2 | ☑ closed (`871a61a`…, incl. B3a/B3b) |
+| **B4** | Reading workflow & release | TEXT-4, VER-3, RISK-3, DOC-4, PMO-3 | B3 | ☑ closed (`ea47e95`) |
 
 Ordering rules:
 

@@ -397,7 +397,9 @@ Tests live inline (`#[cfg(test)]`) and as integration suites in
 | `walk_metrics.rs` | walk + metrics on temp fixtures |
 
 Fixtures: `fixtures/sample` (+ `fixtures/golden` index), `fixtures/vars` and
-`fixtures/ts` (analyzer goldens, VER-2); `fixtures/corpus` (VER-3) is planned.
+`fixtures/ts` (analyzer goldens, VER-2); `fixtures/corpus` (VER-3) was planned but never
+created — VER-3 dogfooded cloned external repos instead (correction 2026-10-25,
+`board/docs/audit-model-2026-10-25.md` F-6).
 
 Batch gates (from [`v2-execution-plan.md`](v2-execution-plan.md) §5, owned by
 VER; a batch closes only when all five are green on the committed tree):
