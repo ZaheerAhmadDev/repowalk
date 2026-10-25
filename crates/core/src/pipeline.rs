@@ -17,6 +17,7 @@ use crate::analyze::Lang;
 use crate::model::{CallSite, FileEntry, Import, Index, Symbol, SymbolKind};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// A language with no analyzer: its files are indexed but nothing is extracted.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -67,15 +68,26 @@ pub fn build_index_with_report(
     progress: &dyn Fn(usize),
 ) -> anyhow::Result<IndexReport> {
     let files = crate::walk::walk(root)?;
-    build_index_report_from_files(root, files, &|phase, done, _total| {
-        if phase == "parse" {
-            progress(done);
-        }
-    })
+    build_index_report_from_files(
+        root,
+        files,
+        &|phase, done, _total| {
+            if phase == "parse" {
+                progress(done);
+            }
+        },
+        None,
+    )
 }
 
 /// Build the index from an already-walked file list, reporting
 /// `progress(phase, done, total)` for the `parse` and `resolve` phases.
+///
+/// `cancel` is cooperative (model audit F-1): the per-file parse loop checks it
+/// before each file and the cache write is skipped when it is set, so a
+/// cancelled build returns the partial index and **persists nothing**. The
+/// public [`build_index`]/[`build_index_with_report`] pass `None` and are
+/// unaffected.
 ///
 /// Split out of [`build_index`] so the v2 `learn` driver can reuse the walk it
 /// already needed for its incremental stamps (F10) instead of walking twice,
@@ -84,17 +96,20 @@ pub(crate) fn build_index_from_files(
     root: &Path,
     files: Vec<FileEntry>,
     progress: &dyn Fn(&'static str, usize, usize),
+    cancel: Option<&AtomicBool>,
 ) -> anyhow::Result<Index> {
-    Ok(build_index_report_from_files(root, files, progress)?.index)
+    Ok(build_index_report_from_files(root, files, progress, cancel)?.index)
 }
 
 /// Shared implementation behind [`build_index_from_files`] /
 /// [`build_index_with_report`]: same phases and cache behaviour, plus the
-/// unsupported-language list.
+/// unsupported-language list. See [`build_index_from_files`] for the `cancel`
+/// contract.
 fn build_index_report_from_files(
     root: &Path,
     files: Vec<FileEntry>,
     progress: &dyn Fn(&'static str, usize, usize),
+    cancel: Option<&AtomicBool>,
 ) -> anyhow::Result<IndexReport> {
     let total = files.len();
     let unsupported = unsupported_languages(&files);
@@ -105,16 +120,31 @@ fn build_index_report_from_files(
         return Ok(IndexReport { index, unsupported });
     }
 
+    let cancelled = || cancel.is_some_and(|c| c.load(Ordering::Relaxed));
     let mut idx = Index::new(root.to_string_lossy());
     idx.files = files;
     progress("parse", 0, total);
     for (done, file) in idx.files.iter().enumerate() {
+        if cancelled() {
+            // A cancelled build must never persist: return the partial index
+            // and leave the on-disk cache exactly as it was (F-1).
+            return Ok(IndexReport {
+                index: idx,
+                unsupported,
+            });
+        }
         let text = std::fs::read_to_string(root.join(&file.path))?;
         let (symbols, sites, imports) = extract_symbols(&file.path, &file.lang, &text);
         idx.symbols.extend(symbols);
         idx.call_sites.extend(sites);
         idx.imports.extend(imports);
         progress("parse", done + 1, total);
+    }
+    if cancelled() {
+        return Ok(IndexReport {
+            index: idx,
+            unsupported,
+        });
     }
 
     let mut edges = crate::resolve::resolve(&idx.files, &idx.symbols, &idx.call_sites);

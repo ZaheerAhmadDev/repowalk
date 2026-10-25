@@ -49,9 +49,11 @@
 //! existing `analyze`→`cache` boundary — it adds no sixth phase.
 use crate::analysis::Analysis;
 use crate::model::{FileEntry, Index, Symbol};
+use crate::parallel::FileJob;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Current on-disk stamp-cache schema (independent of `ANALYSIS_VERSION`).
 ///
@@ -141,6 +143,27 @@ pub fn analysis_for(root: &Path) -> Option<Analysis> {
 /// Reuses the cached analysis for unchanged files; only changed/added files are
 /// re-analyzed. A missing/unreadable `root` is an `Err` (never a panic).
 pub fn learn(root: &Path, progress: &dyn Fn(LearnProgress)) -> anyhow::Result<(Index, Analysis)> {
+    learn_with(root, progress, None)
+}
+
+/// [`learn`] with a cooperative cancellation flag (model audit F-1).
+///
+/// `cancel` is checked between phases and per file during the analyze stage
+/// (including inside the parallel parse loop of [`crate::pipeline`]). When it is
+/// observed, `learn_with` returns `Ok` with the results computed so far and
+/// **persists nothing**: no `analysis.json`, no stamp sidecar, no `index.json`
+/// rewrite. A cancelled run can therefore never poison the on-disk cache with a
+/// partial artifact or a half-paired write — the next learn simply re-runs.
+///
+/// A caller that cancels (the GUI's supersede path) discards the returned
+/// partials; the `Ok` return keeps the signature total without inventing a
+/// third outcome for "you asked me to stop".
+pub fn learn_with(
+    root: &Path,
+    progress: &dyn Fn(LearnProgress),
+    cancel: Option<&AtomicBool>,
+) -> anyhow::Result<(Index, Analysis)> {
+    let cancelled = || cancel.is_some_and(|c| c.load(Ordering::Relaxed));
     let empty = Analysis::new();
 
     // ---- walk -------------------------------------------------------------
@@ -167,10 +190,14 @@ pub fn learn(root: &Path, progress: &dyn Fn(LearnProgress)) -> anyhow::Result<(I
         .collect();
 
     // ---- parse + resolve (delegated to the pipeline) ----------------------
-    let idx =
-        crate::pipeline::build_index_from_files(root, files.clone(), &|phase, done, total| {
+    let idx = crate::pipeline::build_index_from_files(
+        root,
+        files.clone(),
+        &|phase, done, total| {
             emit(progress, phase, done, total, &empty);
-        })?;
+        },
+        cancel,
+    )?;
 
     // ---- analyze (incremental) -------------------------------------------
     // The cached artifact is the other half of the cache key, so load it before
@@ -184,6 +211,12 @@ pub fn learn(root: &Path, progress: &dyn Fn(LearnProgress)) -> anyhow::Result<(I
     // as full staleness — every analyzable file is forced into re-analysis and
     // the sidecar is rewritten at the end.
     let cached = crate::analysis::load(root);
+
+    // Cancellation between parse and analyze: return the partial pair without
+    // touching the cache (F-1).
+    if cancelled() {
+        return Ok((idx, Analysis::new()));
+    }
 
     // Stamps are only trusted when the artifact they describe actually loaded.
     // An empty `old_stamps` makes every comparison below a difference, which is
@@ -252,17 +285,56 @@ pub fn learn(root: &Path, progress: &dyn Fn(LearnProgress)) -> anyhow::Result<(I
 
     let total = needs.len();
     emit(progress, "analyze", 0, total, &analysis);
-    for (i, f) in needs.iter().enumerate() {
-        let Some(lang) = crate::analyze::Lang::from_walk(&f.lang) else {
-            continue;
-        };
-        let source = std::fs::read_to_string(root.join(f.path.as_str()))?;
-        let symbols = symbols_by_file
-            .get(f.path.as_str())
-            .map(Vec::as_slice)
-            .unwrap_or(&[]);
-        crate::analyze::analyze(f.path.as_str(), lang, &source, symbols, &mut analysis);
-        emit(progress, "analyze", i + 1, total, &analysis);
+
+    // ---- analyze (per file, parallel) -------------------------------------
+    // The per-file jobs run through the deterministic parallel map (INTEL-5,
+    // wired in by model audit F-3). `walk` sorts entries by path (walk.rs), so
+    // `needs` is path-sorted and unique — `map_files`' path-sorted output order
+    // therefore equals the old sequential iteration order, and appending each
+    // per-file partial in that order reproduces the sequential artifact
+    // byte-identically. Progress is emitted from THIS thread during the merge
+    // (never from workers), keeping the event stream monotonic and identical in
+    // shape to the old loop. Workers observe `cancel` per file and yield an
+    // empty partial; the merge loop also checks it, and a cancelled run returns
+    // before any cache write (F-1).
+    if total > 0 {
+        let jobs: Vec<FileJob> = needs.iter().map(|f| FileJob::new(&f.path)).collect();
+        let langs: BTreeMap<&str, crate::analyze::Lang> = needs
+            .iter()
+            .map(|f| {
+                (
+                    f.path.as_str(),
+                    crate::analyze::Lang::from_walk(&f.lang)
+                        .expect("needs only holds analyzable files"),
+                )
+            })
+            .collect();
+        let results = crate::parallel::map_files(&jobs, 0, |job| -> anyhow::Result<Analysis> {
+            if cancelled() {
+                return Ok(Analysis::new());
+            }
+            let lang = langs[job.path.as_str()];
+            let source = std::fs::read_to_string(root.join(&job.path))?;
+            let symbols = symbols_by_file
+                .get(&job.path)
+                .map(Vec::as_slice)
+                .unwrap_or(&[]);
+            let mut part = Analysis::new();
+            crate::analyze::analyze(&job.path, lang, &source, symbols, &mut part);
+            Ok(part)
+        });
+        for (i, result) in results.into_iter().enumerate() {
+            if cancelled() {
+                return Ok((idx, analysis));
+            }
+            let part = result?;
+            analysis.variables.extend(part.variables);
+            analysis.cfgs.extend(part.cfgs);
+            analysis.types.extend(part.types);
+            analysis.type_edges.extend(part.type_edges);
+            analysis.uses.extend(part.uses);
+            emit(progress, "analyze", i + 1, total, &analysis);
+        }
     }
 
     // ---- modules (repo-level, deterministic) ------------------------------
@@ -326,14 +398,7 @@ fn load_stamps(root: &Path) -> Option<StampFile> {
 }
 
 fn save_stamps(root: &Path, stamps: &StampFile) -> anyhow::Result<()> {
-    let path = stamps_path(root);
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, serde_json::to_vec(stamps)?)?;
-    std::fs::rename(&tmp, &path)?;
-    Ok(())
+    crate::store::atomic_write(&stamps_path(root), &serde_json::to_vec(stamps)?)
 }
 
 #[cfg(test)]
@@ -542,6 +607,67 @@ mod tests {
     fn missing_root_is_err_not_panic() {
         let root = temp_root("missing").join("does-not-exist");
         assert!(learn(&root, &|_| {}).is_err());
+    }
+
+    // ---- cooperative cancellation (model audit F-1) ------------------------
+
+    /// A pre-cancelled learn returns Ok but persists nothing: no analysis.json,
+    /// no stamp sidecar, and (parse being cancelled before the first file) no
+    /// index.json either. The next learn re-runs from a pristine cache.
+    #[test]
+    fn cancelled_learn_persists_nothing() {
+        let root = temp_root("cancelled");
+        write_fixture(&root);
+        let cancel = AtomicBool::new(true);
+
+        let result = learn_with(&root, &|_| {}, Some(&cancel)).unwrap();
+        assert!(
+            result.0.symbols.is_empty(),
+            "a pre-cancelled run parses no symbols"
+        );
+        assert!(
+            !crate::analysis::analysis_path(&root).exists(),
+            "a cancelled run must not write analysis.json"
+        );
+        assert!(
+            !stamps_path(&root).exists(),
+            "a cancelled run must not write the stamp sidecar"
+        );
+        assert!(
+            !crate::store::cache_path(&root).exists(),
+            "a cancelled run must not write index.json"
+        );
+
+        // The next learn (flag dropped) runs a full cold pass and writes normally.
+        learn(&root, &|_| {}).unwrap();
+        assert!(crate::analysis::analysis_path(&root).exists());
+        assert!(reanalyzed(&root) >= 1);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Cancelling mid-run must not flip the outcome of the *next* learn: after a
+    /// warm learn, a cancelled re-learn leaves the existing cache untouched and
+    /// still loadable.
+    #[test]
+    fn cancelled_relearn_leaves_existing_cache_intact() {
+        let root = temp_root("cancel-warm");
+        write_fixture(&root);
+        let (_, first) = learn(&root, &|_| {}).unwrap();
+
+        let cancel = AtomicBool::new(true);
+        let _ = learn_with(&root, &|_| {}, Some(&cancel)).unwrap();
+        assert_eq!(
+            analysis_for(&root).unwrap(),
+            first,
+            "the cancelled run must not overwrite the artifact"
+        );
+        assert_eq!(load_stamps(&root).unwrap().revision, LEARN_REVISION);
+
+        // And the pipeline is still warm afterwards.
+        assert_eq!(analyze_done(&learn_events(&root)), 0);
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     /// `fixtures/sample` is the real repo fixture (flat layout, one crate).

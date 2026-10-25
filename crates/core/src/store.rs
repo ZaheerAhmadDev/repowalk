@@ -20,10 +20,52 @@
 use crate::model::{FileEntry, Index, SCHEMA_VERSION};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Schema of the stamp sidecar. Independent of `SCHEMA_VERSION`: it is
 /// pipeline-internal bookkeeping, not part of the frozen `index.json` contract.
 const CACHE_HEADER_VERSION: u32 = 1;
+
+/// Monotonic counter so two tmp names handed out in the same process can never
+/// collide, even twice within one nanosecond timestamp tick (model audit F-2).
+static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+/// A unique sibling tmp path for `path`: `<name>.<pid>-<counter>-<nanos>.tmp`.
+///
+/// The fixed `index.json.tmp`-style names this replaces were a race: two
+/// concurrent learns of the same repo could interleave so one run's rename
+/// published the other's truncated tmp. A per-write unique name makes each
+/// rename publish exactly the bytes its own run wrote.
+pub(crate) fn unique_tmp_name(path: &Path) -> PathBuf {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0);
+    let counter = TMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let mut name = path
+        .file_name()
+        .map(|s| s.to_os_string())
+        .unwrap_or_default();
+    name.push(format!(".{}-{}-{}.tmp", std::process::id(), counter, nanos));
+    path.with_file_name(name)
+}
+
+/// Atomic write for a `.repowalk/` artifact: create the parent dir, write a
+/// **unique** tmp sibling, rename over `path`. Every cache write (index,
+/// cache-header, analysis, stamps) goes through this, so a reader never sees a
+/// torn file and concurrent writers never share a tmp name (model audit F-2).
+pub(crate) fn atomic_write(path: &Path, bytes: &[u8]) -> anyhow::Result<()> {
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent)?;
+        }
+    }
+    let tmp = unique_tmp_name(path);
+    std::fs::write(&tmp, bytes)?;
+    std::fs::rename(&tmp, path)?;
+    Ok(())
+}
 
 /// `<root>/.repowalk/index.json`
 pub fn cache_path(root: &Path) -> PathBuf {
@@ -70,7 +112,8 @@ pub fn load(root: &Path) -> Option<Index> {
     serde_json::from_slice(&data).ok()
 }
 
-/// Atomic write (tmp + rename). Creates `.repowalk/`.
+/// Atomic write (unique tmp + rename, see [`atomic_write`]). Creates
+/// `.repowalk/`.
 ///
 /// Writes the frozen `index.json` **and** the per-file stamp sidecar derived
 /// from the index's file list, so the two always describe the same snapshot.
@@ -78,19 +121,13 @@ pub fn save(root: &Path, idx: &Index) -> anyhow::Result<()> {
     let dir = root.join(".repowalk");
     std::fs::create_dir_all(&dir)?;
 
-    let dest = dir.join("index.json");
-    let tmp = dir.join("index.json.tmp");
-    std::fs::write(&tmp, serde_json::to_vec(idx)?)?;
-    std::fs::rename(&tmp, &dest)?;
+    atomic_write(&dir.join("index.json"), &serde_json::to_vec(idx)?)?;
 
     let header = CacheHeader {
         version: CACHE_HEADER_VERSION,
         files: idx.files.iter().map(|f| stamp_of(root, &f.path)).collect(),
     };
-    let hdest = header_path(root);
-    let header_tmp = dir.join("cache-header.json.tmp");
-    std::fs::write(&header_tmp, serde_json::to_vec(&header)?)?;
-    std::fs::rename(&header_tmp, &hdest)?;
+    atomic_write(&header_path(root), &serde_json::to_vec(&header)?)?;
     Ok(())
 }
 
@@ -204,6 +241,51 @@ mod tests {
             header_path(root),
             PathBuf::from("/repo/.repowalk/cache-header.json")
         );
+    }
+
+    // ---- unique tmp names (model audit F-2) -------------------------------
+
+    #[test]
+    fn unique_tmp_names_differ_per_call() {
+        let path = Path::new("/repo/.repowalk/index.json");
+        let a = unique_tmp_name(path);
+        let b = unique_tmp_name(path);
+        assert_ne!(a, b, "two calls in one process must never share a tmp name");
+        // Still a sibling of the destination with the .tmp suffix.
+        assert_eq!(a.parent(), path.parent());
+        assert!(a.file_name().unwrap().to_string_lossy().ends_with(".tmp"));
+        assert!(
+            a.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("index.json."),
+            "the tmp name extends the destination's file name"
+        );
+    }
+
+    #[test]
+    fn atomic_write_publishes_content_and_leaves_no_tmp() {
+        let root = temp_root("atomic-write");
+        let dir = root.join(".repowalk");
+        std::fs::create_dir_all(&dir).unwrap();
+        let dest = dir.join("analysis.json");
+
+        atomic_write(&dest, b"{\"first\":true}").unwrap();
+        assert_eq!(std::fs::read(&dest).unwrap(), b"{\"first\":true}");
+
+        // Overwrite through a second unique tmp; no *.tmp may survive either write.
+        atomic_write(&dest, b"{\"second\":true}").unwrap();
+        assert_eq!(std::fs::read(&dest).unwrap(), b"{\"second\":true}");
+        let leftovers: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
+            .filter(|n| n.ends_with(".tmp"))
+            .collect();
+        assert!(
+            leftovers.is_empty(),
+            "atomic_write must leave no tmp behind: {leftovers:?}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

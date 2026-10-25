@@ -242,18 +242,13 @@ pub fn load(root: &Path) -> Option<Analysis> {
     (a.version == ANALYSIS_VERSION).then_some(a)
 }
 
-/// Persist the artifact atomically (write temp, then rename).
+/// Persist the artifact atomically (unique tmp + rename, via
+/// `store::atomic_write` — model audit F-2).
 pub fn save(root: &Path, analysis: &Analysis) -> anyhow::Result<()> {
     let path = analysis_path(root);
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
     let mut a = analysis.clone();
     a.version = ANALYSIS_VERSION;
-    let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, serde_json::to_vec(&a)?)?;
-    std::fs::rename(&tmp, &path)?;
-    Ok(())
+    crate::store::atomic_write(&path, &serde_json::to_vec(&a)?)
 }
 
 #[cfg(test)]
