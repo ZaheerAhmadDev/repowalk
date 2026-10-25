@@ -6,6 +6,7 @@ use repowalk_core::analysis::Analysis;
 use repowalk_core::export::Diagram;
 use repowalk_core::model::Index;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::theme;
@@ -124,6 +125,13 @@ pub struct App {
     pub files_dock: text::FilesDock,
     /// The floating FILES panel's current screen position (undock target).
     pub files_float_pos: Option<egui::Pos2>,
+    /// True while a background learn is in flight (drives the progress overlay,
+    /// even on a re-learn with an index already loaded — model audit F-4).
+    pub learning: bool,
+    /// Cancel flag of the in-flight learn. A new `start_indexing` supersedes the
+    /// old run by signalling this flag and swapping in a fresh one, so two
+    /// learns can never race on the same `.repowalk/` cache (model audit F-1).
+    pub learn_cancel: Arc<AtomicBool>,
 }
 
 /// The egui context handle used by the indexing thread to request repaints.
@@ -183,6 +191,8 @@ impl App {
             theme_mode: theme::ThemeMode::Dark,
             files_dock: text::FilesDock::default(),
             files_float_pos: None,
+            learning: false,
+            learn_cancel: Arc::new(AtomicBool::new(false)),
         };
         if let Some(repo) = repo {
             app.start_indexing(repo);
@@ -191,7 +201,25 @@ impl App {
     }
 
     /// Kick off a background indexing run (plan §3.1: progress overlay).
+    ///
+    /// Single-flight (model audit F-1): an in-flight learn is *superseded*, not
+    /// joined — its cancel flag is signalled so it unwinds at the next phase or
+    /// file boundary without persisting anything, and its (orphaned) results are
+    /// dropped when its thread exits. Starting a learn for a different repo
+    /// clears the old repo's index and metrics up front, so no pane ever serves
+    /// the previous repo while the status bar names the new one (F-4); a
+    /// same-repo re-learn keeps the old data visible under the overlay until the
+    /// fresh result is adopted.
     pub fn start_indexing(&mut self, repo: PathBuf) {
+        let switching = self.repo.as_ref() != Some(&repo);
+        if switching {
+            self.index = None;
+            self.cached_metrics = None;
+        }
+        self.learning = true;
+        self.learn_cancel.store(true, Ordering::Relaxed);
+        let cancel = Arc::new(AtomicBool::new(false));
+        self.learn_cancel = Arc::clone(&cancel);
         let progress = Arc::new(Mutex::new(IndexProgress::default()));
         let shared = Arc::clone(&progress);
         let ctx = APP_CTX.get().cloned();
@@ -235,7 +263,7 @@ impl App {
                 }
             };
             let mut warning = None;
-            let result = match repowalk_core::learn::learn(&repo, &notify) {
+            let result = match repowalk_core::learn::learn_with(&repo, &notify, Some(&cancel)) {
                 Ok(pair) => Ok(pair),
                 Err(e) => {
                     // `learn` persists its caches, so a read-only repo (or a full
@@ -307,6 +335,7 @@ impl App {
     pub fn poll_progress(&mut self) {
         let mut p = self.progress.lock().unwrap();
         if p.finished {
+            self.learning = false;
             let mut learned: Option<usize> = None;
             if let Some(idx) = p.index.take() {
                 learned = Some(idx.files.len());
@@ -1352,8 +1381,11 @@ impl App {
     }
 
     /// Centered progress overlay while indexing (feedback principle).
+    ///
+    /// Keyed on the `learning` flag rather than `index.is_none()`, so a re-learn
+    /// with an index already loaded is still visible (model audit F-4).
     fn progress_overlay(&mut self, ui: &egui::Ui) {
-        if self.index.is_some() || self.error.is_some() {
+        if !self.learning || self.error.is_some() {
             return;
         }
         let (done, total, phase, variables, cfgs) = {
