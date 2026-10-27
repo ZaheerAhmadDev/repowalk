@@ -21,5 +21,5 @@ serde = { version = "1", features = ["derive"] }
 rfd = "0.15"
 
 [dev-dependencies]
-accesskit = "0.24"
+accesskit = "0.25"
 egui_kittest = { version = "0.36", features = ["eframe"] }
